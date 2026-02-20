@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dashboard-ui/dist/
+
+# Environment files
+.env
+.env.*
+
+# Session and log files
+sessions/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Runtime state
+.orchestrator-session
+.heartbeat-last-fingerprint
+.heartbeat-knowledge-hashes
+.node-path
+.restart
+schedule-last-run.json
+
+# Analysis artifacts
+analysis-history/
+
+# Lock files
+package-lock.json

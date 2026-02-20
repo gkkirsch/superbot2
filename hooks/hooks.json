@@ -1,0 +1,42 @@
+{
+  "hooks": {
+    "TeammateIdle": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.superbot2/hooks/teammate-idle.sh"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.superbot2/hooks/task-completed.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.superbot2/hooks/pre-compact.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "extraKnownMarketplaces": {
+    "supercharge-claude-code": {
+      "source": {
+        "source": "url",
+        "url": "https://superchargeclaudecode.com/api/marketplaces/supercharge-claude-code/marketplace.json"
+      }
+    }
+  }
+}

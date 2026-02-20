@@ -1,0 +1,362 @@
+#!/bin/bash
+# superbot2 — single entry point: launch orchestrator, update, or run setup
+set -euo pipefail
+shopt -s nullglob
+
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
+export SUPERBOT2_HOME="$DIR"
+TEAM_DIR="$HOME/.claude/teams/superbot2"
+TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
+RESTART_FLAG="$DIR/.restart"
+LAUNCHER_PID=$$
+DASHBOARD_PID=""
+
+# ─── Subcommands ───
+
+case "${1:-}" in
+  update)
+    echo ""
+    echo "  Updating superbot2..."
+    echo ""
+
+    if [[ ! -d "$DIR" ]]; then
+      echo "ERROR: $DIR doesn't exist. Run superbot2 first (setup runs automatically)."
+      exit 1
+    fi
+
+    # 1. Pull latest code
+    cd "$REPO_DIR"
+    BEFORE=$(git rev-parse HEAD 2>/dev/null)
+    git pull --ff-only 2>&1
+    AFTER=$(git rev-parse HEAD 2>/dev/null)
+    if [[ "$BEFORE" == "$AFTER" ]]; then
+      echo "  Code: already up to date."
+    else
+      echo "  Code: updated $(git log --oneline "$BEFORE..$AFTER" | wc -l | tr -d ' ') commits:"
+      git log --oneline "$BEFORE..$AFTER"
+    fi
+    echo ""
+
+    # 2. Rebuild dashboard UI
+    echo "  Rebuilding dashboard..."
+    (cd "$REPO_DIR/dashboard" && npm install --silent 2>&1)
+    (cd "$REPO_DIR/dashboard-ui" && npm install --silent 2>&1 && npm run build 2>&1)
+    echo "  Dashboard rebuilt."
+    echo ""
+
+    # 3. Redeploy guide files
+    echo "  Updating guide files..."
+    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/ORCHESTRATOR_GUIDE.md" > "$DIR/ORCHESTRATOR_GUIDE.md"
+    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/SPACE_WORKER_GUIDE.md" > "$DIR/SPACE_WORKER_GUIDE.md"
+
+    # 4. Redeploy templates
+    echo "  Updating templates..."
+    mkdir -p "$DIR/templates"
+    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/space-worker-prompt.md" > "$DIR/templates/space-worker-prompt.md"
+    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/orchestrator-system-prompt-override.md" > "$DIR/templates/orchestrator-system-prompt-override.md"
+
+    # 5. Redeploy scripts
+    echo "  Updating scripts..."
+    mkdir -p "$DIR/scripts"
+    for script in create-space.sh create-project.sh create-task.sh create-escalation.sh heartbeat-cron.sh scheduler.sh lock-helper.sh; do
+      if [[ -f "$REPO_DIR/scripts/$script" ]]; then
+        cp "$REPO_DIR/scripts/$script" "$DIR/scripts/$script"
+      fi
+    done
+    chmod +x "$DIR/scripts/"*.sh
+
+    # 6. Redeploy hooks
+    echo "  Updating hooks..."
+    mkdir -p "$DIR/hooks"
+    cp "$REPO_DIR"/hooks/*.sh "$DIR/hooks/"
+    chmod +x "$DIR/hooks/"*.sh
+
+    # Wire hooks into settings
+    SETTINGS="$HOME/.claude/settings.json"
+    if command -v jq &> /dev/null; then
+      HOOKS_JSON=$(cat "$REPO_DIR/hooks/hooks.json")
+      HOOKS_JSON=$(echo "$HOOKS_JSON" | sed "s|~/.superbot2|$DIR|g; s|\\\${HOME}|$HOME|g; s|~/|$HOME/|g")
+
+      if [[ -f "$SETTINGS" ]]; then
+        EXISTING=$(cat "$SETTINGS")
+        MERGED=$(echo "$EXISTING" | jq --argjson hooks "$(echo "$HOOKS_JSON" | jq '.hooks')" '.hooks = $hooks')
+        echo "$MERGED" > "$SETTINGS"
+      else
+        echo "$HOOKS_JSON" > "$SETTINGS"
+      fi
+    fi
+
+    # 7. Redeploy skills
+    echo "  Updating skills..."
+    SKILLS_DIR="$HOME/.claude/skills"
+    mkdir -p "$SKILLS_DIR"
+    for skill_dir in "$REPO_DIR"/skills/*/; do
+      skill_name=$(basename "$skill_dir")
+      if [[ -d "$SKILLS_DIR/$skill_name" ]]; then
+        rm -rf "$SKILLS_DIR/$skill_name"
+      fi
+      cp -r "$skill_dir" "$SKILLS_DIR/$skill_name"
+      # Expand ~/.superbot2 paths in skill markdown files
+      for md_file in "$SKILLS_DIR/$skill_name"/*.md; do
+        [[ -f "$md_file" ]] || continue
+        sed -i '' "s|~/.superbot2|$DIR|g" "$md_file"
+      done
+      echo "    $skill_name"
+    done
+
+    # 8. Redeploy agents
+    echo "  Updating agents..."
+    AGENTS_DIR="$HOME/.claude/agents"
+    mkdir -p "$AGENTS_DIR"
+    for agent_file in "$REPO_DIR"/agents/*.md; do
+      [[ ! -f "$agent_file" ]] && continue
+      agent_name=$(basename "$agent_file")
+      cp "$agent_file" "$AGENTS_DIR/$agent_name"
+      echo "    $agent_name"
+    done
+
+    echo ""
+    echo "  Update complete. User data was NOT touched:"
+    echo "    spaces/, escalations/, knowledge/, IDENTITY.md, USER.md, MEMORY.md"
+    echo ""
+    echo "  Restart superbot2 to pick up changes."
+    exit 0
+    ;;
+
+  setup)
+    exec bash "$REPO_DIR/scripts/setup.sh"
+    ;;
+
+  help|--help|-h)
+    echo "Usage: superbot2 [command]"
+    echo ""
+    echo "Commands:"
+    echo "  (none)     Start the superbot2 orchestrator"
+    echo "  update     Pull latest code and redeploy (preserves user data)"
+    echo "  setup      Re-run initial setup"
+    echo "  help       Show this help"
+    echo ""
+    exit 0
+    ;;
+esac
+
+# ─── Guard: run setup if not initialized ───
+
+if [[ ! -d "$DIR" ]]; then
+  echo "Superbot2 not set up yet. Running setup..."
+  bash "$REPO_DIR/scripts/setup.sh"
+fi
+
+# ─── Assemble system prompt ───
+
+assemble_prompt() {
+  local prompt
+  prompt=$(cat "$TEMPLATE")
+
+  # Substitute identity
+  if [[ -f "$DIR/IDENTITY.md" ]]; then
+    local identity
+    identity=$(cat "$DIR/IDENTITY.md")
+    prompt="${prompt//\{\{IDENTITY\}\}/$identity}"
+  else
+    prompt="${prompt//\{\{IDENTITY\}\}/No identity configured yet.}"
+  fi
+
+  # Substitute user profile
+  if [[ -f "$DIR/USER.md" ]]; then
+    local user
+    user=$(cat "$DIR/USER.md")
+    prompt="${prompt//\{\{USER\}\}/$user}"
+  else
+    prompt="${prompt//\{\{USER\}\}/No user profile configured yet.}"
+  fi
+
+  # Substitute memory
+  if [[ -f "$DIR/MEMORY.md" ]]; then
+    local memory
+    memory=$(cat "$DIR/MEMORY.md")
+    prompt="${prompt//\{\{MEMORY\}\}/$memory}"
+  else
+    prompt="${prompt//\{\{MEMORY\}\}/No memory yet.}"
+  fi
+
+  # --- Pre-load context ---
+
+  # Orchestrator guide
+  if [[ -f "$DIR/ORCHESTRATOR_GUIDE.md" ]]; then
+    prompt+=$'\n\n## Orchestrator Guide\n\n'
+    prompt+=$(cat "$DIR/ORCHESTRATOR_GUIDE.md")
+  fi
+
+  # Knowledge files
+  local kfiles=("$DIR"/knowledge/*)
+  if [[ ${#kfiles[@]} -gt 0 ]]; then
+    prompt+=$'\n\n## Knowledge\n'
+    for f in "${kfiles[@]}"; do
+      [[ -f "$f" ]] || continue
+      prompt+=$'\n### '"$(basename "$f")"$'\n\n'
+      prompt+=$(cat "$f")
+    done
+  fi
+
+  # Space configs
+  local sfiles=("$DIR"/spaces/*/space.json)
+  if [[ ${#sfiles[@]} -gt 0 ]]; then
+    prompt+=$'\n\n## Spaces\n'
+    for f in "${sfiles[@]}"; do
+      [[ -f "$f" ]] || continue
+      local slug
+      slug=$(basename "$(dirname "$f")")
+      prompt+=$'\n### '"$slug"$'\n\n```json\n'
+      prompt+=$(cat "$f")
+      prompt+=$'\n```\n'
+    done
+  fi
+
+  # Pending escalations
+  local pfiles=("$DIR"/escalations/pending/*.json)
+  if [[ ${#pfiles[@]} -gt 0 ]]; then
+    prompt+=$'\n\n## Pending Escalations\n'
+    for f in "${pfiles[@]}"; do
+      [[ -f "$f" ]] || continue
+      prompt+=$'\n### '"$(basename "$f")"$'\n\n```json\n'
+      prompt+=$(cat "$f")
+      prompt+=$'\n```\n'
+    done
+  fi
+
+  # Draft escalations
+  local dfiles=("$DIR"/escalations/draft/*.json)
+  if [[ ${#dfiles[@]} -gt 0 ]]; then
+    prompt+=$'\n\n## Draft Escalations\n'
+    for f in "${dfiles[@]}"; do
+      [[ -f "$f" ]] || continue
+      prompt+=$'\n### '"$(basename "$f")"$'\n\n```json\n'
+      prompt+=$(cat "$f")
+      prompt+=$'\n```\n'
+    done
+  fi
+
+  echo "$prompt"
+}
+
+# ─── Session ID ───
+
+SESSION_FILE="$DIR/.orchestrator-session"
+SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+echo "$SESSION_ID" > "$SESSION_FILE"
+echo "Generated session ID: $SESSION_ID"
+
+# Update team config with current session ID
+if [[ -f "$TEAM_DIR/config.json" ]] && command -v jq &>/dev/null; then
+  jq --arg sid "$SESSION_ID" '.leadSessionId = $sid' \
+    "$TEAM_DIR/config.json" > "$TEAM_DIR/config.json.tmp" \
+    && mv "$TEAM_DIR/config.json.tmp" "$TEAM_DIR/config.json"
+fi
+
+# ─── Main loop with restart support ───
+
+rm -f "$RESTART_FLAG"
+IS_RESTART=false
+
+# Ensure heartbeat is running
+if ! launchctl list com.superbot2.heartbeat &>/dev/null; then
+  echo "Installing heartbeat..."
+  bash "$REPO_DIR/scripts/install-heartbeat.sh"
+fi
+
+# Ensure scheduler is running
+if ! launchctl list com.superbot2.scheduler &>/dev/null; then
+  echo "Installing scheduler..."
+  bash "$REPO_DIR/scripts/install-scheduler.sh"
+fi
+
+# ─── Dashboard server ───
+
+start_dashboard() {
+  # Kill any existing dashboard on port 3274
+  lsof -ti:3274 | xargs kill 2>/dev/null || true
+
+  echo "Starting dashboard server on http://localhost:3274 ..."
+  node "$REPO_DIR/dashboard/server.js" &
+  DASHBOARD_PID=$!
+  echo "Dashboard server started (PID $DASHBOARD_PID)"
+}
+
+stop_dashboard() {
+  if [[ -n "$DASHBOARD_PID" ]]; then
+    kill "$DASHBOARD_PID" 2>/dev/null
+    wait "$DASHBOARD_PID" 2>/dev/null || true
+    echo "Dashboard server stopped."
+    DASHBOARD_PID=""
+  fi
+}
+
+# Clean up dashboard on exit
+trap 'stop_dashboard' EXIT
+
+start_dashboard
+
+echo "Starting superbot2 orchestrator..."
+
+while true; do
+  # Assemble fresh context each iteration
+  PROMPT=$(assemble_prompt)
+
+  # Start watchdog: monitors for restart flag, kills claude when found
+  (
+    while true; do
+      sleep 1
+      if [[ -f "$RESTART_FLAG" ]]; then
+        pkill -INT -P $LAUNCHER_PID 2>/dev/null
+        exit 0
+      fi
+    done
+  ) &
+  WATCHDOG_PID=$!
+
+  # Build claude args with team registration
+  CLAUDE_ARGS=(
+    --system-prompt "$PROMPT"
+    --session-id "$SESSION_ID"
+    --team-name superbot2
+    --agent-name team-lead
+    --agent-id team-lead@superbot2
+    --dangerously-skip-permissions
+  )
+
+  if [[ "$IS_RESTART" == true ]]; then
+    CLAUDE_ARGS+=(--resume "$SESSION_ID")
+    INITIAL_MSG="Session restarted with fresh context. Begin your cycle."
+  else
+    INITIAL_MSG="Begin your cycle."
+  fi
+
+  # Trigger heartbeat to seed inbox
+  bash "$REPO_DIR/scripts/heartbeat-cron.sh" &
+
+  claude "${CLAUDE_ARGS[@]}" "$INITIAL_MSG"
+
+  # Claude exited — clean up watchdog
+  kill $WATCHDOG_PID 2>/dev/null
+  wait $WATCHDOG_PID 2>/dev/null
+
+  # Check if this was a restart request
+  if [[ -f "$RESTART_FLAG" ]]; then
+    rm -f "$RESTART_FLAG"
+    IS_RESTART=true
+
+    echo ""
+    echo "Superbot2 restarting — resuming session $SESSION_ID"
+    echo ""
+    continue
+  fi
+
+  # Normal exit
+  break
+done
+
+echo "Superbot2 orchestrator stopped."
