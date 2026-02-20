@@ -244,9 +244,35 @@ export function ChatSection() {
     return items
   }, [classified])
 
-  useEffect(() => {
+  // Paginate: show only the last N render items
+  const hasEarlierMessages = renderItems.length > visibleCount
+  const visibleItems = useMemo(() => {
+    if (renderItems.length <= visibleCount) return renderItems
+    return renderItems.slice(-visibleCount)
+  }, [renderItems, visibleCount])
+
+  const loadEarlier = useCallback(() => {
     const container = chatContainerRef.current
-    if (container) {
+    const prevHeight = container?.scrollHeight ?? 0
+    isLoadingEarlierRef.current = true
+    setVisibleCount(prev => prev + MESSAGES_PER_PAGE)
+    // Restore scroll position after DOM updates so content doesn't jump
+    requestAnimationFrame(() => {
+      if (container) {
+        container.scrollTop = container.scrollHeight - prevHeight
+      }
+      isLoadingEarlierRef.current = false
+    })
+  }, [])
+
+  // Auto-scroll to bottom for new messages, but not when loading earlier
+  useEffect(() => {
+    if (isLoadingEarlierRef.current) return
+    const container = chatContainerRef.current
+    if (!container) return
+    // Only auto-scroll if user is near the bottom (within 150px)
+    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
+    if (nearBottom) {
       container.scrollTop = container.scrollHeight
     }
   }, [classified])
@@ -264,7 +290,16 @@ export function ChatSection() {
           </div>
         ) : (
           <>
-            {renderItems.map((item, i) => {
+            {hasEarlierMessages && (
+              <button
+                onClick={loadEarlier}
+                className="flex items-center justify-center gap-1 w-full py-1.5 text-[11px] text-stone/50 hover:text-stone/70 transition-colors"
+              >
+                <ChevronUp className="h-3 w-3" />
+                Load earlier messages
+              </button>
+            )}
+            {visibleItems.map((item, i) => {
               if (item.kind === 'bubble') {
                 if (item.type === 'user') {
                   return <UserBubble key={`b-${i}`} msg={item.msg} />
