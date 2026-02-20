@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, X } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import { Send, X, ChevronUp } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { useMessages } from '@/hooks/useSpaces'
@@ -84,7 +84,7 @@ function ThumbnailGallery({ paths }: { paths: string[] }) {
               <img
                 src={imageApiUrl(path)}
                 alt={filename}
-                className="h-20 w-auto object-cover"
+                className="h-20 w-20 object-cover"
                 loading="lazy"
                 onError={() => setErrorPaths(prev => new Set(prev).add(path))}
               />
@@ -171,12 +171,16 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
   return false
 }
 
+const MESSAGES_PER_PAGE = 50
+
 export function ChatSection() {
   const [text, setText] = useState('')
   const [sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const isLoadingEarlierRef = useRef(false)
   const queryClient = useQueryClient()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
@@ -263,20 +267,7 @@ export function ChatSection() {
             {renderItems.map((item, i) => {
               if (item.kind === 'bubble') {
                 if (item.type === 'user') {
-                  return (
-                    <div key={`b-${i}`} className="flex justify-end">
-                      <div className="max-w-[75%]">
-                        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)] overflow-hidden min-w-0">
-                          {hasImagePaths(item.msg.text) ? (
-                            <TextWithInlineImages text={item.msg.text} className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]" />
-                          ) : (
-                            <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{item.msg.text}</p>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(item.msg.timestamp)}</span>
-                      </div>
-                    </div>
-                  )
+                  return <UserBubble key={`b-${i}`} msg={item.msg} />
                 }
                 return <OrchestratorBubble key={`b-${i}`} msg={item.msg} />
               }
@@ -356,6 +347,29 @@ function ActivityIndicator({ msgs }: { msgs: Array<{ msg: InboxMessage; type: Me
   )
 }
 
+function UserBubble({ msg }: { msg: InboxMessage }) {
+  const imagePaths = useMemo(
+    () => hasImagePaths(msg.text) ? extractImagePaths(msg.text) : [],
+    [msg.text]
+  )
+  const displayText = useMemo(
+    () => imagePaths.length > 0 ? stripImagePaths(msg.text) : msg.text,
+    [msg.text, imagePaths]
+  )
+
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[75%]">
+        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)] overflow-hidden min-w-0">
+          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{displayText}</p>
+        </div>
+        {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
+        <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(msg.timestamp)}</span>
+      </div>
+    </div>
+  )
+}
+
 function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = msg.text.length > 500
@@ -394,8 +408,8 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
               )}
             </>
           )}
-          {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
         </div>
+        {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
         <span className="text-[10px] text-stone/50 block mt-1 ml-1">
           {formatTime(msg.timestamp)}
           {msg.summary && <span className="text-stone/45"> — {msg.summary}</span>}
