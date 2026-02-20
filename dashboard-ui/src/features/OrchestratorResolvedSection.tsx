@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bot, ChevronDown, ChevronUp, Check, X, PenLine } from 'lucide-react'
+import { Bot, ChevronDown, ChevronUp, Check, PenLine } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEscalations } from '@/hooks/useSpaces'
 import { resolveEscalation, dismissEscalation } from '@/lib/api'
