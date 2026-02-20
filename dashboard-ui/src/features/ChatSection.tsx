@@ -141,7 +141,7 @@ export function ChatSection() {
         <h2 className="font-heading text-xl text-parchment">Chat</h2>
         <button
           onClick={() => setShowBackground(!showBackground)}
-          className={`text-xs ${showBackground ? 'text-stone/70' : 'text-stone/40'}`}
+          className={`text-xs ${showBackground ? 'text-stone/70' : 'text-stone/50'}`}
         >
           {showBackground ? 'hide' : 'show'} all activity
         </button>
@@ -150,7 +150,7 @@ export function ChatSection() {
       <div className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0">
         {classified.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-stone/40">No messages yet</p>
+            <p className="text-sm text-stone/50">No messages yet</p>
           </div>
         ) : showBackground ? (
           <>
@@ -159,7 +159,7 @@ export function ChatSection() {
               if (type === 'system') {
                 return (
                   <div key={`${msg.timestamp}-${i}`} className="text-center py-0.5">
-                    <span className="text-[10px] text-stone/35">{getSystemLabel(msg)} · {formatTime(msg.timestamp)}</span>
+                    <span className="text-[10px] text-stone/50">{getSystemLabel(msg)} · {formatTime(msg.timestamp)}</span>
                   </div>
                 )
               }
@@ -171,7 +171,7 @@ export function ChatSection() {
                       <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
                         <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed">{msg.text}</p>
                       </div>
-                      <span className="text-[10px] text-stone/35 block text-right mt-1 mr-1">{formatTime(msg.timestamp)}</span>
+                      <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(msg.timestamp)}</span>
                     </div>
                   </div>
                 )
@@ -183,9 +183,9 @@ export function ChatSection() {
                   const preview = msg.summary || msg.text.slice(0, 80).replace(/\n/g, ' ')
                   return (
                     <div key={`${msg.timestamp}-${i}`} className="py-0.5 pl-1">
-                      <span className="text-[11px] text-stone/30">
+                      <span className="text-[11px] text-stone/50">
                         → {msg.to}: {preview}{!msg.summary && msg.text.length > 80 ? '…' : ''}
-                        <span className="text-stone/20 ml-2">{formatTime(msg.timestamp)}</span>
+                        <span className="text-stone/40 ml-2">{formatTime(msg.timestamp)}</span>
                       </span>
                     </div>
                   )
@@ -215,7 +215,7 @@ export function ChatSection() {
                         <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
                           <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed">{item.msg.text}</p>
                         </div>
-                        <span className="text-[10px] text-stone/35 block text-right mt-1 mr-1">{formatTime(item.msg.timestamp)}</span>
+                        <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(item.msg.timestamp)}</span>
                       </div>
                     </div>
                   )
@@ -236,7 +236,7 @@ export function ChatSection() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Message superbot..."
-          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/35 focus:outline-none focus:border-stone/30 transition-colors"
+          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors"
         />
         <button
           type="submit"
@@ -262,7 +262,7 @@ function ActivityIndicator({ msgs }: { msgs: Array<{ msg: InboxMessage; type: Me
       <>
         {systemMsgs.map(({ msg }, i) => (
           <div key={i} className="text-center py-0.5">
-            <span className="text-[10px] text-stone/35">{getSystemLabel(msg)} · {formatTime(msg.timestamp)}</span>
+            <span className="text-[10px] text-stone/50">{getSystemLabel(msg)} · {formatTime(msg.timestamp)}</span>
           </div>
         ))}
       </>
@@ -292,7 +292,7 @@ function ActivityIndicator({ msgs }: { msgs: Array<{ msg: InboxMessage; type: Me
 
   return (
     <div className="text-center py-1">
-      <span className="text-[10px] text-stone/25">
+      <span className="text-[10px] text-stone/45">
         {parts.join(' · ')}
       </span>
     </div>
@@ -306,7 +306,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%]">
-        <span className="text-[10px] text-stone/40 ml-1 mb-0.5 block">
+        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">
           superbot{msg.to && msg.to !== 'dashboard-user' ? ` → ${msg.to}` : ''}
         </span>
         <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)]">
@@ -330,9 +330,9 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
             </>
           )}
         </div>
-        <span className="text-[10px] text-stone/35 block mt-1 ml-1">
+        <span className="text-[10px] text-stone/50 block mt-1 ml-1">
           {formatTime(msg.timestamp)}
-          {msg.summary && <span className="text-stone/25"> — {msg.summary}</span>}
+          {msg.summary && <span className="text-stone/45"> — {msg.summary}</span>}
         </span>
       </div>
     </div>
@@ -343,7 +343,7 @@ function TypingIndicator() {
   return (
     <div className="flex justify-start">
       <div>
-        <span className="text-[10px] text-stone/40 ml-1 mb-0.5 block">superbot</span>
+        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">superbot</span>
         <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-[rgba(120,140,160,0.12)]">
           <div className="flex gap-1.5 items-center">
             <span className="typing-dot" />
@@ -363,7 +363,7 @@ function AgentBubble({ msg }: { msg: InboxMessage }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%]">
-        <span className="text-[10px] text-stone/35 ml-1 mb-0.5 block">{msg.from}</span>
+        <span className="text-[10px] text-stone/50 ml-1 mb-0.5 block">{msg.from}</span>
         <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-surface/30">
           {isLong && !expanded ? (
             <>
@@ -385,9 +385,9 @@ function AgentBubble({ msg }: { msg: InboxMessage }) {
             </>
           )}
         </div>
-        <span className="text-[10px] text-stone/30 block mt-1 ml-1">
+        <span className="text-[10px] text-stone/50 block mt-1 ml-1">
           {formatTime(msg.timestamp)}
-          {msg.summary && <span className="text-stone/20"> — {msg.summary}</span>}
+          {msg.summary && <span className="text-stone/40"> — {msg.summary}</span>}
         </span>
       </div>
     </div>
