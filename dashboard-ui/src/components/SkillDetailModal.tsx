@@ -1,45 +1,28 @@
 import { useState, useEffect, type ReactNode } from 'react'
+import yaml from 'js-yaml'
 import { Loader2, X, FileText, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-function parseFrontmatter(raw: string): { frontmatter: Record<string, string> | null; body: string } {
+function parseFrontmatter(raw: string): { frontmatter: Record<string, any> | null; body: string } {
   const match = raw.match(/^---\n([\s\S]*?)\n---\n?/)
   if (!match) return { frontmatter: null, body: raw }
-  const fm: Record<string, string> = {}
-  const lines = match[1].split('\n')
-  let currentKey: string | null = null
-  for (const line of lines) {
-    if (currentKey && (line.startsWith('  ') || line.startsWith('\t'))) {
-      fm[currentKey] = (fm[currentKey] ? fm[currentKey] + ' ' : '') + line.trim()
-      continue
-    }
-    currentKey = null
-    const idx = line.indexOf(':')
-    if (idx === -1) continue
-    const key = line.slice(0, idx).trim()
-    let val = line.slice(idx + 1).trim()
-    if (val === '|' || val === '>') {
-      currentKey = key
-      fm[key] = ''
-      continue
-    }
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1)
-    }
-    fm[key] = val
+  try {
+    const fm = yaml.load(match[1]) as Record<string, any> | null
+    return { frontmatter: fm || {}, body: raw.slice(match[0].length) }
+  } catch {
+    return { frontmatter: null, body: raw }
   }
-  return { frontmatter: fm, body: raw.slice(match[0].length) }
 }
 
-function FrontmatterBlock({ data }: { data: Record<string, string> }) {
+function FrontmatterBlock({ data }: { data: Record<string, any> }) {
   return (
     <div className="rounded-lg bg-ink border border-border-custom p-4 mb-4">
       <div className="grid gap-2">
         {Object.entries(data).map(([key, value]) => (
           <div key={key} className="flex gap-3">
             <span className="text-xs font-mono text-sand shrink-0 min-w-[120px]">{key}</span>
-            <span className="text-xs text-parchment">{value}</span>
+            <span className="text-xs text-parchment">{typeof value === 'string' ? value : JSON.stringify(value)}</span>
           </div>
         ))}
       </div>

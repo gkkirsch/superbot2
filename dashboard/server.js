@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, spawn } from 'node:child_process'
+import yaml from 'js-yaml'
 
 const app = express()
 const PORT = 3274
@@ -1070,33 +1071,11 @@ async function getInstalledPluginDirs() {
 function parseFrontmatter(content) {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) return {}
-  const fm = {}
-  const lines = match[1].split('\n')
-  let currentKey = null
-  for (const line of lines) {
-    // Indented line = continuation of previous multiline value
-    if (currentKey && (line.startsWith('  ') || line.startsWith('\t'))) {
-      fm[currentKey] = (fm[currentKey] ? fm[currentKey] + ' ' : '') + line.trim()
-      continue
-    }
-    currentKey = null
-    const idx = line.indexOf(':')
-    if (idx === -1) continue
-    const key = line.slice(0, idx).trim()
-    let val = line.slice(idx + 1).trim()
-    // Block scalar indicator (| or >) — value is on next indented lines
-    if (val === '|' || val === '>') {
-      currentKey = key
-      fm[key] = ''
-      continue
-    }
-    // Strip surrounding quotes
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1)
-    }
-    fm[key] = val
+  try {
+    return yaml.load(match[1]) || {}
+  } catch {
+    return {}
   }
-  return fm
 }
 
 // --- Self-Improvement ---
