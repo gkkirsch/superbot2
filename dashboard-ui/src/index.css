@@ -109,7 +109,7 @@ body {
 .docs-content blockquote { border-left: 2px solid rgba(196, 168, 130, 0.4); padding-left: 1rem; color: rgba(112, 107, 99, 0.8); font-style: italic; margin-bottom: 0.75rem; }
 
 /* Compact markdown for escalation context (text-xs scale) */
-.markdown-compact { font-size: 0.75rem; line-height: 1.6; }
+.markdown-compact { font-size: 0.75rem; line-height: 1.6; overflow-wrap: anywhere; }
 .markdown-compact h1, .markdown-compact h2 { font-family: var(--font-heading); font-size: 0.8125rem; color: #d4cdc4; margin-top: 0.75rem; margin-bottom: 0.375rem; }
 .markdown-compact h3, .markdown-compact h4 { font-family: var(--font-heading); font-size: 0.75rem; color: #d4cdc4; margin-top: 0.5rem; margin-bottom: 0.25rem; }
 .markdown-compact h1:first-child, .markdown-compact h2:first-child, .markdown-compact h3:first-child { margin-top: 0; }
