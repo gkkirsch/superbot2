@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw } from 'lucide-react'
-import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, enablePlugin, disablePlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces } from '@/lib/api'
-import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail } from '@/lib/types'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle } from 'lucide-react'
+import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
+import { installPlugin, uninstallPlugin, enablePlugin, disablePlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
+import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -359,6 +359,109 @@ function HookDetailModal({ hook, onClose }: { hook: HookInfo; onClose: () => voi
   )
 }
 
+function CredentialForm({ pluginName }: { pluginName: string }) {
+  const { data: credStatus, refetch } = usePluginCredentials(pluginName)
+  const [values, setValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState<Record<string, boolean>>({})
+  const [feedback, setFeedback] = useState<Record<string, 'saved' | 'error' | null>>({})
+  const queryClient = useQueryClient()
+
+  if (!credStatus || credStatus.credentials.length === 0) return null
+
+  async function handleSave(cred: CredentialDeclaration) {
+    const val = values[cred.key]
+    if (!val?.trim()) return
+    setSaving(s => ({ ...s, [cred.key]: true }))
+    setFeedback(f => ({ ...f, [cred.key]: null }))
+    try {
+      await savePluginCredential(pluginName, cred.key, val.trim())
+      setFeedback(f => ({ ...f, [cred.key]: 'saved' }))
+      setValues(v => ({ ...v, [cred.key]: '' }))
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
+      setTimeout(() => setFeedback(f => ({ ...f, [cred.key]: null })), 3000)
+    } catch {
+      setFeedback(f => ({ ...f, [cred.key]: 'error' }))
+    } finally {
+      setSaving(s => ({ ...s, [cred.key]: false }))
+    }
+  }
+
+  async function handleDelete(cred: CredentialDeclaration) {
+    setSaving(s => ({ ...s, [cred.key]: true }))
+    try {
+      await deletePluginCredential(pluginName, cred.key)
+      refetch()
+      queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      queryClient.invalidateQueries({ queryKey: ['skills'] })
+    } catch {
+      setFeedback(f => ({ ...f, [cred.key]: 'error' }))
+    } finally {
+      setSaving(s => ({ ...s, [cred.key]: false }))
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Key className="h-3.5 w-3.5 text-sand" />
+        <span className="text-xs font-medium text-parchment">Credentials</span>
+      </div>
+      {credStatus.credentials.map(cred => {
+        const isConfigured = credStatus.configured[cred.key]
+        return (
+          <div key={cred.key} className="rounded-lg bg-ink border border-border-custom p-3">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-parchment">{cred.label || cred.key}</span>
+                {cred.required && <span className="text-[10px] text-ember/70">required</span>}
+              </div>
+              {isConfigured ? (
+                <span className="flex items-center gap-1 text-[10px] text-green-400">
+                  <Check className="h-3 w-3" /> Configured
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] text-amber-400">
+                  <AlertTriangle className="h-3 w-3" /> Not configured
+                </span>
+              )}
+            </div>
+            {cred.description && <p className="text-[11px] text-stone mb-2">{cred.description}</p>}
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={values[cred.key] || ''}
+                onChange={e => setValues(v => ({ ...v, [cred.key]: e.target.value }))}
+                placeholder={isConfigured ? '••••••••' : 'Enter value...'}
+                className="flex-1 px-2.5 py-1.5 text-xs bg-surface border border-border-custom rounded-md text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40"
+              />
+              <button
+                onClick={() => handleSave(cred)}
+                disabled={saving[cred.key] || !values[cred.key]?.trim()}
+                className="px-3 py-1.5 text-xs rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-40"
+              >
+                {saving[cred.key] ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+              </button>
+              {isConfigured && (
+                <button
+                  onClick={() => handleDelete(cred)}
+                  disabled={saving[cred.key]}
+                  className="px-2 py-1.5 text-xs rounded-md text-ember/70 hover:bg-ember/10 transition-colors disabled:opacity-40"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {feedback[cred.key] === 'saved' && <p className="text-[10px] text-green-400 mt-1">Saved to Keychain</p>}
+            {feedback[cred.key] === 'error' && <p className="text-[10px] text-ember mt-1">Failed to save</p>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: () => void }) {
   const [detail, setDetail] = useState<PluginDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -467,6 +570,8 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
               ) : (
                 <p className="text-sm text-stone">No component details available.</p>
               )}
+
+              {plugin.installed && <CredentialForm pluginName={plugin.name} />}
 
               {detail?.hasReadme && (
                 <button
