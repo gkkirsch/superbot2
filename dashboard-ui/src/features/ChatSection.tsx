@@ -67,7 +67,7 @@ export function ChatSection() {
   const [showBackground, setShowBackground] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
@@ -132,7 +132,10 @@ export function ChatSection() {
   }, [classified])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = chatContainerRef.current
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
   }, [classified])
 
   return (
@@ -147,7 +150,7 @@ export function ChatSection() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0">
         {classified.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-stone/50">No messages yet</p>
@@ -201,7 +204,6 @@ export function ChatSection() {
               )
             })}
             {waitingForReply && <TypingIndicator />}
-            <div ref={messagesEndRef} />
           </>
         ) : (
           <>
@@ -225,7 +227,6 @@ export function ChatSection() {
               return <ActivityIndicator key={`a-${i}`} msgs={item.msgs} />
             })}
             {waitingForReply && <TypingIndicator />}
-            <div ref={messagesEndRef} />
           </>
         )}
       </div>
