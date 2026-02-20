@@ -200,6 +200,13 @@ export async function deleteScheduleJob(name: string): Promise<{ schedule: Sched
   return response.json()
 }
 
+export async function updateScheduleJob(originalName: string, job: ScheduledJob): Promise<{ schedule: ScheduledJob[] }> {
+  if (originalName !== job.name) {
+    await deleteScheduleJob(originalName)
+  }
+  return addScheduleJob(job)
+}
+
 // --- Skills page ---
 
 export async function fetchSkills(): Promise<SkillInfo[]> {

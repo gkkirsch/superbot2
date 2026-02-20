@@ -1,14 +1,27 @@
 import { useState } from 'react'
-import { Check, X, Trash2 } from 'lucide-react'
+import { Check, X, Trash2, Clock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchedule, useSystemStatus } from '@/hooks/useSpaces'
-import { addScheduleJob, deleteScheduleJob } from '@/lib/api'
+import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
 import type { ScheduledJob } from '@/lib/types'
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
 }
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+
+function toTitleCase(kebab: string): string {
+  return kebab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+function to12Hour(time24: string): string {
+  const [hStr, mStr] = time24.split(':')
+  let h = parseInt(hStr, 10)
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  if (h === 0) h = 12
+  else if (h > 12) h -= 12
+  return `${h}:${mStr} ${suffix}`
+}
 
 export function SchedulerStatus() {
   const { data } = useSystemStatus()
@@ -26,9 +39,154 @@ export function SchedulerStatus() {
   )
 }
 
+function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState<ScheduledJob>({ ...job, days: job.days ? [...job.days] : [] })
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const originalName = job.name
+
+  const toggleDay = (day: string) => {
+    const days = form.days || []
+    setForm({ ...form, days: days.includes(day) ? days.filter(d => d !== day) : [...days, day] })
+  }
+
+  const handleSave = async () => {
+    if (!form.name || !form.task) return
+    setSaving(true)
+    try {
+      const toSave = { ...form }
+      if (!toSave.space) delete (toSave as Partial<ScheduledJob>).space
+      if (!toSave.days || toSave.days.length === 0 || toSave.days.length === 7) delete (toSave as Partial<ScheduledJob>).days
+      await updateScheduleJob(originalName, toSave)
+      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await deleteScheduleJob(originalName)
+      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      onClose()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
+          <div className="min-w-0">
+            <h2 className="font-heading text-xl text-parchment">{toTitleCase(originalName)}</h2>
+            <p className="text-sm text-stone mt-1">Edit scheduled job</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors shrink-0 ml-4">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value.replace(/\s+/g, '-').toLowerCase() })}
+              className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-stone mb-1.5">Time</label>
+              <input
+                type="time"
+                value={form.time}
+                onChange={e => setForm({ ...form, time: e.target.value })}
+                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
+              <input
+                type="text"
+                value={form.space || ''}
+                onChange={e => setForm({ ...form, space: e.target.value })}
+                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Days</label>
+            <div className="flex items-center gap-1">
+              {ALL_DAYS.map(day => (
+                <button
+                  key={day}
+                  onClick={() => toggleDay(day)}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    (form.days || []).includes(day)
+                      ? 'bg-sand/20 text-sand border border-sand/30'
+                      : 'bg-ink text-stone border border-border-custom hover:border-stone/30'
+                  }`}
+                >
+                  {DAY_LABELS[day]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Task</label>
+            <textarea
+              value={form.task}
+              onChange={e => setForm({ ...form, task: e.target.value })}
+              rows={3}
+              className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50 resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between p-6 pt-4 border-t border-border-custom">
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-xs text-stone hover:text-ember transition-colors inline-flex items-center gap-1"
+          >
+            <Trash2 className="h-3 w-3" />
+            {deleting ? 'Deleting...' : 'Delete'}
+          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="text-xs text-stone hover:text-parchment transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !form.name || !form.task}
+              className="text-xs bg-sand/20 text-sand hover:bg-sand/30 px-3 py-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdding: (v: boolean) => void }) {
   const { data, isLoading } = useSchedule()
   const queryClient = useQueryClient()
+  const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [newJob, setNewJob] = useState<ScheduledJob>({ name: '', time: '09:00', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
 
   if (isLoading) {
@@ -37,11 +195,6 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
 
   const schedule = data?.schedule || []
   const lastRun = data?.lastRun || {}
-
-  const handleDelete = async (name: string) => {
-    await deleteScheduleJob(name)
-    queryClient.invalidateQueries({ queryKey: ['schedule'] })
-  }
 
   const handleAdd = async () => {
     if (!newJob.name || !newJob.time || !newJob.task) return
@@ -75,31 +228,28 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
           : 'Every day'
 
         return (
-          <div key={job.name} className="rounded-lg border border-border-custom bg-surface/30 px-4 py-3">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-parchment text-sm">{job.name}</span>
-                  <span className="text-xs font-mono text-sand">{job.time}</span>
-                  {job.space && (
-                    <span className="text-xs text-stone bg-stone/10 rounded px-1.5 py-0.5">{job.space}</span>
-                  )}
-                </div>
-                <p className="text-xs text-stone mt-1">{job.task}</p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-stone/70">
-                  <span>{days}</span>
-                  {lastDate && <span>Last ran: {lastDate}</span>}
-                </div>
+          <button
+            key={job.name}
+            onClick={() => setEditingJob(job)}
+            className="w-full text-left rounded-lg border border-border-custom bg-surface/30 px-4 py-3 hover:border-sand/30 hover:bg-surface/50 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium text-parchment text-sm">{toTitleCase(job.name)}</span>
+                {job.space && (
+                  <span className="text-xs text-stone bg-stone/10 rounded px-1.5 py-0.5">{job.space}</span>
+                )}
               </div>
-              <button
-                onClick={() => handleDelete(job.name)}
-                className="text-stone hover:text-ember transition-colors p-1 shrink-0"
-                title="Delete job"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <div className="flex items-center gap-1 text-sand text-xs shrink-0 ml-3">
+                <Clock className="h-3 w-3" />
+                <span>{to12Hour(job.time)}</span>
+              </div>
             </div>
-          </div>
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-stone/70">
+              <span>{days}</span>
+              {lastDate && <span>Last ran: {lastDate}</span>}
+            </div>
+          </button>
         )
       })}
 
@@ -166,6 +316,10 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
             </button>
           </div>
         </div>
+      )}
+
+      {editingJob && (
+        <ScheduleEditModal job={editingJob} onClose={() => setEditingJob(null)} />
       )}
     </div>
   )
