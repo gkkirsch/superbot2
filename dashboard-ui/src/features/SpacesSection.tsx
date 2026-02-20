@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useSpaces } from '@/hooks/useSpaces'
 import type { SpaceOverview } from '@/lib/types'
 
@@ -6,7 +7,10 @@ function SpaceCard({ space }: { space: SpaceOverview }) {
   const { completed, total } = space.taskCounts
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-custom bg-surface/40 px-4 py-3">
+    <Link
+      to={`/spaces/${space.slug}`}
+      className="flex items-center justify-between rounded-lg border border-border-custom bg-surface/40 px-4 py-3 transition-colors hover:border-sand/30 hover:bg-surface/60"
+    >
       <div className="flex items-center gap-3 min-w-0">
         <span className={`h-2 w-2 rounded-full shrink-0 ${
           space.status === 'active' ? 'bg-moss' : 'bg-stone/40'
@@ -24,7 +28,7 @@ function SpaceCard({ space }: { space: SpaceOverview }) {
         </p>
         <p className="text-xs text-stone/60">tasks done</p>
       </div>
-    </div>
+    </Link>
   )
 }
 
