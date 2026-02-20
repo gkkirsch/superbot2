@@ -157,7 +157,7 @@ function HiddenSectionsTray({ hidden, onRestore }: {
 // --- Main Dashboard ---
 
 export function Dashboard() {
-  const { config, isLoading, saveConfig } = useDashboardConfig()
+  const { config, saveConfig } = useDashboardConfig()
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
 
