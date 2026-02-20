@@ -64,7 +64,6 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
 export function ChatSection() {
   const [text, setText] = useState('')
   const [sent, setSent] = useState(false)
-  const [showBackground, setShowBackground] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
@@ -140,14 +139,8 @@ export function ChatSection() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-3">
         <h2 className="font-heading text-xl text-parchment">Chat</h2>
-        <button
-          onClick={() => setShowBackground(!showBackground)}
-          className={`text-xs ${showBackground ? 'text-stone/70' : 'text-stone/50'}`}
-        >
-          {showBackground ? 'hide' : 'show'} all activity
-        </button>
       </div>
 
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0">
@@ -155,59 +148,8 @@ export function ChatSection() {
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-stone/50">No messages yet</p>
           </div>
-        ) : showBackground ? (
-          <>
-            {/* Full activity view — every message individually */}
-            {classified.map(({ msg, type }, i) => {
-              if (type === 'system') {
-                return (
-                  <div key={`${msg.timestamp}-${i}`} className="text-center py-0.5">
-                    <span className="text-[10px] text-stone/50">{getSystemLabel(msg)} · {formatTime(msg.timestamp)}</span>
-                  </div>
-                )
-              }
-
-              if (type === 'user') {
-                return (
-                  <div key={`${msg.timestamp}-${i}`} className="flex justify-end">
-                    <div className="max-w-[75%]">
-                      <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
-                        <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.text}</p>
-                      </div>
-                      <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(msg.timestamp)}</span>
-                    </div>
-                  </div>
-                )
-              }
-
-              if (type === 'orchestrator') {
-                // Orchestrator→worker messages show as subtle one-liners
-                if (msg.to && msg.to !== 'dashboard-user') {
-                  const preview = msg.summary || msg.text.slice(0, 80).replace(/\n/g, ' ')
-                  return (
-                    <div key={`${msg.timestamp}-${i}`} className="py-0.5 pl-1">
-                      <span className="text-[11px] text-stone/50">
-                        → {msg.to}: {preview}{!msg.summary && msg.text.length > 80 ? '…' : ''}
-                        <span className="text-stone/40 ml-2">{formatTime(msg.timestamp)}</span>
-                      </span>
-                    </div>
-                  )
-                }
-                return (
-                  <OrchestratorBubble key={`${msg.timestamp}-${i}`} msg={msg} />
-                )
-              }
-
-              // agent/worker — full bubble in background view
-              return (
-                <AgentBubble key={`${msg.timestamp}-${i}`} msg={msg} />
-              )
-            })}
-            {waitingForReply && <TypingIndicator />}
-          </>
         ) : (
           <>
-            {/* Default view: primary bubbles + subtle activity indicators */}
             {renderItems.map((item, i) => {
               if (item.kind === 'bubble') {
                 if (item.type === 'user') {
@@ -357,40 +299,3 @@ function TypingIndicator() {
   )
 }
 
-function AgentBubble({ msg }: { msg: InboxMessage }) {
-  const [expanded, setExpanded] = useState(false)
-  const isLong = msg.text.length > 500
-
-  return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%]">
-        <span className="text-[10px] text-stone/50 ml-1 mb-0.5 block">{msg.from}</span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-surface/30">
-          {isLong && !expanded ? (
-            <>
-              <div className="max-h-32 overflow-hidden">
-                <MarkdownContent content={msg.text} className="text-parchment/70" />
-              </div>
-              <button onClick={() => setExpanded(true)} className="text-xs text-stone/50 mt-1.5">
-                Show more
-              </button>
-            </>
-          ) : (
-            <>
-              <MarkdownContent content={msg.text} className="text-parchment/70" />
-              {isLong && (
-                <button onClick={() => setExpanded(false)} className="text-xs text-stone/50 mt-1.5">
-                  Show less
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        <span className="text-[10px] text-stone/50 block mt-1 ml-1">
-          {formatTime(msg.timestamp)}
-          {msg.summary && <span className="text-stone/40"> — {msg.summary}</span>}
-        </span>
-      </div>
-    </div>
-  )
-}
