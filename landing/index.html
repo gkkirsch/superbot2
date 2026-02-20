@@ -50,6 +50,15 @@
     .fade-up {
       animation: fade-up 0.6s ease-out both;
     }
+    .fade-up-scroll {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+    .fade-up-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
 
     /* Architecture diagram */
     .arch-node {
@@ -117,6 +126,23 @@
         <a href="#install" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
+      <button onclick="toggleMobileNav()" class="md:hidden text-stone hover:text-parchment p-1" aria-label="Menu">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <!-- Mobile nav -->
+    <div id="mobile-nav" class="hidden md:hidden border-t border-border-custom bg-ink/95 backdrop-blur-sm">
+      <div class="flex flex-col px-6 py-4 gap-3 text-sm text-stone">
+        <a href="#features" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Features</a>
+        <a href="#architecture" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Architecture</a>
+        <a href="#dashboard" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Dashboard</a>
+        <a href="#install" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Install</a>
+        <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
+      </div>
     </div>
   </nav>
 
@@ -144,7 +170,7 @@
 
   <!-- Features -->
   <section id="features" class="px-6 py-24">
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-5xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Features</h2>
       <p class="text-stone text-center mb-16 max-w-xl mx-auto">Everything you need to run an autonomous software development operation.</p>
 
@@ -210,7 +236,7 @@
 
   <!-- Architecture -->
   <section id="architecture" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-4xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Architecture</h2>
       <p class="text-stone text-center mb-16 max-w-xl mx-auto">A multi-agent system where the orchestrator delegates work to specialized space workers.</p>
 
@@ -232,7 +258,7 @@
 
         <!-- Workers row -->
         <div class="w-full">
-          <div class="arch-connector-h w-3/4 mx-auto mb-0"></div>
+          <div class="arch-connector-h w-3/4 mx-auto mb-0 hidden md:block"></div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
             <!-- Worker 1 -->
             <div class="flex flex-col items-center gap-0">
@@ -309,7 +335,7 @@
 
   <!-- Dashboard Preview -->
   <section id="dashboard" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto">
+    <div class="max-w-5xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Dashboard</h2>
       <p class="text-stone text-center mb-16 max-w-xl mx-auto">A real-time web UI for managing escalations, chatting with the orchestrator, and monitoring system health.</p>
 
@@ -324,7 +350,7 @@
 
   <!-- Install -->
   <section id="install" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-3xl mx-auto text-center">
+    <div class="max-w-3xl mx-auto text-center fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4">Install</h2>
       <p class="text-stone mb-10">One command. That's it.</p>
 
@@ -380,6 +406,23 @@
         }, 2000);
       });
     }
+
+    function toggleMobileNav() {
+      document.getElementById('mobile-nav').classList.toggle('hidden');
+    }
+    function closeMobileNav() {
+      document.getElementById('mobile-nav').classList.add('hidden');
+    }
+
+    // Scroll-triggered fade-up animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.fade-up-scroll').forEach(el => observer.observe(el));
   </script>
 
 </body>
