@@ -1078,6 +1078,118 @@ function parseFrontmatter(content) {
   }
 }
 
+// --- Plugin Credentials (macOS Keychain) ---
+
+const KEYCHAIN_SERVICE = 'superbot2-plugin-credentials'
+
+function keychainExec(args) {
+  return new Promise((resolve, reject) => {
+    execFile('security', args, (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message))
+      resolve(stdout.trim())
+    })
+  })
+}
+
+async function keychainSet(pluginName, key, value) {
+  const account = `${pluginName}/${key}`
+  await keychainExec(['add-generic-password', '-s', KEYCHAIN_SERVICE, '-a', account, '-w', value, '-U'])
+}
+
+async function keychainGet(pluginName, key) {
+  const account = `${pluginName}/${key}`
+  try {
+    return await keychainExec(['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', account, '-w'])
+  } catch {
+    return null
+  }
+}
+
+async function keychainDelete(pluginName, key) {
+  const account = `${pluginName}/${key}`
+  try {
+    await keychainExec(['delete-generic-password', '-s', KEYCHAIN_SERVICE, '-a', account])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function keychainHas(pluginName, key) {
+  return (await keychainGet(pluginName, key)) !== null
+}
+
+// Read credential declarations from all SKILL.md files in a plugin
+async function getPluginCredentials(installPath) {
+  const skillsDir = join(installPath, 'skills')
+  const entries = await safeReaddir(skillsDir)
+  for (const entry of entries) {
+    const skillMd = join(skillsDir, entry, 'SKILL.md')
+    try {
+      const content = await readFile(skillMd, 'utf-8')
+      const fm = parseFrontmatter(content)
+      if (Array.isArray(fm.credentials) && fm.credentials.length > 0) {
+        return fm.credentials
+      }
+    } catch { /* skip */ }
+  }
+  return []
+}
+
+// GET /api/plugins/:name/credentials — list declared credentials with configured status
+app.get('/api/plugins/:name/credentials', async (req, res) => {
+  try {
+    const pluginName = req.params.name
+    const pluginDirs = await getInstalledPluginDirs()
+    const pd = pluginDirs.find(p => p.pluginName === pluginName || p.pluginId === pluginName)
+    if (!pd) return res.status(404).json({ error: 'Plugin not found' })
+
+    const credentials = await getPluginCredentials(pd.installPath)
+    const configured = {}
+    for (const cred of credentials) {
+      configured[cred.key] = await keychainHas(pd.pluginName, cred.key)
+    }
+    res.json({ credentials, configured })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/plugins/:name/credentials — save a credential to Keychain
+app.post('/api/plugins/:name/credentials', async (req, res) => {
+  try {
+    const pluginName = req.params.name
+    const { key, value } = req.body
+    if (!key || !value) return res.status(400).json({ error: 'key and value required' })
+
+    const pluginDirs = await getInstalledPluginDirs()
+    const pd = pluginDirs.find(p => p.pluginName === pluginName || p.pluginId === pluginName)
+    if (!pd) return res.status(404).json({ error: 'Plugin not found' })
+
+    await keychainSet(pd.pluginName, key, value)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /api/plugins/:name/credentials/:key — remove from Keychain
+app.delete('/api/plugins/:name/credentials/:key', async (req, res) => {
+  try {
+    const pluginName = req.params.name
+    const { key } = req.params
+
+    const pluginDirs = await getInstalledPluginDirs()
+    const pd = pluginDirs.find(p => p.pluginName === pluginName || p.pluginId === pluginName)
+    if (!pd) return res.status(404).json({ error: 'Plugin not found' })
+
+    const deleted = await keychainDelete(pd.pluginName, key)
+    res.json({ ok: deleted })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Self-Improvement ---
 
 const ANALYSIS_HISTORY_DIR = join(SUPERBOT_DIR, 'analysis-history')
@@ -1169,8 +1281,24 @@ app.get('/api/skills', async (_req, res) => {
       } catch { /* no SKILL.md, skip */ }
     }
 
-    // Plugin-provided skills
+    // Plugin-provided skills (with credential status)
     const pluginDirs = await getInstalledPluginDirs()
+    // Pre-compute credential status per plugin
+    const pluginCredentialStatus = new Map()
+    for (const pd of pluginDirs) {
+      const creds = await getPluginCredentials(pd.installPath)
+      if (creds.length > 0) {
+        let allConfigured = true
+        for (const cred of creds) {
+          if (!(await keychainHas(pd.pluginName, cred.key))) {
+            allConfigured = false
+            break
+          }
+        }
+        pluginCredentialStatus.set(pd.pluginName, { credentials: creds, needsConfig: !allConfigured })
+      }
+    }
+
     for (const pd of pluginDirs) {
       const pluginSkillsDir = join(pd.installPath, 'skills')
       const skillEntries = await safeReaddir(pluginSkillsDir)
@@ -1185,6 +1313,7 @@ app.get('/api/skills', async (_req, res) => {
           const content = await readFile(skillMd, 'utf-8')
           const fm = parseFrontmatter(content)
           const files = await safeReaddir(entryPath)
+          const credStatus = pluginCredentialStatus.get(pd.pluginName)
           skills.push({
             id: `plugin:${pd.pluginId}:${entry}`,
             name: fm.name || entry,
@@ -1193,6 +1322,7 @@ app.get('/api/skills', async (_req, res) => {
             source: 'plugin',
             pluginId: pd.pluginId,
             pluginName: pd.pluginName,
+            ...(credStatus?.needsConfig ? { needsConfig: true } : {}),
           })
         } catch { /* no SKILL.md, skip */ }
       }
@@ -1699,7 +1829,7 @@ app.get('/api/plugins', async (_req, res) => {
     const output = await runClaude(['plugin', 'list', '--json', '--available'])
     const data = JSON.parse(output)
 
-    // For installed plugins, scan cache dirs for component counts + get keywords
+    // For installed plugins, scan cache dirs for component counts + get keywords + credential status
     const installed = []
     for (const p of (data.installed || [])) {
       const pid = p.pluginId || p.id
@@ -1707,6 +1837,7 @@ app.get('/api/plugins', async (_req, res) => {
       const installPath = p.installPath
       let componentCounts = null
       let keywords = []
+      let hasUnconfiguredCredentials = false
       if (installPath) {
         try {
           const { counts } = await scanPluginComponents(installPath)
@@ -1715,6 +1846,16 @@ app.get('/api/plugins', async (_req, res) => {
         // Read keywords from local plugin.json
         const pj = await readJsonFile(join(installPath, '.claude-plugin', 'plugin.json'))
         if (pj?.keywords) keywords = pj.keywords
+        // Check credential status
+        const creds = await getPluginCredentials(installPath)
+        if (creds.length > 0) {
+          for (const cred of creds) {
+            if (!(await keychainHas(name, cred.key))) {
+              hasUnconfiguredCredentials = true
+              break
+            }
+          }
+        }
       }
       installed.push({
         ...p,
@@ -1724,6 +1865,7 @@ app.get('/api/plugins', async (_req, res) => {
         installed: true,
         componentCounts,
         keywords,
+        ...(hasUnconfiguredCredentials ? { hasUnconfiguredCredentials: true } : {}),
       })
     }
 
