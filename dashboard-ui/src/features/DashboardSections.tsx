@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks } from 'lucide-react'
 import { SectionHeader } from '@/components/SectionHeader'
 import { EscalationsSection } from '@/features/EscalationsSection'
 import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
@@ -7,6 +7,7 @@ import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection, SchedulerStatus } from '@/features/ScheduleSection'
 import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
+import { TodoSection } from '@/features/TodoSection'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Section wrapper components ---
@@ -55,6 +56,15 @@ function ScheduleDashboardSection() {
   )
 }
 
+function TodoDashboardSection() {
+  return (
+    <section data-section="todos">
+      <SectionHeader title="Todos" icon={ListChecks} />
+      <TodoSection />
+    </section>
+  )
+}
+
 function ExtensionsDashboardSection() {
   return (
     <section data-section="extensions">
@@ -96,6 +106,10 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'schedule',
     Component: ScheduleDashboardSection,
   },
+  'todos': {
+    id: 'todos',
+    Component: TodoDashboardSection,
+  },
   'extensions': {
     id: 'extensions',
     Component: ExtensionsDashboardSection,
@@ -106,6 +120,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
-  rightColumn: ['pulse', 'schedule', 'extensions'],
+  rightColumn: ['pulse', 'schedule', 'todos', 'extensions'],
   hidden: [],
 }

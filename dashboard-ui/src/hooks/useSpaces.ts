@@ -20,8 +20,12 @@ import {
   fetchMessages,
   fetchDashboardConfig,
   saveDashboardConfig,
+  fetchTodos,
+  addTodo,
+  updateTodo,
+  deleteTodo,
 } from '@/lib/api'
-import type { DashboardConfig } from '@/lib/types'
+import type { DashboardConfig, TodoItem } from '@/lib/types'
 
 // --- Context files ---
 
@@ -181,5 +185,35 @@ export function useDashboardConfig() {
     isLoading: query.isLoading,
     saveConfig: mutation.mutate,
     isSaving: mutation.isPending,
+  }
+}
+
+// --- Todos ---
+
+export function useTodos() {
+  const queryClient = useQueryClient()
+  const query = useQuery({ queryKey: ['todos'], queryFn: fetchTodos, staleTime: 30_000 })
+
+  const addMutation = useMutation({
+    mutationFn: (text: string) => addTodo(text),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['todos'] }) },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (todo: TodoItem) => updateTodo(todo.id, { completed: !todo.completed }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['todos'] }) },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => deleteTodo(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['todos'] }) },
+  })
+
+  return {
+    todos: query.data || [],
+    isLoading: query.isLoading,
+    add: addMutation.mutate,
+    toggle: toggleMutation.mutate,
+    remove: removeMutation.mutate,
   }
 }

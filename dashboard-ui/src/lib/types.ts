@@ -207,6 +207,12 @@ export interface InboxMessage {
   metadata?: Record<string, unknown>
 }
 
+export interface TodoItem {
+  id: string
+  text: string
+  completed: boolean
+}
+
 export interface DashboardConfig {
   leftColumn: string[]
   rightColumn: string[]

@@ -770,15 +770,88 @@ app.get('/api/heartbeat/activity', async (_req, res) => {
   }
 })
 
+// --- Todos ---
+
+const TODOS_FILE = join(SUPERBOT_DIR, 'todos.json')
+
+const DEFAULT_TODOS = [
+  { id: '1', text: 'Better memory/daily summaries', completed: false },
+  { id: '2', text: 'Heartbeat audit', completed: false },
+  { id: '3', text: 'User memory/profile', completed: false },
+  { id: '4', text: 'Identity', completed: false },
+  { id: '5', text: 'Natural language hooks/enforcement', completed: false },
+]
+
+async function readTodos() {
+  const data = await readJsonFile(TODOS_FILE)
+  return data || DEFAULT_TODOS
+}
+
+async function writeTodos(todos) {
+  await writeFile(TODOS_FILE, JSON.stringify(todos, null, 2), 'utf-8')
+}
+
+app.get('/api/todos', async (_req, res) => {
+  try {
+    const todos = await readTodos()
+    res.json({ todos })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/todos', async (req, res) => {
+  try {
+    const { text } = req.body
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'Missing or empty text' })
+    }
+    const todos = await readTodos()
+    const newTodo = { id: Date.now().toString(), text: text.trim(), completed: false }
+    todos.push(newTodo)
+    await writeTodos(todos)
+    res.json({ todo: newTodo })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/todos/:id', async (req, res) => {
+  try {
+    const todos = await readTodos()
+    const idx = todos.findIndex(t => t.id === req.params.id)
+    if (idx === -1) return res.status(404).json({ error: 'Todo not found' })
+    const { text, completed } = req.body
+    if (text !== undefined) todos[idx].text = text
+    if (completed !== undefined) todos[idx].completed = completed
+    await writeTodos(todos)
+    res.json({ todo: todos[idx] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/todos/:id', async (req, res) => {
+  try {
+    const todos = await readTodos()
+    const filtered = todos.filter(t => t.id !== req.params.id)
+    if (filtered.length === todos.length) return res.status(404).json({ error: 'Todo not found' })
+    await writeTodos(filtered)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Dashboard config ---
 
 const DEFAULT_DASHBOARD_CONFIG = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
-  rightColumn: ['pulse', 'schedule', 'extensions'],
+  rightColumn: ['pulse', 'schedule', 'todos', 'extensions'],
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'extensions']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'extensions']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {

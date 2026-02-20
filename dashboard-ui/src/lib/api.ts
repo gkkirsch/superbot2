@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem } from './types'
 
 export type { PluginDetail }
 
@@ -500,4 +500,40 @@ export async function saveDashboardConfig(config: DashboardConfig): Promise<Dash
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   const data = await response.json()
   return data.config
+}
+
+// --- Todos ---
+
+export async function fetchTodos(): Promise<TodoItem[]> {
+  const data = await fetchJson<{ todos: TodoItem[] }>('/todos')
+  return data.todos
+}
+
+export async function addTodo(text: string): Promise<TodoItem> {
+  const response = await fetch(`${API_BASE}/todos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.todo
+}
+
+export async function updateTodo(id: string, updates: { text?: string; completed?: boolean }): Promise<TodoItem> {
+  const response = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.todo
+}
+
+export async function deleteTodo(id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
