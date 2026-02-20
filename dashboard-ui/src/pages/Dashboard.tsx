@@ -33,6 +33,7 @@ const SECTION_LABELS: Record<string, string> = {
   'pulse': 'Pulse',
   'schedule': 'Schedule',
   'extensions': 'Extensions',
+  'spaces': 'Spaces & Projects',
 }
 
 // --- Sortable section item ---
@@ -65,7 +66,7 @@ function SortableSection({ id, isEditing, onHide }: {
       {isEditing && (
         <>
           <div
-            className="absolute -left-6 top-1 cursor-grab active:cursor-grabbing text-stone/40 hover:text-sand transition-colors z-10"
+            className="absolute -left-6 top-[0.375rem] cursor-grab active:cursor-grabbing text-stone/40 hover:text-sand transition-colors z-10"
             {...attributes}
             {...listeners}
           >
@@ -73,7 +74,7 @@ function SortableSection({ id, isEditing, onHide }: {
           </div>
           <button
             onClick={() => onHide?.(id)}
-            className="absolute -right-2 top-1 z-10 rounded-full bg-surface border border-stone/20 p-1 text-stone/40 hover:text-ember hover:border-ember/30 transition-colors shadow-sm"
+            className="absolute -right-2 top-[0.375rem] z-10 rounded-full bg-surface border border-stone/20 p-1 text-stone/40 hover:text-ember hover:border-ember/30 transition-colors shadow-sm"
             title={`Hide ${SECTION_LABELS[id] || id}`}
           >
             <X className="h-3 w-3" />
@@ -136,20 +137,18 @@ function HiddenSectionsTray({ hidden, onRestore }: {
   if (hidden.length === 0) return null
 
   return (
-    <div className="mt-8 rounded-lg border border-dashed border-stone/20 bg-surface/20 p-4">
-      <h3 className="text-xs text-stone/60 uppercase tracking-wider mb-3">Hidden Sections</h3>
-      <div className="flex flex-wrap gap-2">
-        {hidden.map((id) => (
-          <button
-            key={id}
-            onClick={() => onRestore(id)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-stone/20 bg-surface/50 text-xs text-stone hover:text-sand hover:border-sand/30 transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            {SECTION_LABELS[id] || id}
-          </button>
-        ))}
-      </div>
+    <div className="mb-6 flex items-center gap-3 flex-wrap">
+      <span className="text-xs text-stone/40 uppercase tracking-wider">Hidden:</span>
+      {hidden.map((id) => (
+        <button
+          key={id}
+          onClick={() => onRestore(id)}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/15 bg-surface/30 text-xs text-stone/60 hover:text-sand hover:border-sand/30 transition-colors"
+        >
+          <Plus className="h-3 w-3" />
+          {SECTION_LABELS[id] || id}
+        </button>
+      ))}
     </div>
   )
 }
@@ -328,6 +327,11 @@ export function Dashboard() {
           </div>
         </div>
 
+        {/* Hidden sections tray — only visible in edit mode */}
+        {isEditing && (
+          <HiddenSectionsTray hidden={layout.hidden} onRestore={handleRestoreSection} />
+        )}
+
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -352,11 +356,6 @@ export function Dashboard() {
             {activeId ? <DragPreview id={activeId} /> : null}
           </DragOverlay>
         </DndContext>
-
-        {/* Hidden sections tray — only visible in edit mode */}
-        {isEditing && (
-          <HiddenSectionsTray hidden={layout.hidden} onRestore={handleRestoreSection} />
-        )}
       </div>
     </div>
   )
