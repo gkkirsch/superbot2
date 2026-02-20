@@ -24,6 +24,7 @@ import {
   addTodo,
   updateTodo,
   deleteTodo,
+  fetchPluginCredentials,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -147,6 +148,17 @@ export function usePlugins() {
 
 export function useMarketplaces() {
   return useQuery({ queryKey: ['marketplaces'], queryFn: fetchMarketplaces, staleTime: 15_000 })
+}
+
+// --- Plugin Credentials ---
+
+export function usePluginCredentials(name: string) {
+  return useQuery({
+    queryKey: ['plugin-credentials', name],
+    queryFn: () => fetchPluginCredentials(name),
+    enabled: !!name,
+    staleTime: 30_000,
+  })
 }
 
 // --- Sessions ---

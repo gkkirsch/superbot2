@@ -92,6 +92,7 @@ export interface SkillInfo {
   source?: 'user' | 'plugin'
   pluginId?: string
   pluginName?: string
+  needsConfig?: boolean
 }
 
 export interface AgentInfo {
@@ -138,6 +139,19 @@ export interface PluginInfo {
   enabled?: boolean
   componentCounts?: ComponentCounts | null
   keywords?: string[]
+  hasUnconfiguredCredentials?: boolean
+}
+
+export interface CredentialDeclaration {
+  key: string
+  label: string
+  description?: string
+  required?: boolean
+}
+
+export interface PluginCredentialStatus {
+  credentials: CredentialDeclaration[]
+  configured: Record<string, boolean>
 }
 
 export interface MarketplaceInfo {

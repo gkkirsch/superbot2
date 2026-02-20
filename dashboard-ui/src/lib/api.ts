@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus } from './types'
 
 export type { PluginDetail }
 
@@ -327,6 +327,30 @@ export async function refreshMarketplaces(): Promise<void> {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+// --- Plugin Credentials ---
+
+export async function fetchPluginCredentials(name: string): Promise<PluginCredentialStatus> {
+  return fetchJson<PluginCredentialStatus>(`/plugins/${encodeURIComponent(name)}/credentials`)
+}
+
+export async function savePluginCredential(name: string, key: string, value: string): Promise<{ ok: boolean }> {
+  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, value }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function deletePluginCredential(name: string, key: string): Promise<{ ok: boolean }> {
+  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
 }
 
 // --- Session summaries ---
