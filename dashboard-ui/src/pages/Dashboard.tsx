@@ -73,7 +73,7 @@ function SortableSection({ id, isEditing, onHide }: {
           </div>
           <button
             onClick={() => onHide?.(id)}
-            className="absolute -right-2 -top-2 z-10 rounded-full bg-surface border border-stone/20 p-1 text-stone/40 hover:text-ember hover:border-ember/30 transition-colors shadow-sm"
+            className="absolute -right-2 top-1 z-10 rounded-full bg-surface border border-stone/20 p-1 text-stone/40 hover:text-ember hover:border-ember/30 transition-colors shadow-sm"
             title={`Hide ${SECTION_LABELS[id] || id}`}
           >
             <X className="h-3 w-3" />
