@@ -1,6 +1,6 @@
 import express from 'express'
 import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, extname, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, spawn } from 'node:child_process'
@@ -2245,6 +2245,60 @@ app.post('/api/messages', async (req, res) => {
     await writeFile(inboxPath, JSON.stringify(existing, null, 2), 'utf-8')
 
     res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Image serving ---
+
+const ALLOWED_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+
+const IMAGE_CONTENT_TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+}
+
+app.get('/api/images', async (req, res) => {
+  try {
+    const imagePath = req.query.path
+    if (!imagePath || typeof imagePath !== 'string') {
+      return res.status(400).json({ error: 'path query parameter required' })
+    }
+
+    // Resolve ~ to homedir
+    const resolved = resolve(
+      imagePath.startsWith('~/') ? join(homedir(), imagePath.slice(1)) : imagePath
+    )
+
+    // Must be absolute
+    if (!resolved.startsWith('/')) {
+      return res.status(400).json({ error: 'Absolute path required' })
+    }
+
+    // Only serve image files
+    const ext = extname(resolved).toLowerCase()
+    if (!ALLOWED_IMAGE_EXTS.has(ext)) {
+      return res.status(403).json({ error: 'Not an allowed image type' })
+    }
+
+    // Check file exists and is a file
+    try {
+      const s = await stat(resolved)
+      if (!s.isFile()) {
+        return res.status(404).json({ error: 'Not a file' })
+      }
+    } catch {
+      return res.status(404).json({ error: 'File not found' })
+    }
+
+    res.set('Content-Type', IMAGE_CONTENT_TYPES[ext])
+    res.set('Cache-Control', 'public, max-age=300')
+    const data = await readFile(resolved)
+    res.send(data)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

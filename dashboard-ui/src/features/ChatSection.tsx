@@ -6,6 +6,68 @@ import { useMessages } from '@/hooks/useSpaces'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import type { InboxMessage } from '@/lib/types'
 
+// --- Inline image detection ---
+
+const IMAGE_PATH_RE = /((?:~\/|\/)[^\s]+\.(?:png|jpe?g|gif|webp))/gi
+
+function imageApiUrl(filePath: string): string {
+  return `/api/images?path=${encodeURIComponent(filePath)}`
+}
+
+function hasImagePaths(text: string): boolean {
+  IMAGE_PATH_RE.lastIndex = 0
+  const result = IMAGE_PATH_RE.test(text)
+  IMAGE_PATH_RE.lastIndex = 0
+  return result
+}
+
+/** Convert image file paths to markdown image syntax for MarkdownContent rendering */
+function preprocessImagesForMarkdown(text: string): string {
+  IMAGE_PATH_RE.lastIndex = 0
+  return text.replace(IMAGE_PATH_RE, (match) => {
+    const filename = match.split('/').pop() || 'image'
+    return `\n![${filename}](${imageApiUrl(match)})\n`
+  })
+}
+
+function ChatImage({ path }: { path: string }) {
+  const [errored, setErrored] = useState(false)
+  const filename = path.split('/').pop() || 'image'
+
+  if (errored) {
+    return <span className="text-stone/50 text-xs italic">{path}</span>
+  }
+
+  return (
+    <a href={imageApiUrl(path)} target="_blank" rel="noopener noreferrer" className="block my-2">
+      <img
+        src={imageApiUrl(path)}
+        alt={filename}
+        className="max-w-md rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+        loading="lazy"
+        onError={() => setErrored(true)}
+      />
+    </a>
+  )
+}
+
+/** Renders plain text with inline images for image paths */
+function TextWithInlineImages({ text, className }: { text: string; className?: string }) {
+  IMAGE_PATH_RE.lastIndex = 0
+  const segments = text.split(IMAGE_PATH_RE)
+
+  return (
+    <div className={className}>
+      {segments.map((segment, i) => {
+        if (i % 2 === 1) {
+          return <ChatImage key={i} path={segment} />
+        }
+        return segment ? <span key={i}>{segment}</span> : null
+      })}
+    </div>
+  )
+}
+
 type MessageType = 'user' | 'orchestrator' | 'agent' | 'system'
 
 function classifyMessage(msg: InboxMessage): MessageType {
@@ -157,7 +219,11 @@ export function ChatSection() {
                     <div key={`b-${i}`} className="flex justify-end">
                       <div className="max-w-[75%]">
                         <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
-                          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{item.msg.text}</p>
+                          {hasImagePaths(item.msg.text) ? (
+                            <TextWithInlineImages text={item.msg.text} className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]" />
+                          ) : (
+                            <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{item.msg.text}</p>
+                          )}
                         </div>
                         <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(item.msg.timestamp)}</span>
                       </div>
@@ -245,6 +311,10 @@ function ActivityIndicator({ msgs }: { msgs: Array<{ msg: InboxMessage; type: Me
 function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = msg.text.length > 500
+  const processedText = useMemo(
+    () => hasImagePaths(msg.text) ? preprocessImagesForMarkdown(msg.text) : msg.text,
+    [msg.text]
+  )
 
   return (
     <div className="flex justify-start">
@@ -256,7 +326,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
           {isLong && !expanded ? (
             <>
               <div className="max-h-32 overflow-hidden">
-                <MarkdownContent content={msg.text} className="text-parchment/80" />
+                <MarkdownContent content={processedText} className="text-parchment/80" />
               </div>
               <button onClick={() => setExpanded(true)} className="text-xs text-stone/50 mt-1.5">
                 Show more
@@ -264,7 +334,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
             </>
           ) : (
             <>
-              <MarkdownContent content={msg.text} className="text-parchment/80" />
+              <MarkdownContent content={processedText} className="text-parchment/80" />
               {isLong && (
                 <button onClick={() => setExpanded(false)} className="text-xs text-stone/50 mt-1.5">
                   Show less
