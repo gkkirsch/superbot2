@@ -60,15 +60,15 @@ function OrchestratorResolvedCard({ escalation }: { escalation: Escalation }) {
           <p className="text-sm text-parchment/90 leading-snug">{escalation.question}</p>
           <p className="text-xs text-moss/80 mt-1 line-clamp-1">{escalation.resolution}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+        <div className="flex items-center gap-2 shrink-0 mt-0.5">
           {resolvedDate && <span className="text-[10px] text-stone/40">{resolvedDate}</span>}
           <button
             onClick={(e) => { e.stopPropagation(); dismissMutation.mutate(escalation.id) }}
             disabled={dismissMutation.isPending}
-            className="opacity-0 group-hover/card:opacity-100 text-stone/30 hover:text-stone p-0.5 rounded transition-all disabled:opacity-40"
+            className="text-stone/40 hover:text-sand/70 transition-colors p-1.5 shrink-0 rounded"
             title="Dismiss"
           >
-            <X className="h-3 w-3" />
+            <Check className="h-4 w-4" />
           </button>
           {expanded
             ? <ChevronUp className="h-3.5 w-3.5 text-stone/40" />

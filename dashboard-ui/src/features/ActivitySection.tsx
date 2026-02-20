@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSystemStatus, useHeartbeatConfig, useActivity } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
@@ -111,6 +111,7 @@ export function ActivitySection() {
   const { data: hbConfig } = useHeartbeatConfig()
   const { data: activity } = useActivity()
   const queryClient = useQueryClient()
+  const [expanded, setExpanded] = useState(true)
   const [editingInterval, setEditingInterval] = useState(false)
   const [intervalValue, setIntervalValue] = useState('')
 
@@ -132,7 +133,11 @@ export function ActivitySection() {
   return (
     <div className="space-y-3">
       {/* Heartbeat status */}
-      <div className="flex items-center justify-between">
+      <div
+        onClick={() => !editingInterval && setExpanded(!expanded)}
+        className="flex items-center justify-between cursor-pointer"
+        role="button"
+      >
         <div className="flex items-center gap-2">
           <div className="relative flex items-center">
             {heartbeatRunning && (
@@ -142,40 +147,50 @@ export function ActivitySection() {
           </div>
           <span className="text-xs text-stone">heartbeat</span>
         </div>
-        {editingInterval ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min="1"
-              value={intervalValue}
-              onChange={e => setIntervalValue(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSaveInterval()}
-              className="w-14 bg-ink border border-border-custom rounded px-1.5 py-0.5 text-xs text-parchment text-center focus:outline-none focus:border-sand/50"
-              autoFocus
-            />
-            <span className="text-xs text-stone">min</span>
-            <button onClick={handleSaveInterval} className="text-xs text-sand hover:text-sand/80"><Check className="h-3 w-3" /></button>
-            <button onClick={() => setEditingInterval(false)} className="text-xs text-stone hover:text-parchment"><X className="h-3 w-3" /></button>
+        <div className="flex items-center gap-2">
+          {editingInterval ? (
+            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+              <input
+                type="number"
+                min="1"
+                value={intervalValue}
+                onChange={e => setIntervalValue(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveInterval()}
+                className="w-14 bg-ink border border-border-custom rounded px-1.5 py-0.5 text-xs text-parchment text-center focus:outline-none focus:border-sand/50"
+                autoFocus
+              />
+              <span className="text-xs text-stone">min</span>
+              <button onClick={handleSaveInterval} className="text-xs text-sand hover:text-sand/80"><Check className="h-3 w-3" /></button>
+              <button onClick={() => setEditingInterval(false)} className="text-xs text-stone hover:text-parchment"><X className="h-3 w-3" /></button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); setIntervalValue(String(intervalMinutes)); setEditingInterval(true) }}
+              className="text-xs text-stone hover:text-sand transition-colors"
+            >
+              every {intervalMinutes}m
+            </button>
+          )}
+          {expanded
+            ? <ChevronUp className="h-3.5 w-3.5 text-stone/40" />
+            : <ChevronDown className="h-3.5 w-3.5 text-stone/40" />
+          }
+        </div>
+      </div>
+
+      {expanded && (
+        <>
+          {/* Activity graph */}
+          <ActivityGraph activity={activity || []} />
+
+          {/* Stats line */}
+          <div className="flex items-center gap-4 text-[10px] text-stone/60">
+            <span>{totalTools.toLocaleString()} tool calls</span>
+            <span>peak {peakSessions} sessions</span>
+            <span>last 24h</span>
           </div>
-        ) : (
-          <button
-            onClick={() => { setIntervalValue(String(intervalMinutes)); setEditingInterval(true) }}
-            className="text-xs text-stone hover:text-sand transition-colors"
-          >
-            every {intervalMinutes}m
-          </button>
-        )}
-      </div>
-
-      {/* Activity graph */}
-      <ActivityGraph activity={activity || []} />
-
-      {/* Stats line */}
-      <div className="flex items-center gap-4 text-[10px] text-stone/60">
-        <span>{totalTools.toLocaleString()} tool calls</span>
-        <span>peak {peakSessions} sessions</span>
-        <span>last 24h</span>
-      </div>
+        </>
+      )}
     </div>
   )
 }
