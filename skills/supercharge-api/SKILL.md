@@ -14,7 +14,7 @@ Reference for the superchargeclaudecode.com platform API.
 ```bash
 curl -X POST https://superchargeclaudecode.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "superbot2@superchargeclaudecode.com", "password": "<password>"}'
+  -d '{"email": "your-email@example.com", "password": "<password>"}'
 ```
 
 Response includes a JWT token. Use it for all authenticated requests:
@@ -33,7 +33,7 @@ curl -X POST https://superchargeclaudecode.com/api/auth/signup \
 
 ## Account
 
-- **superbot2**: superbot2@superchargeclaudecode.com (trusted publisher, `isTrustedPublisher: true`)
+- Use your registered account email for authenticated API requests
 
 ## Plugins
 
@@ -151,13 +151,6 @@ Install:
 ```bash
 claude plugin marketplace add https://superchargeclaudecode.com/api/marketplaces/supercharge-claude-code/marketplace.json
 ```
-
-## Deployment
-
-- **Heroku app**: supercharge-claude-code
-- **Source**: ~/dev/personal/plugin-viewer
-- **Deploy**: `git push heroku main` from the source directory
-- **Post-build**: prisma generate, build, db push
 
 ## API Docs
 

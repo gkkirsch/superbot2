@@ -207,7 +207,7 @@ The `TeammateIdle` hook can be tested directly without launching superbot2:
 
 ```bash
 # Simulate hook with a mock transcript
-echo '{"teammate_name":"test-worker","team_name":"superbot2","cwd":"/Users/gkkirsch/dev","transcript_path":"/tmp/mock.jsonl"}' \
+echo '{"teammate_name":"test-worker","team_name":"superbot2","cwd":"/tmp/test-workspace","transcript_path":"/tmp/mock.jsonl"}' \
   | bash ~/.superbot2/hooks/teammate-idle.sh 2>&1
 echo "EXIT: $?"
 ```

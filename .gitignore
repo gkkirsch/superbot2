@@ -34,3 +34,8 @@ analysis-history/
 
 # Lock files
 package-lock.json
+
+# Sensitive knowledge files (user-specific credentials, account info)
+knowledge/platform-endpoints.md
+knowledge/preferences.md
+knowledge/superbot2-account.md
