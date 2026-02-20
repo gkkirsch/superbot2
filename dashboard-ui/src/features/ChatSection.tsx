@@ -174,7 +174,7 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
 const MESSAGES_PER_PAGE = 50
 
 export function ChatSection() {
-  const [text, setText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const [sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
   const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE)
@@ -188,7 +188,7 @@ export function ChatSection() {
   const mutation = useMutation({
     mutationFn: (message: string) => sendMessageToOrchestrator(message),
     onSuccess: () => {
-      setText('')
+      if (inputRef.current) inputRef.current.value = ''
       setSent(true)
       setWaitingForReply(true)
       setTimeout(() => setSent(false), 2000)
@@ -198,8 +198,9 @@ export function ChatSection() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (text.trim() && !mutation.isPending) {
-      mutation.mutate(text.trim())
+    const value = inputRef.current?.value.trim()
+    if (value && !mutation.isPending) {
+      mutation.mutate(value)
     }
   }
 
@@ -315,15 +316,14 @@ export function ChatSection() {
 
       <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
         <input
+          ref={inputRef}
           type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
           placeholder="Message superbot..."
           className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors"
         />
         <button
           type="submit"
-          disabled={!text.trim() || mutation.isPending}
+          disabled={mutation.isPending}
           className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
         >
           <Send className="h-4 w-4" />
