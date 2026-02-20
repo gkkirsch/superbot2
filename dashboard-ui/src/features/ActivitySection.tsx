@@ -41,12 +41,15 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
     const rect = graphRef.current.getBoundingClientRect()
     const leftPct = (hoveredIndex + 0.5) / filled.length
     const left = rect.left + rect.width * leftPct
+    // If the graph is near the top of the viewport, the tooltip above would
+    // overlap or go behind the sticky navbar. Flip it below the graph instead.
+    const showBelow = rect.top < 160
     return {
       position: 'fixed',
-      top: rect.top - 8,
+      top: showBelow ? rect.bottom + 8 : rect.top - 8,
       left,
-      transform: `translate(${flipTooltip ? '-90%' : '-10%'}, -100%)`,
-      zIndex: 9999,
+      transform: `translate(${flipTooltip ? '-90%' : '-10%'}, ${showBelow ? '0%' : '-100%'})`,
+      zIndex: 99999,
       pointerEvents: 'none' as const,
     }
   }
