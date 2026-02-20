@@ -1155,7 +1155,26 @@ app.get('/api/plugins/:name/credentials', async (req, res) => {
   }
 })
 
-// POST /api/plugins/:name/credentials — save a credential to Keychain
+// --- Credential Validators ---
+// Extensible map of credential key → validation function
+// Each returns { valid: boolean, error?: string }
+
+const CREDENTIAL_VALIDATORS = {
+  GEMINI_API_KEY: async (value) => {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(value)}`
+      const response = await fetch(url, { signal: AbortSignal.timeout(10000) })
+      if (response.ok) return { valid: true }
+      const body = await response.json().catch(() => ({}))
+      const msg = body?.error?.message || `HTTP ${response.status}`
+      return { valid: false, error: msg }
+    } catch (err) {
+      return { valid: false, error: err.message || 'Network error' }
+    }
+  },
+}
+
+// POST /api/plugins/:name/credentials — save a credential to Keychain, optionally validate
 app.post('/api/plugins/:name/credentials', async (req, res) => {
   try {
     const pluginName = req.params.name
@@ -1167,6 +1186,14 @@ app.post('/api/plugins/:name/credentials', async (req, res) => {
     if (!pd) return res.status(404).json({ error: 'Plugin not found' })
 
     await keychainSet(pd.pluginName, key, value)
+
+    // Validate if a validator exists for this credential key
+    const validator = CREDENTIAL_VALIDATORS[key]
+    if (validator) {
+      const validation = await validator(value)
+      return res.json({ ok: true, validation })
+    }
+
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

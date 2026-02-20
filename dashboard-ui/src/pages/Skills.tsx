@@ -363,7 +363,7 @@ function CredentialForm({ pluginName }: { pluginName: string }) {
   const { data: credStatus, refetch } = usePluginCredentials(pluginName)
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
-  const [feedback, setFeedback] = useState<Record<string, 'saved' | 'error' | null>>({})
+  const [feedback, setFeedback] = useState<Record<string, { type: 'saved' | 'validated' | 'invalid' | 'error'; message?: string } | null>>({})
   const queryClient = useQueryClient()
 
   if (!credStatus || credStatus.credentials.length === 0) return null
@@ -374,15 +374,23 @@ function CredentialForm({ pluginName }: { pluginName: string }) {
     setSaving(s => ({ ...s, [cred.key]: true }))
     setFeedback(f => ({ ...f, [cred.key]: null }))
     try {
-      await savePluginCredential(pluginName, cred.key, val.trim())
-      setFeedback(f => ({ ...f, [cred.key]: 'saved' }))
+      const result = await savePluginCredential(pluginName, cred.key, val.trim())
+      if (result.validation) {
+        if (result.validation.valid) {
+          setFeedback(f => ({ ...f, [cred.key]: { type: 'validated' } }))
+        } else {
+          setFeedback(f => ({ ...f, [cred.key]: { type: 'invalid', message: result.validation!.error } }))
+        }
+      } else {
+        setFeedback(f => ({ ...f, [cred.key]: { type: 'saved' } }))
+      }
       setValues(v => ({ ...v, [cred.key]: '' }))
       refetch()
       queryClient.invalidateQueries({ queryKey: ['plugins'] })
       queryClient.invalidateQueries({ queryKey: ['skills'] })
-      setTimeout(() => setFeedback(f => ({ ...f, [cred.key]: null })), 3000)
+      setTimeout(() => setFeedback(f => ({ ...f, [cred.key]: null })), 5000)
     } catch {
-      setFeedback(f => ({ ...f, [cred.key]: 'error' }))
+      setFeedback(f => ({ ...f, [cred.key]: { type: 'error' } }))
     } finally {
       setSaving(s => ({ ...s, [cred.key]: false }))
     }
@@ -453,8 +461,10 @@ function CredentialForm({ pluginName }: { pluginName: string }) {
                 </button>
               )}
             </div>
-            {feedback[cred.key] === 'saved' && <p className="text-[10px] text-green-400 mt-1">Saved to Keychain</p>}
-            {feedback[cred.key] === 'error' && <p className="text-[10px] text-ember mt-1">Failed to save</p>}
+            {feedback[cred.key]?.type === 'validated' && <p className="text-[10px] text-green-400 mt-1">Saved to Keychain — key verified</p>}
+            {feedback[cred.key]?.type === 'saved' && <p className="text-[10px] text-green-400 mt-1">Saved to Keychain</p>}
+            {feedback[cred.key]?.type === 'invalid' && <p className="text-[10px] text-amber-400 mt-1">Saved to Keychain — key appears invalid{feedback[cred.key]!.message ? `: ${feedback[cred.key]!.message}` : ''}</p>}
+            {feedback[cred.key]?.type === 'error' && <p className="text-[10px] text-ember mt-1">Failed to save</p>}
           </div>
         )
       })}

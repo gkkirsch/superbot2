@@ -342,7 +342,7 @@ export async function fetchPluginCredentials(name: string): Promise<PluginCreden
   return fetchJson<PluginCredentialStatus>(`/plugins/${encodeURIComponent(name)}/credentials`)
 }
 
-export async function savePluginCredential(name: string, key: string, value: string): Promise<{ ok: boolean }> {
+export async function savePluginCredential(name: string, key: string, value: string): Promise<{ ok: boolean; validation?: { valid: boolean; error?: string } }> {
   const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
