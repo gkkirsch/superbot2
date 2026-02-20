@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSystemStatus, useHeartbeatConfig, useActivity } from '@/hooks/useSpaces'
@@ -7,6 +8,7 @@ import type { ActivityBucket } from '@/lib/types'
 
 function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const graphRef = useRef<HTMLDivElement>(null)
 
   if (activity.length === 0) {
     return <div className="text-xs text-stone/50 py-2">No activity yet</div>
@@ -34,8 +36,23 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
   const tooltipLeftPct = hoveredIndex !== null ? ((hoveredIndex + 0.5) / filled.length) * 100 : 0
   const flipTooltip = tooltipLeftPct > 75
 
+  const getTooltipStyle = (): React.CSSProperties => {
+    if (hoveredIndex === null || !graphRef.current) return { display: 'none' }
+    const rect = graphRef.current.getBoundingClientRect()
+    const leftPct = (hoveredIndex + 0.5) / filled.length
+    const left = rect.left + rect.width * leftPct
+    return {
+      position: 'fixed',
+      top: rect.top - 8,
+      left,
+      transform: `translate(${flipTooltip ? '-90%' : '-10%'}, -100%)`,
+      zIndex: 9999,
+      pointerEvents: 'none' as const,
+    }
+  }
+
   return (
-    <div className="relative" onMouseLeave={() => setHoveredIndex(null)}>
+    <div className="relative" ref={graphRef} onMouseLeave={() => setHoveredIndex(null)}>
       <div className="flex items-end gap-px h-14">
         {filled.map((bucket, i) => {
           if (!bucket) {
@@ -59,14 +76,8 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
         })}
       </div>
 
-      {hoveredIndex !== null && hoveredBucket && (
-        <div
-          className="pointer-events-none absolute bottom-full mb-2 z-10"
-          style={{
-            left: `${tooltipLeftPct}%`,
-            transform: flipTooltip ? 'translateX(-90%)' : 'translateX(-10%)',
-          }}
-        >
+      {hoveredIndex !== null && hoveredBucket && createPortal(
+        <div style={getTooltipStyle()}>
           <div className="rounded-lg border border-border-custom bg-surface px-3 py-2 shadow-lg min-w-[160px]">
             <div className="text-xs font-medium text-parchment">{formatTime(hoveredBucket.ts)}</div>
             <div className="mt-1.5 space-y-0.5 text-[11px]">
@@ -100,7 +111,8 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
