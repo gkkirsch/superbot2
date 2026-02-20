@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send } from 'lucide-react'
+import { Send, X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { useMessages } from '@/hooks/useSpaces'
@@ -21,49 +21,97 @@ function hasImagePaths(text: string): boolean {
   return result
 }
 
-/** Convert image file paths to markdown image syntax for MarkdownContent rendering */
-function preprocessImagesForMarkdown(text: string): string {
+/** Extract image file paths from text */
+function extractImagePaths(text: string): string[] {
   IMAGE_PATH_RE.lastIndex = 0
-  return text.replace(IMAGE_PATH_RE, (match) => {
-    const filename = match.split('/').pop() || 'image'
-    return `\n![${filename}](${imageApiUrl(match)})\n`
-  })
+  const paths: string[] = []
+  let match
+  while ((match = IMAGE_PATH_RE.exec(text)) !== null) {
+    paths.push(match[1])
+  }
+  IMAGE_PATH_RE.lastIndex = 0
+  return paths
 }
 
-function ChatImage({ path }: { path: string }) {
-  const [errored, setErrored] = useState(false)
-  const filename = path.split('/').pop() || 'image'
+/** Strip image paths from text, cleaning up extra whitespace */
+function stripImagePaths(text: string): string {
+  IMAGE_PATH_RE.lastIndex = 0
+  return text.replace(IMAGE_PATH_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+}
 
-  if (errored) {
-    return <span className="text-stone/50 text-xs italic">{path}</span>
-  }
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
 
   return (
-    <a href={imageApiUrl(path)} target="_blank" rel="noopener noreferrer" className="block my-2">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <button onClick={onClose} className="absolute top-4 right-4 text-parchment/70 hover:text-parchment transition-colors">
+        <X className="h-6 w-6" />
+      </button>
       <img
-        src={imageApiUrl(path)}
-        alt={filename}
-        className="max-w-full rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
-        loading="lazy"
-        onError={() => setErrored(true)}
+        src={src}
+        alt={alt}
+        className="max-h-[90vh] max-w-[90vw] rounded-lg"
+        onClick={(e) => e.stopPropagation()}
       />
-    </a>
+    </div>
   )
 }
 
-/** Renders plain text with inline images for image paths */
+function ThumbnailGallery({ paths }: { paths: string[] }) {
+  const [lightboxPath, setLightboxPath] = useState<string | null>(null)
+  const [errorPaths, setErrorPaths] = useState<Set<string>>(new Set())
+
+  if (paths.length === 0) return null
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-1.5 mt-2">
+        {paths.map((path, i) => {
+          const filename = path.split('/').pop() || 'image'
+          if (errorPaths.has(path)) {
+            return <span key={i} className="text-stone/50 text-xs italic">{path}</span>
+          }
+          return (
+            <button
+              key={i}
+              onClick={() => setLightboxPath(path)}
+              className="rounded-md overflow-hidden border border-border-custom hover:border-stone/40 transition-colors"
+            >
+              <img
+                src={imageApiUrl(path)}
+                alt={filename}
+                className="h-20 w-auto object-cover"
+                loading="lazy"
+                onError={() => setErrorPaths(prev => new Set(prev).add(path))}
+              />
+            </button>
+          )
+        })}
+      </div>
+      {lightboxPath && (
+        <ImageLightbox
+          src={imageApiUrl(lightboxPath)}
+          alt={lightboxPath.split('/').pop() || 'image'}
+          onClose={() => setLightboxPath(null)}
+        />
+      )}
+    </>
+  )
+}
+
+/** Renders plain text with image thumbnails below */
 function TextWithInlineImages({ text, className }: { text: string; className?: string }) {
-  IMAGE_PATH_RE.lastIndex = 0
-  const segments = text.split(IMAGE_PATH_RE)
+  const imagePaths = useMemo(() => extractImagePaths(text), [text])
+  const strippedText = useMemo(() => stripImagePaths(text), [text])
 
   return (
     <div className={className}>
-      {segments.map((segment, i) => {
-        if (i % 2 === 1) {
-          return <ChatImage key={i} path={segment} />
-        }
-        return segment ? <span key={i}>{segment}</span> : null
-      })}
+      {strippedText && <span>{strippedText}</span>}
+      <ThumbnailGallery paths={imagePaths} />
     </div>
   )
 }
@@ -311,18 +359,22 @@ function ActivityIndicator({ msgs }: { msgs: Array<{ msg: InboxMessage; type: Me
 function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = msg.text.length > 500
-  const processedText = useMemo(
-    () => hasImagePaths(msg.text) ? preprocessImagesForMarkdown(msg.text) : msg.text,
+  const imagePaths = useMemo(
+    () => hasImagePaths(msg.text) ? extractImagePaths(msg.text) : [],
     [msg.text]
+  )
+  const processedText = useMemo(
+    () => imagePaths.length > 0 ? stripImagePaths(msg.text) : msg.text,
+    [msg.text, imagePaths]
   )
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%]">
+      <div className="max-w-[85%] overflow-hidden">
         <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">
           superbot{msg.to && msg.to !== 'dashboard-user' ? ` → ${msg.to}` : ''}
         </span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0">
+        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
           {isLong && !expanded ? (
             <>
               <div className="max-h-32 overflow-hidden">
@@ -342,6 +394,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
               )}
             </>
           )}
+          {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
         </div>
         <span className="text-[10px] text-stone/50 block mt-1 ml-1">
           {formatTime(msg.timestamp)}
