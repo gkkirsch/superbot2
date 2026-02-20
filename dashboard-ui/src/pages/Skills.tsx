@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw } from 'lucide-react'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, enablePlugin, disablePlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace } from '@/lib/api'
+import { installPlugin, uninstallPlugin, enablePlugin, disablePlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail } from '@/lib/types'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import ReactMarkdown from 'react-markdown'
@@ -655,7 +655,36 @@ function MarketplaceManager() {
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const queryClient = useQueryClient()
+
+  // Auto-refresh marketplace data on mount
+  useEffect(() => {
+    let cancelled = false
+    refreshMarketplaces()
+      .then(() => {
+        if (!cancelled) {
+          queryClient.invalidateQueries({ queryKey: ['plugins'] })
+          queryClient.invalidateQueries({ queryKey: ['marketplaces'] })
+        }
+      })
+      .catch(() => {}) // silent — not critical
+    return () => { cancelled = true }
+  }, [queryClient])
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    setError(null)
+    try {
+      await refreshMarketplaces()
+      await queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      await queryClient.invalidateQueries({ queryKey: ['marketplaces'] })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to refresh')
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const hasSupercharge = marketplaces?.some(m =>
     m.url === SUPERCHARGE_MARKETPLACE_URL || m.name === 'supercharge-claude-code'
@@ -701,6 +730,14 @@ function MarketplaceManager() {
         <Store className="h-3.5 w-3.5 text-sand" />
         <span className="text-xs font-medium text-sand uppercase tracking-wider">Marketplaces</span>
         {marketplaces && <span className="text-xs text-stone">({marketplaces.length})</span>}
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="ml-auto p-1 text-stone hover:text-sand transition-colors disabled:opacity-50"
+          title="Refresh marketplace plugins"
+        >
+          <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {isLoading ? (

@@ -322,6 +322,13 @@ export async function removeMarketplace(name: string): Promise<void> {
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
+export async function refreshMarketplaces(): Promise<void> {
+  const response = await fetch(`${API_BASE}/marketplaces/refresh`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
 // --- Session summaries ---
 
 export async function fetchSessions(limit = 20): Promise<SessionSummary[]> {

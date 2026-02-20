@@ -1854,6 +1854,19 @@ app.delete('/api/marketplaces/:name', async (req, res) => {
   }
 })
 
+app.post('/api/marketplaces/refresh', async (_req, res) => {
+  try {
+    await runClaude(['plugin', 'marketplace', 'update'])
+    // Clear caches so next /api/plugins call picks up new data
+    pluginMetaCache.clear()
+    pluginDetailCache.clear()
+    metaPreFetched = false
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Session summaries ---
 
 app.get('/api/sessions', async (req, res) => {
