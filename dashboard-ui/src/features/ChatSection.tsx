@@ -43,7 +43,7 @@ function ChatImage({ path }: { path: string }) {
       <img
         src={imageApiUrl(path)}
         alt={filename}
-        className="max-w-md rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
+        className="max-w-full rounded-lg hover:opacity-90 transition-opacity cursor-pointer"
         loading="lazy"
         onError={() => setErrored(true)}
       />
@@ -218,7 +218,7 @@ export function ChatSection() {
                   return (
                     <div key={`b-${i}`} className="flex justify-end">
                       <div className="max-w-[75%]">
-                        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
+                        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)] overflow-hidden min-w-0">
                           {hasImagePaths(item.msg.text) ? (
                             <TextWithInlineImages text={item.msg.text} className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]" />
                           ) : (
@@ -322,7 +322,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
         <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">
           superbot{msg.to && msg.to !== 'dashboard-user' ? ` → ${msg.to}` : ''}
         </span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)]">
+        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0">
           {isLong && !expanded ? (
             <>
               <div className="max-h-32 overflow-hidden">
