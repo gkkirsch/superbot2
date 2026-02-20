@@ -379,32 +379,25 @@ export function DashboardExtensionsSection() {
       {/* Skills tab content */}
       {currentTab === 'skills' && (
         superbotLoading ? (
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-10 rounded-md bg-surface/50 animate-pulse" />
+              <div key={i} className="h-7 w-20 rounded-full bg-surface/50 animate-pulse" />
             ))}
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
             {superbotSkills?.map((skill) => (
               <button
                 key={skill.id}
                 onClick={() => setSelectedSuperbotSkill(skill)}
-                className={`w-full text-left rounded-md border-l-2 border px-3 py-2 transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
                   skill.enabled === false
-                    ? 'border-l-stone/30 border-stone/20 bg-stone/5 hover:bg-stone/10'
-                    : 'border-l-moss border-moss/20 bg-moss/5 hover:bg-moss/10'
+                    ? 'border-stone/20 bg-stone/5 text-stone hover:bg-stone/10'
+                    : 'border-moss/25 bg-moss/10 text-parchment hover:bg-moss/20'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className={`text-xs font-medium truncate ${skill.enabled === false ? 'text-stone' : 'text-parchment'}`}>
-                    {skill.name}
-                  </p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {skill.enabled === false && <span className="text-[10px] text-stone/50">Disabled</span>}
-                    <ChevronRight className="h-3 w-3 text-stone/40" />
-                  </div>
-                </div>
+                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${skill.enabled === false ? 'bg-stone/40' : 'bg-moss'}`} />
+                {skill.name}
               </button>
             ))}
 
@@ -412,7 +405,7 @@ export function DashboardExtensionsSection() {
               const pluginSkills = pluginSkillGroups.get(plugin.name) ?? []
               const isExpanded = expandedPlugins.has(plugin.name)
               return (
-                <div key={plugin.pluginId}>
+                <div key={plugin.pluginId} className="contents">
                   <button
                     onClick={() => setExpandedPlugins(prev => {
                       const next = new Set(prev)
@@ -420,33 +413,27 @@ export function DashboardExtensionsSection() {
                       else next.add(plugin.name)
                       return next
                     })}
-                    className="w-full text-left rounded-md border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border border-moss/25 bg-moss/10 text-parchment hover:bg-moss/20 transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
-                        <span className="text-xs font-medium text-parchment truncate">{titleCase(plugin.name)}</span>
-                        {pluginSkills.length > 0 && <span className="text-[10px] text-stone/50">({pluginSkills.length})</span>}
-                        {plugin.hasUnconfiguredCredentials && <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
-                      </div>
-                      {isExpanded
-                        ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
-                        : <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                      }
-                    </div>
+                    <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
+                    {titleCase(plugin.name)}
+                    {pluginSkills.length > 0 && <span className="text-[10px] text-stone/50">{pluginSkills.length}</span>}
+                    {plugin.hasUnconfiguredCredentials && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
+                    {isExpanded
+                      ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
+                      : <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
+                    }
                   </button>
                   {isExpanded && pluginSkills.length > 0 && (
-                    <div className="ml-3 mt-1 space-y-1 border-l border-moss/15 pl-2">
+                    <div className="w-full flex flex-wrap gap-1.5 pl-4">
                       {pluginSkills.map(s => (
                         <button
                           key={s.id}
                           onClick={() => setSelectedPluginSkill(s)}
-                          className="w-full text-left rounded-md bg-moss/5 px-3 py-1.5 hover:bg-moss/10 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] border border-moss/15 bg-moss/5 text-parchment/80 hover:bg-moss/15 transition-colors cursor-pointer"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-parchment truncate">{s.name}</p>
-                            <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                          </div>
+                          <span className="h-1 w-1 rounded-full bg-moss/50 shrink-0" />
+                          {s.name}
                         </button>
                       ))}
                     </div>
@@ -460,29 +447,20 @@ export function DashboardExtensionsSection() {
 
       {/* Hooks tab content */}
       {currentTab === 'hooks' && (
-        <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-2">
           {hooks?.map((hook, i) => (
             <button
               key={`${hook.event}-${i}`}
               onClick={() => setSelectedHook(hook)}
-              className={`w-full text-left rounded-md border-l-2 border px-3 py-2 transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
                 hook.enabled === false
-                  ? 'border-l-stone/30 border-stone/20 bg-stone/5 hover:bg-stone/10'
-                  : 'border-l-moss border-moss/20 bg-moss/5 hover:bg-moss/10'
+                  ? 'border-stone/20 bg-stone/5 text-stone hover:bg-stone/10'
+                  : 'border-moss/25 bg-moss/10 text-parchment hover:bg-moss/20'
               }`}
+              title={hook.description}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-medium truncate ${hook.enabled === false ? 'text-stone' : 'text-parchment'}`}>
-                    {hook.event}
-                  </p>
-                  <p className="text-[10px] text-stone/60 mt-0.5 line-clamp-2">{hook.description}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {hook.enabled === false && <span className="text-[10px] text-stone/50">Disabled</span>}
-                  <ChevronRight className="h-3 w-3 text-stone/40" />
-                </div>
-              </div>
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${hook.enabled === false ? 'bg-stone/40' : 'bg-moss'}`} />
+              {hook.event}
             </button>
           ))}
         </div>
@@ -490,26 +468,19 @@ export function DashboardExtensionsSection() {
 
       {/* Agents tab content */}
       {currentTab === 'agents' && (
-        <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-2">
           {agents?.map((agent) => (
             <button
               key={agent.id}
               onClick={() => setSelectedAgent(agent)}
-              className={`w-full text-left rounded-md border-l-2 border px-3 py-2 transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border ${
                 agent.enabled === false
-                  ? 'border-l-stone/30 border-stone/20 bg-stone/5 hover:bg-stone/10'
-                  : 'border-l-moss border-moss/20 bg-moss/5 hover:bg-moss/10'
+                  ? 'border-stone/20 bg-stone/5 text-stone hover:bg-stone/10'
+                  : 'border-moss/25 bg-moss/10 text-parchment hover:bg-moss/20'
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className={`text-xs font-medium truncate ${agent.enabled === false ? 'text-stone' : 'text-parchment'}`}>
-                  {agent.name}
-                </p>
-                <div className="flex items-center gap-1 shrink-0">
-                  {agent.enabled === false && <span className="text-[10px] text-stone/50">Disabled</span>}
-                  <ChevronRight className="h-3 w-3 text-stone/40" />
-                </div>
-              </div>
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${agent.enabled === false ? 'bg-stone/40' : 'bg-moss'}`} />
+              {agent.name}
             </button>
           ))}
         </div>
