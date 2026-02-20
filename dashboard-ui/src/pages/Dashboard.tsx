@@ -65,7 +65,7 @@ function SortableSection({ id, isEditing, onHide }: {
       {isEditing && (
         <>
           <div
-            className="absolute -left-8 top-3 cursor-grab active:cursor-grabbing text-stone/40 hover:text-sand transition-colors z-10"
+            className="absolute -left-6 top-1 cursor-grab active:cursor-grabbing text-stone/40 hover:text-sand transition-colors z-10"
             {...attributes}
             {...listeners}
           >
@@ -335,7 +335,7 @@ export function Dashboard() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-8 ${isEditing ? 'pl-8' : ''}`}>
+          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-8 ${isEditing ? 'pl-6' : ''}`}>
             {/* Left column */}
             <DroppableColumn id="leftColumn" sectionIds={layout.leftColumn} isEditing={isEditing} onHide={handleHideSection} />
 

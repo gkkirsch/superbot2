@@ -88,10 +88,7 @@ export function RecentActivitySection() {
     },
   })
 
-  if (isLoading) return null
-  if (!sessions || sessions.length === 0) return null
-
-  const visible = showAll ? sessions : sessions.slice(0, 5)
+  const visible = showAll ? (sessions ?? []) : (sessions ?? []).slice(0, 5)
 
   return (
     <section className="mt-8" data-section="recent-activity">
@@ -99,23 +96,36 @@ export function RecentActivitySection() {
         <FolderOpen className="h-5 w-5 text-sand" />
         <h2 className="font-heading text-xl text-parchment">Recent Activity</h2>
       </div>
-      <div className="space-y-2">
-        {visible.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            onDismiss={(id) => dismissMutation.mutate(id)}
-          />
-        ))}
-        {sessions.length > 5 && (
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-xs text-stone hover:text-sand transition-colors mx-auto"
-          >
-            {showAll ? 'Show fewer' : `Show all ${sessions.length}`}
-          </button>
-        )}
-      </div>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-lg bg-stone/5 animate-pulse" />
+          ))}
+        </div>
+      ) : !sessions || sessions.length === 0 ? (
+        <div className="rounded-lg border border-border-custom bg-surface/50 py-8 text-center">
+          <FolderOpen className="h-6 w-6 text-stone/20 mx-auto mb-2" />
+          <p className="text-sm text-stone">No recent activity</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {visible.map((session) => (
+            <SessionCard
+              key={session.id}
+              session={session}
+              onDismiss={(id) => dismissMutation.mutate(id)}
+            />
+          ))}
+          {sessions.length > 5 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="text-xs text-stone hover:text-sand transition-colors mx-auto"
+            >
+              {showAll ? 'Show fewer' : `Show all ${sessions.length}`}
+            </button>
+          )}
+        </div>
+      )}
     </section>
   )
 }

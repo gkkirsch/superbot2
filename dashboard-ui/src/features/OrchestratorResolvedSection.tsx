@@ -152,28 +152,38 @@ export function OrchestratorResolvedSection() {
 
   const orchestratorResolved = (resolved ?? []).filter(e => e.resolvedBy === 'orchestrator' && !e.dismissedAt)
 
-  if (isLoading) return null
-  if (orchestratorResolved.length === 0) return null
-
   const visible = showAll ? orchestratorResolved : orchestratorResolved.slice(0, 5)
 
   return (
     <section className="mt-8" data-section="orchestrator-resolved">
       <SectionHeader title="Orchestrator Decisions" icon={Bot} />
-      <div className="space-y-2">
-        {visible.map((e) => (
-          <OrchestratorResolvedCard key={e.id} escalation={e} />
-        ))}
-        {orchestratorResolved.length > 5 && (
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-xs text-stone hover:text-sand transition-colors flex items-center gap-1 mx-auto"
-          >
-            {showAll ? 'Show fewer' : `Show all ${orchestratorResolved.length}`}
-            {showAll ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-          </button>
-        )}
-      </div>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-12 rounded-lg bg-stone/5 animate-pulse" />
+          ))}
+        </div>
+      ) : orchestratorResolved.length === 0 ? (
+        <div className="rounded-lg border border-border-custom bg-surface/50 py-8 text-center">
+          <Bot className="h-6 w-6 text-stone/20 mx-auto mb-2" />
+          <p className="text-sm text-stone">No orchestrator decisions to review</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {visible.map((e) => (
+            <OrchestratorResolvedCard key={e.id} escalation={e} />
+          ))}
+          {orchestratorResolved.length > 5 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="text-xs text-stone hover:text-sand transition-colors flex items-center gap-1 mx-auto"
+            >
+              {showAll ? 'Show fewer' : `Show all ${orchestratorResolved.length}`}
+              {showAll ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          )}
+        </div>
+      )}
     </section>
   )
 }
