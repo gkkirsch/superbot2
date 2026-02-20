@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
 import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle } from 'lucide-react'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, enablePlugin, disablePlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import ReactMarkdown from 'react-markdown'
@@ -622,9 +622,9 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
   )
 }
 
-// --- Plugin Card (compact for available list) ---
+// --- Plugin Pill (compact chip for browse list) ---
 
-function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
+function PluginPill({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
   const [loading, setLoading] = useState(false)
   const queryClient = useQueryClient()
 
@@ -639,107 +639,31 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
     }
   }
 
-  async function handleUninstall(e: React.MouseEvent) {
-    e.stopPropagation()
-    setLoading(true)
-    try {
-      await uninstallPlugin(plugin.name)
-      await queryClient.invalidateQueries({ queryKey: ['plugins'] })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleToggle(e: React.MouseEvent) {
-    e.stopPropagation()
-    setLoading(true)
-    try {
-      if (plugin.enabled) {
-        await disablePlugin(plugin.name)
-      } else {
-        await enablePlugin(plugin.name)
-      }
-      await queryClient.invalidateQueries({ queryKey: ['plugins'] })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const cc = plugin.componentCounts
-
   return (
-    <div
+    <button
       onClick={onClick}
-      className="rounded-lg border border-border-custom bg-surface/50 p-4 cursor-pointer hover:border-sand/30 transition-colors"
+      className={`group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+        plugin.installed
+          ? 'border-moss/30 bg-moss/10 text-parchment hover:bg-moss/20'
+          : 'border-border-custom bg-surface/50 text-parchment hover:border-sand/30 hover:bg-surface'
+      }`}
+      title={plugin.description}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-parchment">{titleCase(plugin.name)}</p>
-          <p className="text-xs text-stone mt-1 line-clamp-2">{plugin.description}</p>
-          {cc && (cc.skills > 0 || cc.agents > 0 || cc.commands > 0 || cc.hooks > 0) && (
-            <div className="flex items-center gap-2 mt-2">
-              {cc.skills > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-stone/70">
-                  <Sparkles className="h-2.5 w-2.5" />{cc.skills} skill{cc.skills > 1 ? 's' : ''}
-                </span>
-              )}
-              {cc.agents > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-stone/70">
-                  <Bot className="h-2.5 w-2.5" />{cc.agents} agent{cc.agents > 1 ? 's' : ''}
-                </span>
-              )}
-              {cc.commands > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-stone/70">
-                  <Terminal className="h-2.5 w-2.5" />{cc.commands} cmd{cc.commands > 1 ? 's' : ''}
-                </span>
-              )}
-              {cc.hooks > 0 && (
-                <span className="flex items-center gap-1 text-[10px] text-stone/70">
-                  <Webhook className="h-2.5 w-2.5" />{cc.hooks} hook{cc.hooks > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-          )}
-          {plugin.marketplaceName && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <Store className="h-2.5 w-2.5 text-stone/40" />
-              <span className="text-[10px] text-stone/40">{plugin.marketplaceName}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-          {plugin.installed ? (
-            <>
-              <button
-                onClick={handleToggle}
-                disabled={loading}
-                className={`relative w-9 h-5 rounded-full transition-colors ${plugin.enabled ? 'bg-moss' : 'bg-stone/30'}`}
-                title={plugin.enabled ? 'Disable' : 'Enable'}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-parchment transition-transform ${plugin.enabled ? 'translate-x-4' : ''}`} />
-              </button>
-              <button
-                onClick={handleUninstall}
-                disabled={loading}
-                className="p-1.5 text-stone hover:text-ember transition-colors disabled:opacity-50"
-                title="Uninstall"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={handleInstall}
-              disabled={loading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-              {loading ? 'Installing...' : 'Install'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+      {plugin.installed && (
+        <Check className="h-3 w-3 text-moss shrink-0" />
+      )}
+      {plugin.hasUnconfiguredCredentials && (
+        <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+      )}
+      <span className="font-medium truncate max-w-[200px]">{titleCase(plugin.name)}</span>
+      {!plugin.installed && !loading && (
+        <Download
+          className="h-3 w-3 text-stone/40 group-hover:text-sand shrink-0 transition-colors"
+          onClick={handleInstall}
+        />
+      )}
+      {loading && <Loader2 className="h-3 w-3 animate-spin text-sand shrink-0" />}
+    </button>
   )
 }
 
@@ -1335,17 +1259,17 @@ function BrowsePlugins() {
 
       {/* Results */}
       {isLoading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-24 rounded-lg bg-surface/50 animate-pulse" />)}
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-8 w-32 rounded-full bg-surface/50 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-stone py-8 text-center">
           {search ? `No plugins matching "${search}"` : 'No plugins available.'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="flex flex-wrap gap-2">
           {filtered.map(p => (
-            <PluginCard key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} />
+            <PluginPill key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} />
           ))}
         </div>
       )}
