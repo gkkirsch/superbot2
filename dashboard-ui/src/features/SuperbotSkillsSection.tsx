@@ -427,6 +427,7 @@ export function DashboardExtensionsSection() {
                         <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
                         <span className="text-xs font-medium text-parchment truncate">{titleCase(plugin.name)}</span>
                         {pluginSkills.length > 0 && <span className="text-[10px] text-stone/50">({pluginSkills.length})</span>}
+                        {plugin.hasUnconfiguredCredentials && <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
                       </div>
                       {isExpanded
                         ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />

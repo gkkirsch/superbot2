@@ -2,10 +2,14 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { topNavItems } from '@/lib/navigation'
+import { usePlugins } from '@/hooks/useSpaces'
 
 export function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
+  const { data: plugins } = usePlugins()
+
+  const hasUnconfiguredPlugins = plugins?.some(p => p.installed && p.hasUnconfiguredCredentials) ?? false
 
   const isActive = (to: string, end?: boolean) => {
     if (end) return location.pathname === to
@@ -27,7 +31,7 @@ export function Nav() {
               to={to}
               end={end}
               className={() =>
-                `flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                `flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors relative ${
                   isActive(to, end)
                     ? 'bg-sand/15 text-sand font-medium'
                     : 'text-stone hover:text-parchment hover:bg-surface'
@@ -36,6 +40,9 @@ export function Nav() {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {to === '/skills' && hasUnconfiguredPlugins && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-400" />
+              )}
             </NavLink>
           ))}
         </div>
@@ -61,7 +68,7 @@ export function Nav() {
               end={end}
               onClick={() => setMobileOpen(false)}
               className={() =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors relative ${
                   isActive(to, end)
                     ? 'bg-sand/15 text-sand font-medium'
                     : 'text-stone hover:text-parchment hover:bg-surface'
@@ -70,6 +77,9 @@ export function Nav() {
             >
               <Icon className="h-4 w-4" />
               {label}
+              {to === '/skills' && hasUnconfiguredPlugins && (
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+              )}
             </NavLink>
           ))}
         </div>

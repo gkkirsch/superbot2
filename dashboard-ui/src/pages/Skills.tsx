@@ -967,6 +967,9 @@ function InstalledSidebar() {
               >
                 <span className="text-xs font-medium text-parchment truncate">{titleCase(p.name || p.pluginId)}</span>
                 <div className="flex items-center gap-1 shrink-0">
+                  {p.hasUnconfiguredCredentials && (
+                    <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />
+                  )}
                   <span className="text-[10px] text-moss/70">Installed</span>
                   <ChevronRight className="h-3 w-3 text-stone/40" />
                 </div>
@@ -1010,6 +1013,7 @@ function InstalledSidebar() {
             {/* Plugin-provided skills, grouped by plugin */}
             {Array.from(pluginSkillGroups.entries()).map(([pluginName, pluginSkills]) => {
               const isExpanded = expandedPluginSkills.has(pluginName)
+              const groupNeedsConfig = pluginSkills.some(s => s.needsConfig)
               return (
                 <div key={pluginName}>
                   <button
@@ -1026,6 +1030,7 @@ function InstalledSidebar() {
                         <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
                         <span className="text-xs font-medium text-parchment truncate">{titleCase(pluginName)}</span>
                         <span className="text-[10px] text-stone/50">({pluginSkills.length})</span>
+                        {groupNeedsConfig && <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
                       </div>
                       {isExpanded
                         ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
