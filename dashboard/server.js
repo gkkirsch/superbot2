@@ -13,6 +13,7 @@ const SPACES_DIR = join(SUPERBOT_DIR, 'spaces')
 const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations')
 const SESSIONS_DIR = join(SUPERBOT_DIR, 'sessions')
 const SUPERBOT_SKILLS_DIR = join(import.meta.dirname, '..', 'skills')
+const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const TEAM_INBOXES_DIR = join(homedir(), '.claude', 'teams', 'superbot2', 'inboxes')
 
 app.use(express.json())
@@ -844,15 +845,88 @@ app.delete('/api/todos/:id', async (req, res) => {
   }
 })
 
+// --- Knowledge files ---
+
+app.get('/api/knowledge', async (_req, res) => {
+  try {
+    const groups = []
+
+    // Global knowledge
+    const globalFiles = await safeReaddir(KNOWLEDGE_DIR)
+    const globalMd = globalFiles.filter(f => f.endsWith('.md')).sort()
+    if (globalMd.length > 0) {
+      groups.push({
+        source: 'global',
+        label: 'Global',
+        files: globalMd.map(f => ({ name: f.replace(/\.md$/, ''), path: f })),
+      })
+    }
+
+    // Per-space knowledge
+    const spaceSlugs = await safeReaddir(SPACES_DIR)
+    const sortedSlugs = spaceSlugs.sort()
+    for (const slug of sortedSlugs) {
+      const spaceKnowledgeDir = join(SPACES_DIR, slug, 'knowledge')
+      const files = await safeReaddir(spaceKnowledgeDir)
+      const mdFiles = files.filter(f => f.endsWith('.md')).sort()
+      if (mdFiles.length === 0) continue
+
+      // Check it's actually a directory
+      try {
+        const s = await stat(join(SPACES_DIR, slug))
+        if (!s.isDirectory()) continue
+      } catch { continue }
+
+      const spaceJson = await readJsonFile(join(SPACES_DIR, slug, 'space.json'))
+      const label = spaceJson?.name || slug
+
+      groups.push({
+        source: slug,
+        label,
+        files: mdFiles.map(f => ({ name: f.replace(/\.md$/, ''), path: f })),
+      })
+    }
+
+    res.json({ groups })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/knowledge/:source/:filename', async (req, res) => {
+  try {
+    const { source, filename } = req.params
+    // Sanitize filename to prevent path traversal
+    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    if (!safeName.endsWith('.md')) {
+      return res.status(400).json({ error: 'Only .md files supported' })
+    }
+
+    let filePath
+    if (source === 'global') {
+      filePath = join(KNOWLEDGE_DIR, safeName)
+    } else {
+      // Per-space knowledge
+      const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
+      filePath = join(SPACES_DIR, safeSource, 'knowledge', safeName)
+    }
+
+    const result = await readMarkdownFile(filePath)
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Dashboard config ---
 
 const DEFAULT_DASHBOARD_CONFIG = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
-  rightColumn: ['pulse', 'schedule', 'todos', 'extensions'],
+  rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'extensions']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {

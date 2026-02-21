@@ -233,6 +233,17 @@ export interface DashboardConfig {
   hidden: string[]
 }
 
+export interface KnowledgeFile {
+  name: string
+  path: string
+}
+
+export interface KnowledgeGroup {
+  source: string
+  label: string
+  files: KnowledgeFile[]
+}
+
 export interface Escalation {
   id: string
   type: 'decision' | 'blocker' | 'question' | 'approval' | 'improvement'

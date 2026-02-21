@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup } from './types'
 
 export type { PluginDetail }
 
@@ -574,4 +574,15 @@ export async function deleteTodo(id: string): Promise<void> {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+// --- Knowledge files ---
+
+export async function fetchKnowledge(): Promise<KnowledgeGroup[]> {
+  const data = await fetchJson<{ groups: KnowledgeGroup[] }>('/knowledge')
+  return data.groups
+}
+
+export async function fetchKnowledgeContent(source: string, filename: string): Promise<ContextFile> {
+  return fetchJson<ContextFile>(`/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`)
 }

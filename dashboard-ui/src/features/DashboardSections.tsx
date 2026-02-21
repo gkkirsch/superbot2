@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
 import { SectionHeader } from '@/components/SectionHeader'
 import { EscalationsSection } from '@/features/EscalationsSection'
 import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
@@ -9,6 +9,7 @@ import { ScheduleSection, SchedulerStatus } from '@/features/ScheduleSection'
 import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
+import { KnowledgeSection } from '@/features/KnowledgeSection'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Section wrapper components ---
@@ -62,6 +63,15 @@ function TodoDashboardSection() {
     <section data-section="todos">
       <SectionHeader title="Todos" icon={ListChecks} />
       <TodoSection />
+    </section>
+  )
+}
+
+function KnowledgeDashboardSection() {
+  return (
+    <section data-section="knowledge">
+      <SectionHeader title="Knowledge" icon={BookOpen} />
+      <KnowledgeSection />
     </section>
   )
 }
@@ -120,6 +130,10 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'todos',
     Component: TodoDashboardSection,
   },
+  'knowledge': {
+    id: 'knowledge',
+    Component: KnowledgeDashboardSection,
+  },
   'extensions': {
     id: 'extensions',
     Component: ExtensionsDashboardSection,
@@ -134,6 +148,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
-  rightColumn: ['pulse', 'schedule', 'todos', 'extensions'],
+  rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['spaces'],
 }

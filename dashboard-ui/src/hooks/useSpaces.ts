@@ -25,6 +25,7 @@ import {
   updateTodo,
   deleteTodo,
   fetchPluginCredentials,
+  fetchKnowledge,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -228,4 +229,10 @@ export function useTodos() {
     toggle: toggleMutation.mutate,
     remove: removeMutation.mutate,
   }
+}
+
+// --- Knowledge ---
+
+export function useKnowledge() {
+  return useQuery({ queryKey: ['knowledge'], queryFn: fetchKnowledge, staleTime: 30_000 })
 }

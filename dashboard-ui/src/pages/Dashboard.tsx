@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -32,6 +32,7 @@ const SECTION_LABELS: Record<string, string> = {
   'recent-activity': 'Recent Activity',
   'pulse': 'Pulse',
   'schedule': 'Schedule',
+  'knowledge': 'Knowledge',
   'extensions': 'Extensions',
   'spaces': 'Spaces & Projects',
 }
@@ -162,7 +163,15 @@ export function Dashboard() {
 
   // Local layout state for drag operations (committed to server on drag end)
   const [localLayout, setLocalLayout] = useState<DashboardConfig | null>(null)
-  const layout = localLayout || config || DEFAULT_DASHBOARD_CONFIG
+  const baseLayout = localLayout || config || DEFAULT_DASHBOARD_CONFIG
+
+  // Auto-discover new sections not yet in the saved config
+  const layout = useMemo(() => {
+    const allKnown = new Set([...baseLayout.leftColumn, ...baseLayout.rightColumn, ...baseLayout.hidden])
+    const newSections = Object.keys(SECTION_REGISTRY).filter(id => !allKnown.has(id))
+    if (newSections.length === 0) return baseLayout
+    return { ...baseLayout, hidden: [...baseLayout.hidden, ...newSections] }
+  }, [baseLayout])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
