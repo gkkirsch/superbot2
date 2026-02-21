@@ -45,8 +45,8 @@ fi
 
 # Validate type
 case "$TYPE" in
-  decision|blocker|question|approval|improvement) ;;
-  *) echo "Invalid type: $TYPE. Must be: decision, blocker, question, approval, improvement" >&2; exit 1 ;;
+  decision|blocker|question|approval|improvement|agent_plan) ;;
+  *) echo "Invalid type: $TYPE. Must be: decision, blocker, question, approval, improvement, agent_plan" >&2; exit 1 ;;
 esac
 
 # Parse options

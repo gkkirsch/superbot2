@@ -218,6 +218,58 @@ You can manage scheduled jobs by editing the `schedule` array in `~/.superbot2/c
 }
 ```
 
+## Plan on Heartbeat
+
+When the heartbeat surfaces new/unacknowledged items, follow this workflow:
+
+1. **Acknowledge** each item so it stops repeating:
+   ```bash
+   bash ~/.superbot2/scripts/acknowledge-escalation.sh <escalation-file>
+   ```
+
+2. **Spawn a todo plan agent** for each new item that needs planning. The plan agent:
+   - Reads the relevant space context, knowledge, and escalation details
+   - Uses the `superbot-brainstorming` skill to research and brainstorm
+   - Creates an `agent_plan` escalation with the actionable plan
+   - Does **NOT** execute anything — only plans
+
+   ```
+   Task tool:
+     subagent_type: "space-worker"
+     team_name: "{{TEAM_NAME}}"
+     name: "<space>-<project>-planner"
+     prompt: |
+       # <space> / <project> — Planning Only
+
+       Working directory: <code_dir>
+
+       ## Briefing
+       Research and plan a response to this heartbeat item:
+       "<item description>"
+
+       ## Instructions
+       1. Read the space OVERVIEW, knowledge files, and relevant context
+       2. Use the `superbot-brainstorming` skill to brainstorm approaches
+       3. Create an agent_plan escalation with your plan:
+          bash ~/.superbot2/scripts/create-escalation.sh agent_plan <space> <project> \
+            "Plan: <brief description>" \
+            --context "<your detailed actionable plan in markdown>" \
+            --priority medium
+       4. Do NOT implement anything. Only research and plan.
+
+       ## Read these files first
+       1. ~/.superbot2/spaces/<space>/OVERVIEW.md
+       2. All files in ~/.superbot2/spaces/<space>/knowledge/
+   ```
+
+3. **Do not execute plans** — the user reviews `agent_plan` escalations in the dashboard and approves, rejects, or redirects them.
+
+Not every heartbeat item needs a plan agent. Use judgment:
+- Completed projects with "what's next?" → spawn plan agent
+- Unresolved escalations → triage normally (resolve or promote)
+- Knowledge updates → review for cross-space patterns as usual
+- Projects ready for work → assign workers as usual
+
 ## Before you go idle
 
 1. No untriaged escalations — triage them all via `resolve-escalation.sh` or `promote-escalation.sh`
