@@ -178,7 +178,7 @@ scan_projects() {
       fi
 
       local human_blockers
-      human_blockers=$(echo "$_blocked_keys" | grep -c "^${sp_key}$" 2>/dev/null || echo 0)
+      human_blockers=$(echo "$_blocked_keys" | grep -c "^${sp_key}$" 2>/dev/null || true)
 
       if [[ "$p_count" -gt 0 && "$ip_count" -eq 0 && "$human_blockers" -eq 0 ]]; then
         # Ready for work: has pending tasks, no active worker, no blocking escalations
@@ -243,10 +243,42 @@ else
   echo '[]' > "$INBOX"
 fi
 
-# --- Gather counts ---
+# --- Gather counts (split by acknowledgment status) ---
 untriaged_count=${#untriaged_files[@]}
 pending_count=${#pending_files[@]}
 resolved_count=${#resolved_files[@]}
+
+# Count unacknowledged vs acknowledged items (bash 3.2 compatible)
+untriaged_new_count=0
+untriaged_ack_count=0
+pending_new_count=0
+pending_ack_count=0
+
+if command -v jq &>/dev/null; then
+  for f in "${untriaged_files[@]}"; do
+    if [[ -f "$f" ]]; then
+      ack=$(jq -r '.acknowledgedAt // "null"' "$f" 2>/dev/null)
+      if [[ "$ack" == "null" ]]; then
+        ((untriaged_new_count++)) || true
+      else
+        ((untriaged_ack_count++)) || true
+      fi
+    fi
+  done
+  for f in "${pending_files[@]}"; do
+    if [[ -f "$f" ]]; then
+      ack=$(jq -r '.acknowledgedAt // "null"' "$f" 2>/dev/null)
+      if [[ "$ack" == "null" ]]; then
+        ((pending_new_count++)) || true
+      else
+        ((pending_ack_count++)) || true
+      fi
+    fi
+  done
+else
+  untriaged_new_count=$untriaged_count
+  pending_new_count=$pending_count
+fi
 
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
@@ -273,26 +305,32 @@ if [[ "$is_first_run" == true ]]; then
   action_details+="(First heartbeat — current state snapshot)"$'\n'
 fi
 
-# 1. Untriaged escalations → triage them
-if [[ "$untriaged_count" -gt 0 ]]; then
-  actions+=("TRIAGE: ${untriaged_count} untriaged escalation(s)")
+# 1. Untriaged escalations → triage them (only unacknowledged = NEW)
+ack_untriaged_text=""
+if [[ "$untriaged_new_count" -gt 0 ]]; then
+  actions+=("TRIAGE: ${untriaged_new_count} new untriaged escalation(s)")
   action_details+=$'\n## Triage These Escalations\n'
   action_details+="Read each file in $DIR/escalations/untriaged/ and move to resolved/ or needs_human/."$'\n'
-  for f in "${untriaged_files[@]}"; do
-    if [[ -f "$f" ]] && command -v jq &>/dev/null; then
-      space=$(jq -r '.space // "unknown"' "$f" 2>/dev/null)
-      project=$(jq -r '.project // "unknown"' "$f" 2>/dev/null)
-      question=$(jq -r '.question // "unknown"' "$f" 2>/dev/null | head -c 120)
-      esc_type=$(jq -r '.type // "question"' "$f" 2>/dev/null)
-      blocks_project=$(jq -r '.blocksProject // false' "$f" 2>/dev/null)
-      blocks_task=$(jq -r '.blocksTask // "null"' "$f" 2>/dev/null)
-      blocking=""
-      [[ "$blocks_project" == "true" ]] && blocking=" (BLOCKS PROJECT)"
-      [[ "$blocks_task" != "null" ]] && blocking=" (blocks task: $blocks_task)"
-      action_details+="- [${space}/${project}] ${esc_type}: \"${question}\"${blocking}"$'\n'
-    fi
-  done
 fi
+for f in "${untriaged_files[@]}"; do
+  if [[ -f "$f" ]] && command -v jq &>/dev/null; then
+    f_ack=$(jq -r '.acknowledgedAt // "null"' "$f" 2>/dev/null)
+    space=$(jq -r '.space // "unknown"' "$f" 2>/dev/null)
+    project=$(jq -r '.project // "unknown"' "$f" 2>/dev/null)
+    question=$(jq -r '.question // "unknown"' "$f" 2>/dev/null | head -c 120)
+    esc_type=$(jq -r '.type // "question"' "$f" 2>/dev/null)
+    blocks_project=$(jq -r '.blocksProject // false' "$f" 2>/dev/null)
+    blocks_task=$(jq -r '.blocksTask // "null"' "$f" 2>/dev/null)
+    blocking=""
+    [[ "$blocks_project" == "true" ]] && blocking=" (BLOCKS PROJECT)"
+    [[ "$blocks_task" != "null" ]] && blocking=" (blocks task: $blocks_task)"
+    if [[ "$f_ack" == "null" ]]; then
+      action_details+="- [${space}/${project}] ${esc_type}: \"${question}\"${blocking}"$'\n'
+    else
+      ack_untriaged_text+="- [${space}/${project}] ${esc_type}: \"${question}\""$'\n'
+    fi
+  fi
+done
 
 # 1b. Recently resolved escalations (unconsumed) → spawn workers
 resolved_unconsumed_count=0
@@ -342,12 +380,14 @@ if [[ "$projects_planning_count" -gt 0 ]]; then
   action_details+="$projects_planning_text"
 fi
 
-# 5. Needs-human escalations waiting on user
-if [[ "$pending_count" -gt 0 ]]; then
+# 5. Needs-human escalations waiting on user (only unacknowledged = NEW)
+ack_pending_text=""
+if [[ "$pending_new_count" -gt 0 || "$pending_count" -gt 0 ]]; then
   waiting_detail=""
   first_question=""
   for pf in "${pending_files[@]}"; do
     if [[ -f "$pf" ]] && command -v jq &>/dev/null; then
+      pf_ack=$(jq -r '.acknowledgedAt // "null"' "$pf" 2>/dev/null)
       pf_space=$(jq -r '.space // "unknown"' "$pf" 2>/dev/null)
       pf_project=$(jq -r '.project // "unknown"' "$pf" 2>/dev/null)
       pf_question=$(jq -r '.question // "unknown"' "$pf" 2>/dev/null | head -c 120)
@@ -356,21 +396,27 @@ if [[ "$pending_count" -gt 0 ]]; then
       pf_blocks_project=$(jq -r '.blocksProject // false' "$pf" 2>/dev/null)
       blocking=""
       [[ "$pf_blocks_project" == "true" ]] && blocking=" (BLOCKS PROJECT)"
-      waiting_detail+="- [${pf_space}/${pf_project}] ${pf_type}: \"${pf_question}\" [${pf_priority}]${blocking}"$'\n'
-      [[ -z "$first_question" ]] && first_question="$pf_question"
+      if [[ "$pf_ack" == "null" ]]; then
+        waiting_detail+="- [${pf_space}/${pf_project}] ${pf_type}: \"${pf_question}\" [${pf_priority}]${blocking}"$'\n'
+        [[ -z "$first_question" ]] && first_question="$pf_question"
+      else
+        ack_pending_text+="- [${pf_space}/${pf_project}] ${pf_type}: \"${pf_question}\""$'\n'
+      fi
     fi
   done
 
-  # Make action line specific: include question for single, count for multiple
-  if [[ "$pending_count" -eq 1 && -n "$first_question" ]]; then
-    short_q=$(echo "$first_question" | head -c 80)
-    actions+=("WAITING: \"${short_q}\"")
-  else
-    actions+=("WAITING: ${pending_count} escalations need input")
+  if [[ "$pending_new_count" -gt 0 ]]; then
+    # Make action line specific: include question for single, count for multiple
+    if [[ "$pending_new_count" -eq 1 && -n "$first_question" ]]; then
+      short_q=$(echo "$first_question" | head -c 80)
+      actions+=("WAITING: \"${short_q}\"")
+    else
+      actions+=("WAITING: ${pending_new_count} new escalations need input")
+    fi
+    action_details+=$'\n## Escalations Waiting on User\n'
+    action_details+="These need your decision in the dashboard or via escalation files."$'\n'
+    action_details+="$waiting_detail"
   fi
-  action_details+=$'\n## Escalations Waiting on User\n'
-  action_details+="These need your decision in the dashboard or via escalation files."$'\n'
-  action_details+="$waiting_detail"
 fi
 
 # 6. Knowledge files → review for cross-space patterns
@@ -442,6 +488,15 @@ if [[ -n "$previous_fingerprint" ]]; then
     action_details+="Knowledge files in $DIR/knowledge/ updated. Check for cross-space patterns to promote."$'\n'
     action_details+="$k_changed_details"
   fi
+fi
+
+# 7. Previously Reviewed items (acknowledged) — collapsed summary
+prev_reviewed_total=$((untriaged_ack_count + pending_ack_count))
+if [[ "$prev_reviewed_total" -gt 0 ]]; then
+  action_details+=$'\n## Previously Reviewed ('"$prev_reviewed_total"$' items)\n'
+  action_details+="These items were already acknowledged. No action needed unless state changed."$'\n'
+  [[ -n "$ack_untriaged_text" ]] && action_details+="$ack_untriaged_text"
+  [[ -n "$ack_pending_text" ]] && action_details+="$ack_pending_text"
 fi
 
 # --- Build final message text ---
