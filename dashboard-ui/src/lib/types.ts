@@ -246,7 +246,7 @@ export interface KnowledgeGroup {
 
 export interface Escalation {
   id: string
-  type: 'decision' | 'blocker' | 'question' | 'approval' | 'improvement'
+  type: 'decision' | 'blocker' | 'question' | 'approval' | 'improvement' | 'agent_plan'
   space: string
   spaceName?: string
   project: string
@@ -261,6 +261,7 @@ export interface Escalation {
   resolution: string | null
   resolvedBy: string | null
   resolvedAt: string | null
+  acknowledgedAt?: string | null
   dismissedAt?: string | null
   createdAt: string
 }

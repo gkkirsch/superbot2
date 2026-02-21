@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb } from 'lucide-react'
+import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb, ClipboardList } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { resolveEscalation, deleteEscalation } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
@@ -11,6 +11,7 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
   question: { icon: <HelpCircle className="h-4 w-4" />, color: 'text-parchment' },
   approval: { icon: <ShieldCheck className="h-4 w-4" />, color: 'text-moss' },
   improvement: { icon: <Lightbulb className="h-4 w-4" />, color: 'text-amber-400' },
+  agent_plan: { icon: <ClipboardList className="h-4 w-4" />, color: 'text-sky-400' },
 }
 
 
@@ -74,6 +75,11 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
             {escalation.blocksProject && (
               <span className="text-[10px] text-ember">
                 blocks project
+              </span>
+            )}
+            {escalation.acknowledgedAt && (
+              <span className="text-[10px] text-moss/70 bg-moss/10 rounded-full px-1.5 py-0.5">
+                acknowledged
               </span>
             )}
           </div>

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import {
   MessageCircleQuestion, AlertTriangle, HelpCircle, ShieldCheck,
-  Filter, CheckCircle2, Clock, Circle, Lightbulb,
+  Filter, CheckCircle2, Clock, Circle, Lightbulb, ClipboardList,
 } from 'lucide-react'
 import { useAllEscalations } from '@/hooks/useSpaces'
 import { EscalationCard } from '@/features/EscalationCard'
@@ -30,6 +30,7 @@ const typeIcon: Record<Escalation['type'], React.ReactNode> = {
   question: <HelpCircle className="h-3.5 w-3.5" />,
   approval: <ShieldCheck className="h-3.5 w-3.5" />,
   improvement: <Lightbulb className="h-3.5 w-3.5" />,
+  agent_plan: <ClipboardList className="h-3.5 w-3.5" />,
 }
 
 function SummaryStats({ escalations }: { escalations: Escalation[] }) {
@@ -161,7 +162,7 @@ export function AllEscalations() {
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] text-stone uppercase tracking-wider">Type</span>
                   <div className="flex gap-1">
-                    {(['all', 'decision', 'blocker', 'question', 'approval', 'improvement'] as TypeFilter[]).map(t => (
+                    {(['all', 'decision', 'blocker', 'question', 'approval', 'improvement', 'agent_plan'] as TypeFilter[]).map(t => (
                       <button
                         key={t}
                         onClick={() => setTypeFilter(t)}
@@ -172,7 +173,7 @@ export function AllEscalations() {
                         }`}
                       >
                         {t !== 'all' && typeIcon[t]}
-                        {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+                        {t === 'all' ? 'All' : t === 'agent_plan' ? 'Plan' : t.charAt(0).toUpperCase() + t.slice(1)}
                       </button>
                     ))}
                   </div>
