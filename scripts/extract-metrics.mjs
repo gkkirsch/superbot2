@@ -10,8 +10,8 @@ import { homedir } from 'node:os'
 import { createInterface } from 'node:readline'
 import { writeFile } from 'node:fs/promises'
 
-const CLAUDE_PROJECTS = join(homedir(), '.claude', 'projects')
-const SUPERBOT_DIR = join(homedir(), '.superbot2')
+const SUPERBOT_DIR = process.env.SUPERBOT2_HOME || join(homedir(), '.superbot2')
+const CLAUDE_PROJECTS = join(SUPERBOT_DIR, '.claude', 'projects')
 
 // Parse CLI args
 const args = process.argv.slice(2)

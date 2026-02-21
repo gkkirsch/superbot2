@@ -61,6 +61,13 @@ cat > "$PLIST_PATH" << EOF
   <string>$LOG_DIR/scheduler.log</string>
   <key>StandardErrorPath</key>
   <string>$LOG_DIR/scheduler.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SUPERBOT2_HOME</key>
+    <string>$SUPERBOT2_HOME</string>
+    <key>SUPERBOT2_NAME</key>
+    <string>${SUPERBOT2_NAME:-superbot2}</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
 </dict>

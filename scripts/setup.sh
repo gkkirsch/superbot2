@@ -2,16 +2,36 @@
 # superbot2 setup - Initialize SUPERBOT2_HOME and install hooks/skills/agents
 set -euo pipefail
 
-DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
+SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
+DIR="${SUPERBOT2_HOME:-$HOME/.$SUPERBOT2_NAME}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "Setting up superbot2..."
+echo "Setting up $SUPERBOT2_NAME..."
+
+# --- Backup helper ---
+
+backup_if_exists() {
+  local target="$1"
+  if [[ -e "$target" ]]; then
+    local backup="${target}.backup.$(date +%Y%m%d-%H%M%S)"
+    echo "  Backing up $target → $backup"
+    cp -a "$target" "$backup"
+  fi
+}
 
 # --- Directory structure ---
 echo "Creating directory structure..."
-mkdir -p "$DIR"/{knowledge,escalations/{untriaged,needs_human,resolved},daily,spaces,templates,hooks,skills,scripts}
-TEAM_DIR="$HOME/.claude/teams/superbot2"
+backup_if_exists "$DIR"
+mkdir -p "$DIR"/{knowledge,escalations/{untriaged,needs_human,resolved},daily,spaces,templates,skills,scripts}
+CLAUDE_DIR="$DIR/.claude"
+mkdir -p "$CLAUDE_DIR"
+TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
+TASK_DIR="$CLAUDE_DIR/tasks/$SUPERBOT2_NAME"
+backup_if_exists "$TEAM_DIR"
 mkdir -p "$TEAM_DIR/inboxes"
+mkdir -p "$TASK_DIR"
+touch "$TASK_DIR/.lock"
+echo "1" > "$TASK_DIR/.highwatermark"
 
 # Initialize team config if missing
 if [[ ! -f "$TEAM_DIR/config.json" ]]; then
@@ -19,14 +39,14 @@ if [[ ! -f "$TEAM_DIR/config.json" ]]; then
   NOW_MS=$(date +%s)000
   cat > "$TEAM_DIR/config.json" << EOF
 {
-  "name": "superbot2",
-  "description": "Superbot2 — team-lead orchestrates space workers and heartbeat",
+  "name": "$SUPERBOT2_NAME",
+  "description": "$SUPERBOT2_NAME — team-lead orchestrates space workers and heartbeat",
   "createdAt": $NOW_MS,
-  "leadAgentId": "team-lead@superbot2",
+  "leadAgentId": "team-lead@$SUPERBOT2_NAME",
   "leadSessionId": "$LEAD_SESSION",
   "members": [
     {
-      "agentId": "team-lead@superbot2",
+      "agentId": "team-lead@$SUPERBOT2_NAME",
       "name": "team-lead",
       "agentType": "team-lead",
       "joinedAt": $NOW_MS,
@@ -34,7 +54,7 @@ if [[ ! -f "$TEAM_DIR/config.json" ]]; then
       "subscriptions": []
     },
     {
-      "agentId": "heartbeat@superbot2",
+      "agentId": "heartbeat@$SUPERBOT2_NAME",
       "name": "heartbeat",
       "agentType": "heartbeat",
       "joinedAt": $NOW_MS,
@@ -51,21 +71,42 @@ else
 fi
 
 # Initialize inboxes if missing
-for inbox in team-lead heartbeat; do
+for inbox in team-lead heartbeat dashboard-user; do
   if [[ ! -f "$TEAM_DIR/inboxes/$inbox.json" ]]; then
     echo '[]' > "$TEAM_DIR/inboxes/$inbox.json"
     echo "  Initialized $inbox inbox"
   fi
 done
 
-# --- Guide files (expand ~ to absolute path) ---
-echo "Copying guide files..."
-sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/ORCHESTRATOR_GUIDE.md" > "$DIR/ORCHESTRATOR_GUIDE.md"
-sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/SPACE_WORKER_GUIDE.md" > "$DIR/SPACE_WORKER_GUIDE.md"
+# --- Auth: copy credentials into isolated CLAUDE_DIR ---
+echo "Setting up auth credentials..."
+
+# Copy .claude.json for config/preferences
+if [[ -f "$HOME/.claude.json" ]]; then
+  cp "$HOME/.claude.json" "$CLAUDE_DIR/.claude.json"
+  echo "  Copied .claude.json"
+else
+  echo "  No ~/.claude.json found, skipping"
+fi
+
+# Compute hash of the config dir for keychain service name and copy credential
+if command -v security &>/dev/null; then
+  CONFIG_HASH=$(echo -n "$CLAUDE_DIR" | shasum -a 256 | cut -c1-8)
+  NEW_SERVICE="Claude Code-credentials-${CONFIG_HASH}"
+
+  CRED=$(security find-generic-password -s "Claude Code-credentials" -a "$USER" -w 2>/dev/null || true)
+  if [[ -n "$CRED" ]]; then
+    security add-generic-password -s "$NEW_SERVICE" -a "$USER" -w "$CRED" -U 2>/dev/null || true
+    echo "  Copied keychain credential to $NEW_SERVICE"
+  else
+    echo "  No existing Claude Code keychain credential found, skipping"
+  fi
+else
+  echo "  Not on macOS (no security command), skipping keychain setup"
+fi
 
 # --- Templates (expand ~ to absolute path) ---
 echo "Copying templates..."
-sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/space-worker-prompt.md" > "$DIR/templates/space-worker-prompt.md"
 sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/orchestrator-system-prompt-override.md" > "$DIR/templates/orchestrator-system-prompt-override.md"
 
 # --- Identity files (don't overwrite existing) ---
@@ -150,46 +191,43 @@ fi
 
 # --- Scripts ---
 echo "Installing scripts..."
-for script in create-space.sh create-project.sh create-task.sh create-escalation.sh heartbeat-cron.sh scheduler.sh lock-helper.sh; do
+for script in create-space.sh create-project.sh create-task.sh update-task.sh create-escalation.sh resolve-escalation.sh promote-escalation.sh consume-escalation.sh write-session.sh portfolio-status.sh heartbeat-cron.sh scheduler.sh lock-helper.sh; do
   cp "$REPO_DIR/scripts/$script" "$DIR/scripts/$script"
 done
 chmod +x "$DIR/scripts/"*.sh
 echo "  Installed scaffold scripts"
 
-# --- Hooks ---
-echo "Installing hooks..."
-cp "$REPO_DIR"/hooks/*.sh "$DIR/hooks/"
-chmod +x "$DIR/hooks/"*.sh
-echo "  Copied hook scripts to $DIR/hooks/"
+# --- Settings ---
+SETTINGS="$CLAUDE_DIR/settings.json"
+GLOBAL_SETTINGS="$HOME/.claude/settings.json"
 
-# Wire hooks into .claude/settings.local.json
-SETTINGS="$HOME/.claude/settings.json"
+if command -v jq &> /dev/null; then
+  BASE='{}'
 
-if [[ -f "$SETTINGS" ]]; then
-  # Merge hooks into existing settings
-  if command -v jq &> /dev/null; then
-    HOOKS_JSON=$(cat "$REPO_DIR/hooks/hooks.json")
-    # Replace hook command paths with absolute paths
-    HOOKS_JSON=$(echo "$HOOKS_JSON" | sed "s|~/.superbot2|$DIR|g; s|\\\${HOME}|$HOME|g; s|~/|$HOME/|g")
-
-    EXISTING=$(cat "$SETTINGS")
-    MERGED=$(echo "$EXISTING" | jq --argjson hooks "$(echo "$HOOKS_JSON" | jq '.hooks')" --argjson mkts "$(echo "$HOOKS_JSON" | jq '.extraKnownMarketplaces // {}')" '.hooks = $hooks | .extraKnownMarketplaces = $mkts')
-    echo "$MERGED" > "$SETTINGS"
-    echo "  Merged hooks and marketplaces into $SETTINGS"
-  else
-    echo "  WARNING: jq not found. Manually add hooks from hooks/hooks.json to $SETTINGS"
+  # Merge in existing user prefs (preserve enabledPlugins, skipDangerousModePermissionPrompt, etc.)
+  backup_if_exists "$SETTINGS"
+  if [[ -f "$SETTINGS" ]]; then
+    EXISTING=$(cat "$SETTINGS" | jq 'del(.hooks)')
+    BASE=$(echo "$BASE" | jq --argjson existing "$EXISTING" '. + $existing')
   fi
+
+  # Seed enabledPlugins + skipDangerousModePermissionPrompt from global settings
+  if [[ -f "$GLOBAL_SETTINGS" ]]; then
+    BASE=$(echo "$BASE" | jq --argjson global "$(cat "$GLOBAL_SETTINGS")" '
+      .enabledPlugins = ($global.enabledPlugins // .enabledPlugins // {}) |
+      .skipDangerousModePermissionPrompt = ($global.skipDangerousModePermissionPrompt // .skipDangerousModePermissionPrompt // false)')
+    echo "  Seeded enabledPlugins + skipDangerousModePermissionPrompt from global"
+  fi
+
+  echo "$BASE" > "$SETTINGS"
+  echo "  Wrote $SETTINGS (user prefs)"
 else
-  # Create settings file with hooks
-  HOOKS_JSON=$(cat "$REPO_DIR/hooks/hooks.json")
-  HOOKS_JSON=$(echo "$HOOKS_JSON" | sed "s|~/.superbot2|$DIR|g; s|\\\${HOME}|$HOME|g; s|~/|$HOME/|g")
-  echo "$HOOKS_JSON" > "$SETTINGS"
-  echo "  Created $SETTINGS with hooks"
+  echo "  WARNING: jq not found. Manually configure $SETTINGS"
 fi
 
 # --- Skills ---
 echo "Installing skills..."
-SKILLS_DIR="$HOME/.claude/skills"
+SKILLS_DIR="$CLAUDE_DIR/skills"
 mkdir -p "$SKILLS_DIR"
 
 for skill_dir in "$REPO_DIR"/skills/*/; do
@@ -208,7 +246,7 @@ done
 
 # --- Agents ---
 echo "Installing agents..."
-AGENTS_DIR="$HOME/.claude/agents"
+AGENTS_DIR="$CLAUDE_DIR/agents"
 mkdir -p "$AGENTS_DIR"
 
 for agent_file in "$REPO_DIR"/agents/*.md; do
@@ -262,18 +300,18 @@ if [[ -n "$SHELL_PROFILE" ]]; then
   fi
 
   # Superbot2 alias
-  if ! grep -q "alias superbot2=" "$SHELL_PROFILE" 2>/dev/null; then
+  if ! grep -q "alias $SUPERBOT2_NAME=" "$SHELL_PROFILE" 2>/dev/null; then
     echo "" >> "$SHELL_PROFILE"
-    echo "# Superbot2" >> "$SHELL_PROFILE"
-    echo "alias superbot2=\"$REPO_DIR/superbot2\"" >> "$SHELL_PROFILE"
-    echo "  Added superbot2 alias to $SHELL_PROFILE"
+    echo "# $SUPERBOT2_NAME" >> "$SHELL_PROFILE"
+    echo "alias $SUPERBOT2_NAME=\"SUPERBOT2_NAME=$SUPERBOT2_NAME SUPERBOT2_HOME=$DIR $REPO_DIR/superbot2\"" >> "$SHELL_PROFILE"
+    echo "  Added $SUPERBOT2_NAME alias to $SHELL_PROFILE"
   else
-    echo "  superbot2 alias already exists in $SHELL_PROFILE"
+    echo "  $SUPERBOT2_NAME alias already exists in $SHELL_PROFILE"
   fi
 else
   echo "  Warning: Could not detect shell profile. Manually add:"
   echo "    export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
-  echo "    alias superbot2=\"$REPO_DIR/superbot2\""
+  echo "    alias $SUPERBOT2_NAME=\"$REPO_DIR/superbot2\""
 fi
 
 # Export for this session
@@ -285,8 +323,9 @@ echo "Setup complete!"
 echo ""
 echo "  Runtime directory: $DIR"
 echo "  App directory:     $REPO_DIR"
+echo "  Team name:         $SUPERBOT2_NAME"
 echo ""
 echo "Next steps:"
 echo "  1. Edit $DIR/USER.md with your preferences"
 echo "  2. Edit $DIR/IDENTITY.md to customize the bot personality"
-echo "  3. Restart your terminal (to pick up the alias), then run: superbot2"
+echo "  3. Restart your terminal (to pick up the alias), then run: $SUPERBOT2_NAME"

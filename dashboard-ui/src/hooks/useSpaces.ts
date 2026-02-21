@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   fetchSpaces, fetchSpace, fetchSpaceOverview, fetchProjectTasks,
   fetchEscalations, fetchSpaceEscalations, fetchAllTasks,
-  fetchIdentity, fetchUser, fetchMemory,
+  fetchIdentity, fetchUser, fetchMemory, fetchOrchestratorPrompt, fetchWorkerPrompt,
   fetchProjectPlan, fetchProjectDocuments,
   fetchServerStatus,
   fetchSchedule,
@@ -41,6 +41,14 @@ export function useUser() {
 
 export function useMemory() {
   return useQuery({ queryKey: ['context', 'memory'], queryFn: fetchMemory, staleTime: 60_000 })
+}
+
+export function useOrchestratorPrompt() {
+  return useQuery({ queryKey: ['context', 'orchestrator-prompt'], queryFn: fetchOrchestratorPrompt, staleTime: 60_000 })
+}
+
+export function useWorkerPrompt() {
+  return useQuery({ queryKey: ['context', 'worker-prompt'], queryFn: fetchWorkerPrompt, staleTime: 60_000 })
 }
 
 // --- Spaces ---

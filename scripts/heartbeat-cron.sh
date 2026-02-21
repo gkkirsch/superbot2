@@ -7,9 +7,11 @@ shopt -s nullglob
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lock-helper.sh"
 
-DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
+SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
+DIR="${SUPERBOT2_HOME:-$HOME/.$SUPERBOT2_NAME}"
+CLAUDE_DIR="$DIR/.claude"
 FINGERPRINT_FILE="$DIR/.heartbeat-last-fingerprint"
-INBOX="$HOME/.claude/teams/superbot2/inboxes/team-lead.json"
+INBOX="$CLAUDE_DIR/teams/$SUPERBOT2_NAME/inboxes/team-lead.json"
 ACTIVITY_LOG="$DIR/logs/heartbeat-activity.json"
 KNOWLEDGE_HASH_FILE="$DIR/.heartbeat-knowledge-hashes"
 

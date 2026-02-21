@@ -7,7 +7,8 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
-const CLAUDE_PROJECTS = join(homedir(), '.claude', 'projects')
+const SUPERBOT_DIR = process.env.SUPERBOT2_HOME || join(homedir(), '.superbot2')
+const CLAUDE_PROJECTS = join(SUPERBOT_DIR, '.claude', 'projects')
 const hoursBack = parseInt(process.argv[2] || '24', 10)
 
 async function parseActivity(hoursBack) {

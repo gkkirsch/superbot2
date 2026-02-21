@@ -7,10 +7,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Source file locking helper
 source "$SCRIPT_DIR/lock-helper.sh"
+SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
+CLAUDE_DIR="$DIR/.claude"
 CONFIG="$DIR/config.json"
 LAST_RUN="$DIR/schedule-last-run.json"
 LOG="$DIR/logs/scheduler.log"
-TEAM_DIR="$HOME/.claude/teams/superbot2"
+TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
 
 # Exit silently if no config or team not set up
 [[ ! -f "$CONFIG" ]] && exit 0

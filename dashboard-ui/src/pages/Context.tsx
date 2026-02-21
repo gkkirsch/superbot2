@@ -1,5 +1,5 @@
 import { FileText } from 'lucide-react'
-import { ContextSection } from '@/features/ContextSection'
+import { ContextSection, SystemPromptsSection } from '@/features/ContextSection'
 
 export function Context() {
   return (
@@ -10,6 +10,9 @@ export function Context() {
           <h1 className="font-heading text-2xl text-parchment">Context</h1>
         </div>
         <ContextSection />
+        <div className="mt-10">
+          <SystemPromptsSection />
+        </div>
       </div>
     </div>
   )

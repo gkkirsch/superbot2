@@ -5,9 +5,8 @@
 When modifying system files in `~/.superbot2/` (guides, templates, scripts), always sync changes to `~/dev/superbot2/`. The dev repo is the source of truth; the deployed copy is at `~/.superbot2/`.
 
 Key mappings:
-- `~/.superbot2/ORCHESTRATOR_GUIDE.md` ↔ `~/dev/superbot2/templates/ORCHESTRATOR_GUIDE.md`
-- `~/.superbot2/SPACE_WORKER_GUIDE.md` ↔ `~/dev/superbot2/templates/SPACE_WORKER_GUIDE.md`
-- `~/.superbot2/templates/space-worker-prompt.md` ↔ `~/dev/superbot2/templates/space-worker-prompt.md`
+- `~/.superbot2/templates/orchestrator-system-prompt-override.md` ↔ `~/dev/superbot2/templates/orchestrator-system-prompt-override.md`
+- `~/.claude/agents/space-worker.md` ↔ `~/dev/superbot2/agents/space-worker.md`
 - `~/.superbot2/hooks/*.sh` ↔ `~/dev/superbot2/hooks/*.sh`
 - `~/.superbot2/scripts/*.sh` ↔ `~/dev/superbot2/scripts/*.sh`
 - Skills: `~/dev/superbot2/skills/` (source, workers edit directly)

@@ -26,6 +26,14 @@ export async function fetchMemory(): Promise<ContextFile> {
   return fetchJson<ContextFile>('/memory')
 }
 
+export async function fetchOrchestratorPrompt(): Promise<ContextFile> {
+  return fetchJson<ContextFile>('/orchestrator-prompt')
+}
+
+export async function fetchWorkerPrompt(): Promise<ContextFile> {
+  return fetchJson<ContextFile>('/worker-prompt')
+}
+
 // --- Spaces ---
 
 export async function fetchSpaces(): Promise<SpaceOverview[]> {

@@ -4,8 +4,9 @@ set -e
 # Superbot2 installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
 
-INSTALL_DIR="${SUPERBOT2_APP_DIR:-$HOME/.superbot2-app}"
-SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.superbot2}"
+SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
+INSTALL_DIR="${SUPERBOT2_APP_DIR:-$HOME/.${SUPERBOT2_NAME}-app}"
+SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.$SUPERBOT2_NAME}"
 
 echo ""
 echo "  ╔═══════════════════════════════╗"
@@ -92,16 +93,36 @@ if ! command -v claude &>/dev/null; then
   echo ""
 fi
 
-# --- Clone or update ---
+# --- Backup helper ---
 
-if [[ -d "$INSTALL_DIR/.git" ]]; then
+backup_if_exists() {
+  local target="$1"
+  if [[ -e "$target" ]]; then
+    local backup="${target}.backup.$(date +%Y%m%d-%H%M%S)"
+    echo "  Backing up $target → $backup"
+    cp -a "$target" "$backup"
+  fi
+}
+
+# --- Clone or update (skip if SUPERBOT2_LOCAL points to a local repo) ---
+
+if [[ -n "${SUPERBOT2_LOCAL:-}" ]]; then
+  if [[ ! -d "$SUPERBOT2_LOCAL/scripts" ]]; then
+    echo "SUPERBOT2_LOCAL=$SUPERBOT2_LOCAL does not look like a superbot2 repo."
+    exit 1
+  fi
+  INSTALL_DIR="$SUPERBOT2_LOCAL"
+  echo "Using local repo at $INSTALL_DIR (SUPERBOT2_LOCAL mode, skipping clone)"
+elif [[ -d "$INSTALL_DIR/.git" ]]; then
   echo "Updating existing installation at $INSTALL_DIR..."
+  backup_if_exists "$INSTALL_DIR"
   git -C "$INSTALL_DIR" pull --ff-only
 else
   if [[ -d "$INSTALL_DIR" ]]; then
     echo "Directory $INSTALL_DIR exists but is not a git repo."
-    echo "Remove it first or set SUPERBOT2_APP_DIR to a different path."
-    exit 1
+    echo "Backing up before proceeding..."
+    backup_if_exists "$INSTALL_DIR"
+    rm -rf "$INSTALL_DIR"
   fi
   echo "Cloning superbot2 to $INSTALL_DIR..."
   git clone https://github.com/gkkirsch/superbot2.git "$INSTALL_DIR"
@@ -112,7 +133,7 @@ fi
 echo ""
 echo "Running setup..."
 echo ""
-SUPERBOT2_HOME="$SUPERBOT2_HOME" bash "$INSTALL_DIR/scripts/setup.sh"
+SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$SUPERBOT2_HOME" bash "$INSTALL_DIR/scripts/setup.sh"
 
 # --- Launch dashboard ---
 
@@ -139,7 +160,7 @@ fi
 
 echo ""
 echo "  ╔═══════════════════════════════════════╗"
-echo "  ║        Superbot2 installed!           ║"
+echo "  ║        $SUPERBOT2_NAME installed!           ║"
 echo "  ╚═══════════════════════════════════════╝"
 echo ""
 echo "  Dashboard:  http://localhost:3274  (running now)"
@@ -147,10 +168,10 @@ echo "  Data:       $SUPERBOT2_HOME"
 echo "  Code:       $INSTALL_DIR"
 echo ""
 echo "  Next steps:"
-echo "    1. Restart your terminal (to pick up the superbot2 alias)"
-echo "    2. Run: superbot2"
+echo "    1. Restart your terminal (to pick up the $SUPERBOT2_NAME alias)"
+echo "    2. Run: $SUPERBOT2_NAME"
 echo ""
 echo "  The dashboard is running in the background (PID $DASHBOARD_PID)."
 echo "  It will stop when you close this terminal."
-echo "  Run 'superbot2' to start the full system (orchestrator + dashboard)."
+echo "  Run '$SUPERBOT2_NAME' to start the full system (orchestrator + dashboard)."
 echo ""

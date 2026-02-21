@@ -6,9 +6,13 @@ shopt -s nullglob
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
+SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
+DIR="${SUPERBOT2_HOME:-$HOME/.$SUPERBOT2_NAME}"
 export SUPERBOT2_HOME="$DIR"
-TEAM_DIR="$HOME/.claude/teams/superbot2"
+export SUPERBOT2_NAME
+CLAUDE_DIR="$DIR/.claude"
+export CLAUDE_CONFIG_DIR="$CLAUDE_DIR"
+TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
 TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
 RESTART_FLAG="$DIR/.restart"
 LAUNCHER_PID=$$
@@ -47,15 +51,9 @@ case "${1:-}" in
     echo "  Dashboard rebuilt."
     echo ""
 
-    # 3. Redeploy guide files
-    echo "  Updating guide files..."
-    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/ORCHESTRATOR_GUIDE.md" > "$DIR/ORCHESTRATOR_GUIDE.md"
-    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/SPACE_WORKER_GUIDE.md" > "$DIR/SPACE_WORKER_GUIDE.md"
-
-    # 4. Redeploy templates
+    # 3. Redeploy templates
     echo "  Updating templates..."
     mkdir -p "$DIR/templates"
-    sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/space-worker-prompt.md" > "$DIR/templates/space-worker-prompt.md"
     sed "s|~/.superbot2|$DIR|g" "$REPO_DIR/templates/orchestrator-system-prompt-override.md" > "$DIR/templates/orchestrator-system-prompt-override.md"
 
     # 5. Redeploy scripts
@@ -68,30 +66,9 @@ case "${1:-}" in
     done
     chmod +x "$DIR/scripts/"*.sh
 
-    # 6. Redeploy hooks
-    echo "  Updating hooks..."
-    mkdir -p "$DIR/hooks"
-    cp "$REPO_DIR"/hooks/*.sh "$DIR/hooks/"
-    chmod +x "$DIR/hooks/"*.sh
-
-    # Wire hooks into settings
-    SETTINGS="$HOME/.claude/settings.json"
-    if command -v jq &> /dev/null; then
-      HOOKS_JSON=$(cat "$REPO_DIR/hooks/hooks.json")
-      HOOKS_JSON=$(echo "$HOOKS_JSON" | sed "s|~/.superbot2|$DIR|g; s|\\\${HOME}|$HOME|g; s|~/|$HOME/|g")
-
-      if [[ -f "$SETTINGS" ]]; then
-        EXISTING=$(cat "$SETTINGS")
-        MERGED=$(echo "$EXISTING" | jq --argjson hooks "$(echo "$HOOKS_JSON" | jq '.hooks')" '.hooks = $hooks')
-        echo "$MERGED" > "$SETTINGS"
-      else
-        echo "$HOOKS_JSON" > "$SETTINGS"
-      fi
-    fi
-
-    # 7. Redeploy skills
+    # 6. Redeploy skills
     echo "  Updating skills..."
-    SKILLS_DIR="$HOME/.claude/skills"
+    SKILLS_DIR="$CLAUDE_DIR/skills"
     mkdir -p "$SKILLS_DIR"
     for skill_dir in "$REPO_DIR"/skills/*/; do
       skill_name=$(basename "$skill_dir")
@@ -109,7 +86,7 @@ case "${1:-}" in
 
     # 8. Redeploy agents
     echo "  Updating agents..."
-    AGENTS_DIR="$HOME/.claude/agents"
+    AGENTS_DIR="$CLAUDE_DIR/agents"
     mkdir -p "$AGENTS_DIR"
     for agent_file in "$REPO_DIR"/agents/*.md; do
       [[ ! -f "$agent_file" ]] && continue
@@ -185,12 +162,6 @@ assemble_prompt() {
 
   # --- Pre-load context ---
 
-  # Orchestrator guide
-  if [[ -f "$DIR/ORCHESTRATOR_GUIDE.md" ]]; then
-    prompt+=$'\n\n## Orchestrator Guide\n\n'
-    prompt+=$(cat "$DIR/ORCHESTRATOR_GUIDE.md")
-  fi
-
   # Knowledge files
   local kfiles=("$DIR"/knowledge/*)
   if [[ ${#kfiles[@]} -gt 0 ]]; then
@@ -239,6 +210,9 @@ assemble_prompt() {
       prompt+=$'\n```\n'
     done
   fi
+
+  # Substitute team name (last — catches placeholders in all appended content)
+  prompt="${prompt//\{\{TEAM_NAME\}\}/$SUPERBOT2_NAME}"
 
   echo "$prompt"
 }
@@ -322,9 +296,9 @@ while true; do
   CLAUDE_ARGS=(
     --system-prompt "$PROMPT"
     --session-id "$SESSION_ID"
-    --team-name superbot2
+    --team-name "$SUPERBOT2_NAME"
     --agent-name team-lead
-    --agent-id team-lead@superbot2
+    --agent-id "team-lead@$SUPERBOT2_NAME"
     --dangerously-skip-permissions
   )
 
@@ -333,6 +307,15 @@ while true; do
     INITIAL_MSG="Session restarted with fresh context. Begin your cycle."
   else
     INITIAL_MSG="Begin your cycle."
+  fi
+
+  # Purge self-addressed idle notifications from team-lead inbox
+  # (Claude Code sends idle_notification to the team lead when any teammate's turn
+  # ends — including the team lead itself, causing an infinite wake loop)
+  INBOX="$TEAM_DIR/inboxes/team-lead.json"
+  if [[ -f "$INBOX" ]] && command -v jq &>/dev/null; then
+    jq '[.[] | select(.from != "team-lead" or ((.text // "") | test("idle_notification") | not))]' \
+      "$INBOX" > "$INBOX.tmp" && mv "$INBOX.tmp" "$INBOX"
   fi
 
   # Trigger heartbeat to seed inbox

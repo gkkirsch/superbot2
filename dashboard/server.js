@@ -8,13 +8,14 @@ import yaml from 'js-yaml'
 
 const app = express()
 const PORT = 3274
-const SUPERBOT_DIR = process.env.SUPERBOT2_HOME || join(homedir(), '.superbot2')
+const SUPERBOT2_NAME = process.env.SUPERBOT2_NAME || 'superbot2'
+const SUPERBOT_DIR = process.env.SUPERBOT2_HOME || join(homedir(), `.${SUPERBOT2_NAME}`)
 const SPACES_DIR = join(SUPERBOT_DIR, 'spaces')
 const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations')
 const SESSIONS_DIR = join(SUPERBOT_DIR, 'sessions')
 const SUPERBOT_SKILLS_DIR = join(import.meta.dirname, '..', 'skills')
 const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
-const TEAM_INBOXES_DIR = join(homedir(), '.claude', 'teams', 'superbot2', 'inboxes')
+const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 
 app.use(express.json())
 
@@ -136,6 +137,26 @@ app.get('/api/memory', async (_req, res) => {
   try {
     const result = await readMarkdownFile(join(SUPERBOT_DIR, 'MEMORY.md'))
     res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/orchestrator-prompt', async (_req, res) => {
+  try {
+    const template = await readMarkdownFile(join(SUPERBOT_DIR, 'templates', 'orchestrator-system-prompt-override.md'))
+    const content = template.exists ? template.content : ''
+    res.json({ content, exists: template.exists })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/worker-prompt', async (_req, res) => {
+  try {
+    const agentDef = await readMarkdownFile(join(homedir(), '.claude', 'agents', 'space-worker.md'))
+    const content = agentDef.exists ? agentDef.content : ''
+    res.json({ content, exists: agentDef.exists })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -1064,7 +1085,7 @@ app.post('/api/schedule', async (req, res) => {
 
 // --- Skills page endpoints ---
 
-const CLAUDE_DIR = join(homedir(), '.claude')
+const CLAUDE_DIR = join(SUPERBOT_DIR, '.claude')
 const PLUGINS_CACHE_DIR = join(CLAUDE_DIR, 'plugins', 'cache')
 
 // Scan an installed plugin's cache dir for component counts & items
@@ -1799,7 +1820,7 @@ app.delete('/api/hooks/:event', async (req, res) => {
 
 function runClaude(args) {
   return new Promise((resolve, reject) => {
-    execFile('claude', args, { timeout: 30_000 }, (err, stdout, stderr) => {
+    execFile('claude', args, { timeout: 30_000, env: { ...process.env, CLAUDE_CONFIG_DIR: CLAUDE_DIR } }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message))
       resolve(stdout.trim())
     })
