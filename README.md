@@ -2,6 +2,16 @@
 
 An autonomous AI orchestrator built on [Claude Code](https://claude.ai/). Superbot2 runs as a persistent team of AI agents that manage projects, execute tasks, and self-improve — all from a single command.
 
+## Quick Start
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
+```
+
+This clones the repo, builds the dashboard, deploys hooks/skills/agents, and opens the dashboard in your browser. After install, restart your terminal and run `superbot2` to start the full system.
+
+**Prerequisites:** macOS, Node.js v18+, git, jq. Claude Code is installed automatically if missing.
+
 ## How It Works
 
 Superbot2 uses Claude Code's agent teams feature to create a multi-agent system:
@@ -36,21 +46,9 @@ Superbot2 uses Claude Code's agent teams feature to create a multi-agent system:
   config.json              # Schedule and configuration
 ```
 
-## Prerequisites
-
-- **macOS** (Linux support planned)
-- **Node.js** v18+
-- **git**
-- **jq**
-- **Claude Code** — installed automatically if missing
-
 ## Install
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
-```
-
-This clones the repo to `~/.superbot2-app/`, builds the dashboard, deploys hooks/skills/agents, initializes `~/.superbot2/`, and adds a shell alias.
+See [Quick Start](#quick-start) above. The installer clones to `~/.superbot2-app/`, builds the dashboard, deploys hooks/skills/agents, initializes `~/.superbot2/`, and adds a shell alias.
 
 ## Usage
 
@@ -81,7 +79,7 @@ superbot2 help
 
 ```bash
 # Install code to a custom directory
-SUPERBOT2_APP_DIR=~/my-superbot2 curl -fsSL .../install.sh | bash
+SUPERBOT2_APP_DIR=~/my-superbot2 curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
 
 # Use a custom runtime directory
 SUPERBOT2_HOME=/tmp/superbot2-test superbot2

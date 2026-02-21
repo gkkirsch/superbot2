@@ -5,6 +5,7 @@ set -e
 # Usage: curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
 
 INSTALL_DIR="${SUPERBOT2_APP_DIR:-$HOME/.superbot2-app}"
+SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.superbot2}"
 
 echo ""
 echo "  ╔═══════════════════════════════╗"
@@ -55,33 +56,39 @@ if ! command -v claude &>/dev/null; then
 fi
 
 if ! command -v claude &>/dev/null; then
-  echo "Claude Code is not installed."
-  echo ""
-  read -p "Would you like to install it now? (y/n) " -n 1 -r
-  echo ""
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Installing Claude Code..."
-    curl -fsSL https://claude.ai/install.sh | bash
+  if [[ -t 0 ]]; then
+    # Interactive mode — ask the user
+    echo "Claude Code is not installed."
     echo ""
-
-    for candidate in "$HOME/.claude/local/bin/claude" "$HOME/.local/bin/claude" "/usr/local/bin/claude"; do
-      if [[ -x "$candidate" ]]; then
-        export PATH="$(dirname "$candidate"):$PATH"
-        break
-      fi
-    done
-
-    if ! command -v claude &>/dev/null; then
-      echo "Installation finished but 'claude' command not found in current shell."
-      echo "You may need to restart your terminal, then re-run this script."
+    read -p "Would you like to install it now? (y/n) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo "Superbot2 requires Claude Code. Install it manually:"
+      echo "  curl -fsSL https://claude.ai/install.sh | bash"
       exit 1
     fi
-    echo "Claude Code installed successfully."
   else
-    echo "Superbot2 requires Claude Code. Install it manually:"
-    echo "  curl -fsSL https://claude.ai/install.sh | bash"
+    # Pipe mode (curl | bash) — auto-install
+    echo "Claude Code is not installed. Installing automatically..."
+  fi
+
+  echo "Installing Claude Code..."
+  curl -fsSL https://claude.ai/install.sh | bash
+  echo ""
+
+  for candidate in "$HOME/.claude/local/bin/claude" "$HOME/.local/bin/claude" "/usr/local/bin/claude"; do
+    if [[ -x "$candidate" ]]; then
+      export PATH="$(dirname "$candidate"):$PATH"
+      break
+    fi
+  done
+
+  if ! command -v claude &>/dev/null; then
+    echo "Installation finished but 'claude' command not found in current shell."
+    echo "You may need to restart your terminal, then re-run this script."
     exit 1
   fi
+  echo "Claude Code installed successfully."
   echo ""
 fi
 
@@ -105,4 +112,45 @@ fi
 echo ""
 echo "Running setup..."
 echo ""
-SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.superbot2}" bash "$INSTALL_DIR/scripts/setup.sh"
+SUPERBOT2_HOME="$SUPERBOT2_HOME" bash "$INSTALL_DIR/scripts/setup.sh"
+
+# --- Launch dashboard ---
+
+echo ""
+echo "Starting dashboard..."
+
+# Kill any existing dashboard on port 3274
+lsof -ti:3274 2>/dev/null | xargs kill 2>/dev/null || true
+
+SUPERBOT2_HOME="$SUPERBOT2_HOME" node "$INSTALL_DIR/dashboard/server.js" &
+DASHBOARD_PID=$!
+
+# Give server a moment to start
+sleep 2
+
+# Open in browser (macOS)
+if command -v open &>/dev/null; then
+  open "http://localhost:3274"
+elif command -v xdg-open &>/dev/null; then
+  xdg-open "http://localhost:3274"
+fi
+
+# --- Done ---
+
+echo ""
+echo "  ╔═══════════════════════════════════════╗"
+echo "  ║        Superbot2 installed!           ║"
+echo "  ╚═══════════════════════════════════════╝"
+echo ""
+echo "  Dashboard:  http://localhost:3274  (running now)"
+echo "  Data:       $SUPERBOT2_HOME"
+echo "  Code:       $INSTALL_DIR"
+echo ""
+echo "  Next steps:"
+echo "    1. Restart your terminal (to pick up the superbot2 alias)"
+echo "    2. Run: superbot2"
+echo ""
+echo "  The dashboard is running in the background (PID $DASHBOARD_PID)."
+echo "  It will stop when you close this terminal."
+echo "  Run 'superbot2' to start the full system (orchestrator + dashboard)."
+echo ""

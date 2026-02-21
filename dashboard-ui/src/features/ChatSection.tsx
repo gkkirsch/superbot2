@@ -103,19 +103,6 @@ function ThumbnailGallery({ paths }: { paths: string[] }) {
   )
 }
 
-/** Renders plain text with image thumbnails below */
-function TextWithInlineImages({ text, className }: { text: string; className?: string }) {
-  const imagePaths = useMemo(() => extractImagePaths(text), [text])
-  const strippedText = useMemo(() => stripImagePaths(text), [text])
-
-  return (
-    <div className={className}>
-      {strippedText && <span>{strippedText}</span>}
-      <ThumbnailGallery paths={imagePaths} />
-    </div>
-  )
-}
-
 type MessageType = 'user' | 'orchestrator' | 'agent' | 'system'
 
 function classifyMessage(msg: InboxMessage): MessageType {

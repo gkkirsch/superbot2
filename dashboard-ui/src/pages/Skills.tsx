@@ -404,7 +404,7 @@ function CredentialForm({ pluginName }: { pluginName: string }) {
       queryClient.invalidateQueries({ queryKey: ['plugins'] })
       queryClient.invalidateQueries({ queryKey: ['skills'] })
     } catch {
-      setFeedback(f => ({ ...f, [cred.key]: 'error' }))
+      setFeedback(f => ({ ...f, [cred.key]: { type: 'error' } }))
     } finally {
       setSaving(s => ({ ...s, [cred.key]: false }))
     }
