@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { Send, X, ChevronUp, Paperclip } from 'lucide-react'
+import { Send, X, ChevronUp, Paperclip, FileText } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { useMessages } from '@/hooks/useSpaces'
@@ -9,6 +9,7 @@ import type { InboxMessage } from '@/lib/types'
 // --- Inline image detection ---
 
 const IMAGE_PATH_RE = /((?:~\/|\/)[^\s]+\.(?:png|jpe?g|gif|webp))/gi
+const PDF_PATH_RE = /((?:~\/|\/)[^\s]+\.pdf)/gi
 
 function imageApiUrl(filePath: string): string {
   return `/api/images?path=${encodeURIComponent(filePath)}`
@@ -37,6 +38,29 @@ function extractImagePaths(text: string): string[] {
 function stripImagePaths(text: string): string {
   IMAGE_PATH_RE.lastIndex = 0
   return text.replace(IMAGE_PATH_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function hasPdfPaths(text: string): boolean {
+  PDF_PATH_RE.lastIndex = 0
+  const result = PDF_PATH_RE.test(text)
+  PDF_PATH_RE.lastIndex = 0
+  return result
+}
+
+function extractPdfPaths(text: string): string[] {
+  PDF_PATH_RE.lastIndex = 0
+  const paths: string[] = []
+  let match
+  while ((match = PDF_PATH_RE.exec(text)) !== null) {
+    paths.push(match[1])
+  }
+  PDF_PATH_RE.lastIndex = 0
+  return paths
+}
+
+function stripPdfPaths(text: string): string {
+  PDF_PATH_RE.lastIndex = 0
+  return text.replace(PDF_PATH_RE, '').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
@@ -100,6 +124,29 @@ function ThumbnailGallery({ paths }: { paths: string[] }) {
         />
       )}
     </>
+  )
+}
+
+function PdfAttachments({ paths }: { paths: string[] }) {
+  if (paths.length === 0) return null
+  return (
+    <div className="flex flex-col gap-1.5 mt-2">
+      {paths.map((path, i) => {
+        const filename = path.split('/').pop() || 'document.pdf'
+        return (
+          <a
+            key={i}
+            href={imageApiUrl(path)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-custom hover:bg-surface/30 transition-colors group"
+          >
+            <FileText className="h-5 w-5 text-stone/60 group-hover:text-stone/80 shrink-0" />
+            <span className="text-sm text-parchment/70 group-hover:text-parchment/90 truncate">{filename}</span>
+          </a>
+        )
+      })}
+    </div>
   )
 }
 
@@ -178,10 +225,10 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+const ACCEPTED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']
 
 export function ChatSection() {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
@@ -200,7 +247,10 @@ export function ChatSection() {
     mutationFn: ({ text, images }: { text: string; images?: { name: string; data: string }[] }) =>
       sendMessageToOrchestrator(text, images),
     onSuccess: () => {
-      if (inputRef.current) inputRef.current.value = ''
+      if (inputRef.current) {
+        inputRef.current.value = ''
+        inputRef.current.style.height = 'auto'
+      }
       setAttachedImages(prev => {
         prev.forEach(img => URL.revokeObjectURL(img.preview))
         return []
@@ -213,7 +263,7 @@ export function ChatSection() {
   })
 
   const addFiles = useCallback((files: File[]) => {
-    const valid = files.filter(f => ACCEPTED_IMAGE_TYPES.includes(f.type))
+    const valid = files.filter(f => ACCEPTED_FILE_TYPES.includes(f.type))
     if (valid.length === 0) return
     const newImages = valid.map(file => ({
       file,
@@ -290,7 +340,7 @@ export function ChatSection() {
       if (!items) return
       const files: File[] = []
       for (const item of items) {
-        if (item.kind === 'file' && ACCEPTED_IMAGE_TYPES.includes(item.type)) {
+        if (item.kind === 'file' && ACCEPTED_FILE_TYPES.includes(item.type)) {
           const file = item.getAsFile()
           if (file) files.push(file)
         }
@@ -397,7 +447,7 @@ export function ChatSection() {
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <Paperclip className="h-8 w-8 text-sand/50 mx-auto mb-2" />
-              <p className="text-sm text-sand/70">Drop images here</p>
+              <p className="text-sm text-sand/70">Drop files here</p>
             </div>
           </div>
         ) : classified.length === 0 ? (
@@ -433,11 +483,17 @@ export function ChatSection() {
         <div className="mt-2 flex flex-wrap gap-2">
           {attachedImages.map((img, i) => (
             <div key={i} className="relative group">
-              <img
-                src={img.preview}
-                alt={img.file.name}
-                className="h-16 w-16 object-cover rounded-lg border border-border-custom"
-              />
+              {img.file.type === 'application/pdf' ? (
+                <div className="h-16 w-16 flex items-center justify-center rounded-lg border border-border-custom bg-ink/40">
+                  <FileText className="h-6 w-6 text-stone/60" />
+                </div>
+              ) : (
+                <img
+                  src={img.preview}
+                  alt={img.file.name}
+                  className="h-16 w-16 object-cover rounded-lg border border-border-custom"
+                />
+              )}
               <button
                 onClick={() => removeImage(i)}
                 className="absolute -top-1.5 -right-1.5 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -452,11 +508,11 @@ export function ChatSection() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
+      <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
+          accept="image/png,image/jpeg,image/gif,image/webp,.pdf,application/pdf"
           multiple
           onChange={handleFileSelect}
           className="hidden"
@@ -465,15 +521,26 @@ export function ChatSection() {
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
-          title="Attach images"
+          title="Attach files"
         >
           <Paperclip className="h-4 w-4" />
         </button>
-        <input
+        <textarea
           ref={inputRef}
-          type="text"
+          rows={1}
           placeholder="Message superbot..."
-          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors"
+          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              e.currentTarget.form?.requestSubmit()
+            }
+          }}
+          onInput={(e) => {
+            const target = e.currentTarget
+            target.style.height = 'auto'
+            target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+          }}
         />
         <button
           type="submit"
@@ -541,10 +608,16 @@ function UserBubble({ msg }: { msg: InboxMessage }) {
     () => hasImagePaths(msg.text) ? extractImagePaths(msg.text) : [],
     [msg.text]
   )
-  const displayText = useMemo(
-    () => imagePaths.length > 0 ? stripImagePaths(msg.text) : msg.text,
-    [msg.text, imagePaths]
+  const pdfPaths = useMemo(
+    () => hasPdfPaths(msg.text) ? extractPdfPaths(msg.text) : [],
+    [msg.text]
   )
+  const displayText = useMemo(() => {
+    let text = msg.text
+    if (imagePaths.length > 0) text = stripImagePaths(text)
+    if (pdfPaths.length > 0) text = stripPdfPaths(text)
+    return text
+  }, [msg.text, imagePaths, pdfPaths])
 
   return (
     <div className="flex justify-end">
@@ -553,6 +626,7 @@ function UserBubble({ msg }: { msg: InboxMessage }) {
           <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{displayText}</p>
         </div>
         {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
+        {pdfPaths.length > 0 && <PdfAttachments paths={pdfPaths} />}
         <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">{formatTime(msg.timestamp)}</span>
       </div>
     </div>
@@ -566,10 +640,16 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
     () => hasImagePaths(msg.text) ? extractImagePaths(msg.text) : [],
     [msg.text]
   )
-  const processedText = useMemo(
-    () => imagePaths.length > 0 ? stripImagePaths(msg.text) : msg.text,
-    [msg.text, imagePaths]
+  const pdfPaths = useMemo(
+    () => hasPdfPaths(msg.text) ? extractPdfPaths(msg.text) : [],
+    [msg.text]
   )
+  const processedText = useMemo(() => {
+    let text = msg.text
+    if (imagePaths.length > 0) text = stripImagePaths(text)
+    if (pdfPaths.length > 0) text = stripPdfPaths(text)
+    return text
+  }, [msg.text, imagePaths, pdfPaths])
 
   return (
     <div className="flex justify-start">
@@ -599,6 +679,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
           )}
         </div>
         {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
+        {pdfPaths.length > 0 && <PdfAttachments paths={pdfPaths} />}
         <span className="text-[10px] text-stone/50 block mt-1 ml-1">
           {formatTime(msg.timestamp)}
           {msg.summary && <span className="text-stone/45"> — {msg.summary}</span>}

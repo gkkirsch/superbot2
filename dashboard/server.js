@@ -2382,7 +2382,7 @@ app.post('/api/messages', async (req, res) => {
 
 // --- Image serving ---
 
-const ALLOWED_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
+const ALLOWED_IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf'])
 
 const IMAGE_CONTENT_TYPES = {
   '.png': 'image/png',
@@ -2390,6 +2390,7 @@ const IMAGE_CONTENT_TYPES = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
 }
 
 app.get('/api/images', async (req, res) => {
