@@ -75,8 +75,9 @@ EOF
 fi
 
 for file in conventions decisions patterns; do
+  title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
   cat > "$DIR/knowledge/$file.md" << EOF
-# ${file^}
+# $title
 
 No ${file} recorded yet.
 EOF

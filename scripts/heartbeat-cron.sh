@@ -165,7 +165,8 @@ scan_projects() {
                 highest_rank=$rank
                 highest_priority="$priority"
               fi
-              task_lines+="  - [${priority^^}] ${subject}"$'\n'
+              priority_upper=$(echo "$priority" | tr '[:lower:]' '[:upper:]')
+              task_lines+="  - [${priority_upper}] ${subject}"$'\n'
               ;;
             in_progress)
               ((ip_count++)) || true

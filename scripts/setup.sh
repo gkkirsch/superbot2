@@ -147,7 +147,8 @@ for file in conventions decisions preferences; do
     if [[ -f "$REPO_DIR/seed/knowledge/$file.md" ]]; then
       cp "$REPO_DIR/seed/knowledge/$file.md" "$DIR/knowledge/$file.md"
     else
-      echo "# ${file^}" > "$DIR/knowledge/$file.md"
+      title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+      echo "# $title" > "$DIR/knowledge/$file.md"
       echo "" >> "$DIR/knowledge/$file.md"
       echo "No ${file} recorded yet." >> "$DIR/knowledge/$file.md"
     fi
@@ -179,7 +180,8 @@ General-purpose space for miscellaneous projects and tasks.
 EOF
 
   for file in conventions decisions patterns; do
-    echo "# ${file^}" > "$DEFAULT_SPACE/knowledge/$file.md"
+    title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+    echo "# $title" > "$DEFAULT_SPACE/knowledge/$file.md"
     echo "" >> "$DEFAULT_SPACE/knowledge/$file.md"
     echo "No ${file} recorded yet." >> "$DEFAULT_SPACE/knowledge/$file.md"
   done
