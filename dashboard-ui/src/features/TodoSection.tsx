@@ -1,9 +1,120 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import { useTodos } from '@/hooks/useSpaces'
+import { X, ChevronUp, ClipboardList } from 'lucide-react'
+import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
+import { MarkdownContent } from '@/features/MarkdownContent'
+import type { Escalation } from '@/lib/types'
+
+function findResearch(todoText: string, escalations: Escalation[]): Escalation | null {
+  const lower = todoText.toLowerCase()
+  const words = lower.split(/\s+/).filter(w => w.length > 3)
+
+  let best: Escalation | null = null
+  let bestScore = 0
+
+  for (const esc of escalations) {
+    const target = `${esc.question} ${esc.context}`.toLowerCase()
+    let score = 0
+    for (const word of words) {
+      if (target.includes(word)) score++
+    }
+    // Require at least 2 matching words or 50% match
+    const threshold = Math.max(2, Math.ceil(words.length * 0.4))
+    if (score >= threshold && score > bestScore) {
+      best = esc
+      bestScore = score
+    }
+  }
+
+  return best
+}
+
+interface TodoItemRowProps {
+  todo: { id: string; text: string; completed: boolean }
+  research: Escalation | null
+  onToggle: () => void
+  onRemove: () => void
+}
+
+function TodoItemRow({ todo, research, onToggle, onRemove }: TodoItemRowProps) {
+  const [expanded, setExpanded] = useState(false)
+  const hasResearch = !!research
+
+  return (
+    <div>
+      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasResearch ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle() }}
+          className={todo.completed
+            ? "h-4 w-4 shrink-0 rounded border border-sand/30 bg-sand/20 flex items-center justify-center transition-colors"
+            : "h-4 w-4 shrink-0 rounded border border-stone/30 hover:border-sand/50 transition-colors"
+          }
+        >
+          {todo.completed && (
+            <svg className="h-2.5 w-2.5 text-sand/70" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M2 6l3 3 5-5" />
+            </svg>
+          )}
+        </button>
+        <button
+          onClick={() => hasResearch && setExpanded(!expanded)}
+          className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
+        >
+          {todo.text}
+        </button>
+        {hasResearch && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="shrink-0 text-sky-400/60 hover:text-sky-400 transition-colors p-0.5"
+            title="View research"
+          >
+            {expanded
+              ? <ChevronUp className="h-3.5 w-3.5" />
+              : <ClipboardList className="h-3.5 w-3.5" />
+            }
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove() }}
+          className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {expanded && research && (
+        <div className="ml-8 mr-2 mb-2 mt-1 rounded-lg border border-sky-400/20 bg-sky-400/[0.03] overflow-hidden animate-fade-up" style={{ animationDuration: '0.2s' }}>
+          <div className="px-3 py-2">
+            <div className="flex items-center gap-1.5 mb-2">
+              <ClipboardList className="h-3 w-3 text-sky-400/70" />
+              <span className="text-[10px] font-medium text-sky-400/70 uppercase tracking-wider">Research</span>
+              {research.space && (
+                <span className="text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5 ml-1">
+                  {research.spaceName || research.space}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-parchment/80 font-medium mb-1.5">{research.question}</p>
+            {research.context && (
+              <div className="max-h-64 overflow-y-auto">
+                <MarkdownContent content={research.context} className="text-stone/70" />
+              </div>
+            )}
+            {research.status === 'resolved' && research.resolution && (
+              <div className="mt-2 pt-2 border-t border-sky-400/10">
+                <span className="text-[10px] text-moss/70 font-medium">Resolution: </span>
+                <span className="text-xs text-stone/60">{research.resolution}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function TodoSection() {
   const { todos, isLoading, add, toggle, remove } = useTodos()
+  const { data: agentPlans } = useTodoResearch()
   const [input, setInput] = useState('')
 
   const handleAdd = (e: React.FormEvent) => {
@@ -17,6 +128,7 @@ export function TodoSection() {
 
   const incomplete = todos.filter(t => !t.completed)
   const completed = todos.filter(t => t.completed)
+  const plans = agentPlans || []
 
   return (
     <div className="space-y-2">
@@ -43,42 +155,26 @@ export function TodoSection() {
 
       <div className="space-y-0.5">
         {incomplete.map(todo => (
-          <div key={todo.id} className="flex items-center gap-2 group rounded-lg px-2 py-1.5 hover:bg-surface/20 transition-colors">
-            <button
-              onClick={() => toggle(todo)}
-              className="h-4 w-4 shrink-0 rounded border border-stone/30 hover:border-sand/50 transition-colors"
-            />
-            <span className="flex-1 text-sm text-parchment/90 leading-snug">{todo.text}</span>
-            <button
-              onClick={() => remove(todo.id)}
-              className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <TodoItemRow
+            key={todo.id}
+            todo={todo}
+            research={findResearch(todo.text, plans)}
+            onToggle={() => toggle(todo)}
+            onRemove={() => remove(todo.id)}
+          />
         ))}
       </div>
 
       {completed.length > 0 && (
         <div className="space-y-0.5 pt-1 border-t border-stone/10">
           {completed.map(todo => (
-            <div key={todo.id} className="flex items-center gap-2 group rounded-lg px-2 py-1.5 hover:bg-surface/20 transition-colors">
-              <button
-                onClick={() => toggle(todo)}
-                className="h-4 w-4 shrink-0 rounded border border-sand/30 bg-sand/20 flex items-center justify-center transition-colors"
-              >
-                <svg className="h-2.5 w-2.5 text-sand/70" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M2 6l3 3 5-5" />
-                </svg>
-              </button>
-              <span className="flex-1 text-sm text-stone/40 line-through leading-snug">{todo.text}</span>
-              <button
-                onClick={() => remove(todo.id)}
-                className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <TodoItemRow
+              key={todo.id}
+              todo={todo}
+              research={findResearch(todo.text, plans)}
+              onToggle={() => toggle(todo)}
+              onRemove={() => remove(todo.id)}
+            />
           ))}
         </div>
       )}

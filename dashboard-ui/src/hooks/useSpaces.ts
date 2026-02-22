@@ -239,6 +239,17 @@ export function useTodos() {
   }
 }
 
+// --- Todo Research (agent_plan escalations) ---
+
+export function useTodoResearch() {
+  return useQuery({
+    queryKey: ['escalations', undefined, undefined, 'agent_plan'],
+    queryFn: () => fetchEscalations(undefined, undefined, 'agent_plan'),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
+}
+
 // --- Knowledge ---
 
 export function useKnowledge() {
