@@ -2507,6 +2507,201 @@ app.post('/api/updates/run', async (_req, res) => {
   }
 })
 
+// --- Skill Creator ---
+
+import { createInterface } from 'node:readline'
+
+const SKILL_CREATOR_SESSIONS = new Map()
+const SKILL_CREATOR_UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads', 'skill-creator')
+const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-prompt.md')
+const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
+
+// SSE stream endpoint
+app.get('/api/skill-creator/stream', (req, res) => {
+  const sessionId = req.query.sessionId
+  if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+  res.write(':connected\n\n')
+
+  // Store SSE response for this session
+  const existing = SKILL_CREATOR_SESSIONS.get(sessionId)
+  if (existing) {
+    existing.sseResponse = res
+  } else {
+    SKILL_CREATOR_SESSIONS.set(sessionId, { process: null, sseResponse: res, createdAt: Date.now() })
+  }
+
+  // Keepalive
+  const heartbeat = setInterval(() => {
+    res.write(':keepalive\n\n')
+  }, 30000)
+
+  req.on('close', () => {
+    clearInterval(heartbeat)
+    const session = SKILL_CREATOR_SESSIONS.get(sessionId)
+    // Guard: only clean up if this is still our SSE response (reconnection race fix)
+    if (session && session.sseResponse === res) {
+      if (session.process) {
+        try { session.process.kill() } catch {}
+      }
+      SKILL_CREATOR_SESSIONS.delete(sessionId)
+    }
+  })
+})
+
+// Chat endpoint
+app.post('/api/skill-creator/chat', async (req, res) => {
+  try {
+    const { message, sessionId } = req.body
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    if (!message || !message.trim()) return res.status(400).json({ error: 'message required' })
+
+    let session = SKILL_CREATOR_SESSIONS.get(sessionId)
+    if (!session) {
+      return res.status(400).json({ error: 'No SSE connection. Connect to /api/skill-creator/stream first.' })
+    }
+
+    if (session.process) {
+      // Existing process — send follow-up message via stdin
+      session.process.stdin.write(JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: message.trim() }
+      }) + '\n')
+      return res.json({ ok: true, action: 'message_sent' })
+    }
+
+    // Spawn new claude -p process
+    const child = spawn('claude', [
+      '-p',
+      '--output-format', 'stream-json',
+      '--input-format', 'stream-json',
+      '--verbose',
+      '--system-prompt', SKILL_CREATOR_PROMPT_PATH,
+      '--append-system-prompt', `\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
+      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+      '--permission-mode', 'bypassPermissions',
+      '--no-session-persistence',
+      '--model', 'sonnet'
+    ], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, CLAUDECODE: undefined }
+    })
+
+    session.process = child
+
+    // Read stdout line by line and forward as SSE
+    const rl = createInterface({ input: child.stdout })
+
+    rl.on('line', (line) => {
+      if (!line.trim()) return
+      try {
+        const event = JSON.parse(line)
+        const sseRes = SKILL_CREATOR_SESSIONS.get(sessionId)?.sseResponse
+        if (!sseRes) return
+
+        if (event.type === 'assistant') {
+          // Complete assistant message with content blocks
+          const content = event.message?.content || []
+          // Extract text and tool_use blocks
+          const textBlocks = content.filter(b => b.type === 'text').map(b => b.text).join('')
+          const toolBlocks = content.filter(b => b.type === 'tool_use').map(b => ({
+            name: b.name,
+            input: b.input
+          }))
+          sseRes.write(`data: ${JSON.stringify({ type: 'assistant', text: textBlocks, tools: toolBlocks })}\n\n`)
+        } else if (event.type === 'result') {
+          sseRes.write(`data: ${JSON.stringify({ type: 'result', subtype: event.subtype, cost: event.total_cost_usd, duration: event.duration_ms })}\n\n`)
+        } else if (event.type === 'content_block_delta' || event.type === 'message_delta') {
+          // Stream event — forward text deltas
+          if (event.delta?.type === 'text_delta') {
+            sseRes.write(`data: ${JSON.stringify({ type: 'text', text: event.delta.text })}\n\n`)
+          }
+        }
+      } catch {
+        // Skip unparseable lines
+      }
+    })
+
+    // Handle stderr (claude logs)
+    const stderrChunks = []
+    child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
+
+    child.on('exit', (code) => {
+      const sseRes = SKILL_CREATOR_SESSIONS.get(sessionId)?.sseResponse
+      if (sseRes) {
+        if (code !== 0) {
+          const stderr = stderrChunks.join('')
+          sseRes.write(`data: ${JSON.stringify({ type: 'error', message: `claude process exited with code ${code}`, stderr })}\n\n`)
+        }
+        sseRes.write(`data: ${JSON.stringify({ type: 'process_exit', code })}\n\n`)
+      }
+      const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
+      if (sess) sess.process = null
+    })
+
+    // Send the first message
+    child.stdin.write(JSON.stringify({
+      type: 'user',
+      message: { role: 'user', content: message.trim() }
+    }) + '\n')
+
+    res.json({ ok: true, action: 'process_spawned' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// File upload endpoint
+app.post('/api/skill-creator/upload', async (req, res) => {
+  try {
+    const { sessionId, files } = req.body
+    if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'files array required' })
+    }
+
+    const uploadDir = join(SKILL_CREATOR_UPLOADS_DIR, sessionId)
+    await mkdir(uploadDir, { recursive: true })
+
+    const ALLOWED_UPLOAD_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt', '.md', '.json', '.yaml', '.yml', '.js', '.ts', '.py', '.sh'])
+    const savedPaths = []
+
+    for (const file of files) {
+      const ext = extname(file.name).toLowerCase() || '.txt'
+      if (!ALLOWED_UPLOAD_EXTS.has(ext)) continue
+      const ts = Date.now()
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const filename = `${ts}-${safeName}`
+      const filePath = join(uploadDir, filename)
+      const buffer = Buffer.from(file.data, 'base64')
+      await writeFile(filePath, buffer)
+      savedPaths.push(filePath)
+    }
+
+    res.json({ ok: true, paths: savedPaths })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Delete session endpoint
+app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
+  const { sessionId } = req.params
+  const session = SKILL_CREATOR_SESSIONS.get(sessionId)
+  if (!session) return res.status(404).json({ error: 'Session not found' })
+
+  if (session.process) {
+    try { session.process.kill() } catch {}
+  }
+  SKILL_CREATOR_SESSIONS.delete(sessionId)
+  res.json({ ok: true })
+})
+
 // --- Static files (production) ---
 
 const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')

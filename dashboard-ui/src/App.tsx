@@ -8,6 +8,7 @@ import { SpaceDetail } from './pages/SpaceDetail'
 import { ProjectDetail } from './pages/ProjectDetail'
 import { Context } from './pages/Context'
 import { Skills } from './pages/Skills'
+import { SkillCreator } from './pages/SkillCreator'
 
 function AppContent() {
   return (
@@ -20,6 +21,7 @@ function AppContent() {
         <Route path="/spaces/:slug" element={<SpaceDetail />} />
         <Route path="/spaces/:slug/:project" element={<ProjectDetail />} />
         <Route path="/skills" element={<Skills />} />
+        <Route path="/skill-creator" element={<SkillCreator />} />
         <Route path="/context" element={<Context />} />
       </Routes>
       <UpdateCheckButton />
