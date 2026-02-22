@@ -1,7 +1,7 @@
 ---
 name: space-worker
 description: Use this agent for superbot2 space workers that execute project tasks autonomously. Workers code, test, document, and manage project state within their assigned space.
-model: inherit
+model: opus
 permissionMode: bypassPermissions
 ---
 

@@ -622,9 +622,9 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
   )
 }
 
-// --- Plugin Pill (compact chip for browse list) ---
+// --- Plugin Card (detailed card for browse list) ---
 
-function PluginPill({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
+function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
   const [loading, setLoading] = useState(false)
   const queryClient = useQueryClient()
 
@@ -639,30 +639,89 @@ function PluginPill({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
     }
   }
 
+  const cc = plugin.componentCounts
+
   return (
     <button
       onClick={onClick}
-      className={`group inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+      className={`group w-full text-left rounded-lg border p-4 transition-colors cursor-pointer ${
         plugin.installed
-          ? 'border-moss/30 bg-moss/10 text-parchment hover:bg-moss/20'
-          : 'border-border-custom bg-surface/50 text-parchment hover:border-sand/30 hover:bg-surface'
+          ? 'border-moss/30 bg-moss/5 hover:bg-moss/10'
+          : 'border-border-custom bg-surface/50 hover:border-sand/30 hover:bg-surface'
       }`}
-      title={plugin.description}
     >
-      {plugin.installed && (
-        <Check className="h-3 w-3 text-moss shrink-0" />
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <h3 className="text-sm font-medium text-parchment leading-tight">{titleCase(plugin.name)}</h3>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {plugin.installed && (
+            <span className="flex items-center gap-1 text-[10px] text-moss">
+              <Check className="h-3 w-3" />
+              Installed
+            </span>
+          )}
+          {plugin.hasUnconfiguredCredentials && (
+            <AlertTriangle className="h-3 w-3 text-amber-400" />
+          )}
+          {!plugin.installed && !loading && (
+            <span
+              onClick={handleInstall}
+              className="flex items-center gap-1 text-[10px] text-stone/50 group-hover:text-sand transition-colors"
+            >
+              <Download className="h-3 w-3" />
+              Install
+            </span>
+          )}
+          {loading && <Loader2 className="h-3 w-3 animate-spin text-sand" />}
+        </div>
+      </div>
+
+      {/* Description */}
+      {plugin.description && (
+        <p className="text-xs text-stone line-clamp-2 mb-2.5">{plugin.description}</p>
       )}
-      {plugin.hasUnconfiguredCredentials && (
-        <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
+
+      {/* Component counts */}
+      {cc && (cc.skills > 0 || cc.commands > 0 || cc.agents > 0 || cc.hooks > 0) && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {cc.skills > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-stone/60">
+              <Sparkles className="h-2.5 w-2.5" />
+              {cc.skills} {cc.skills === 1 ? 'skill' : 'skills'}
+            </span>
+          )}
+          {cc.commands > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-stone/60">
+              <Terminal className="h-2.5 w-2.5" />
+              {cc.commands} {cc.commands === 1 ? 'command' : 'commands'}
+            </span>
+          )}
+          {cc.agents > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-stone/60">
+              <Bot className="h-2.5 w-2.5" />
+              {cc.agents} {cc.agents === 1 ? 'agent' : 'agents'}
+            </span>
+          )}
+          {cc.hooks > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-stone/60">
+              <Webhook className="h-2.5 w-2.5" />
+              {cc.hooks} {cc.hooks === 1 ? 'hook' : 'hooks'}
+            </span>
+          )}
+        </div>
       )}
-      <span className="font-medium truncate max-w-[200px]">{titleCase(plugin.name)}</span>
-      {!plugin.installed && !loading && (
-        <Download
-          className="h-3 w-3 text-stone/40 group-hover:text-sand shrink-0 transition-colors"
-          onClick={handleInstall}
-        />
+
+      {/* Keywords */}
+      {plugin.keywords && plugin.keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {plugin.keywords.slice(0, 4).map(k => (
+            <span key={k} className="text-[10px] text-stone/50 bg-ink/60 px-1.5 py-0.5 rounded">{k}</span>
+          ))}
+          {plugin.keywords.length > 4 && (
+            <span className="text-[10px] text-stone/40">+{plugin.keywords.length - 4}</span>
+          )}
+        </div>
       )}
-      {loading && <Loader2 className="h-3 w-3 animate-spin text-sand shrink-0" />}
     </button>
   )
 }
@@ -1259,17 +1318,17 @@ function BrowsePlugins() {
 
       {/* Results */}
       {isLoading ? (
-        <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <div key={i} className="h-8 w-32 rounded-full bg-surface/50 animate-pulse" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-28 rounded-lg bg-surface/50 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-stone py-8 text-center">
           {search ? `No plugins matching "${search}"` : 'No plugins available.'}
         </p>
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filtered.map(p => (
-            <PluginPill key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} />
+            <PluginCard key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} />
           ))}
         </div>
       )}
