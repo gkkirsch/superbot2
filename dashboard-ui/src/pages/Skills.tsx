@@ -569,6 +569,15 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
             <FileViewer pluginName={plugin.name} filePath={viewingFile} onBack={() => setViewingFile(null)} />
           ) : (
             <div className="space-y-6">
+              {plugin.installed && plugin.hasUnconfiguredCredentials && (
+                <div className="flex items-center gap-2 rounded-lg bg-amber-400/10 border border-amber-400/30 px-4 py-3">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                  <p className="text-xs text-amber-300">This plugin requires API credentials to function. Configure them below.</p>
+                </div>
+              )}
+
+              {plugin.installed && <CredentialForm pluginName={plugin.name} />}
+
               {c && (c.commands.length > 0 || c.agents.length > 0 || c.skills.length > 0 || c.hooks.length > 0) ? (
                 <div className="space-y-4">
                   <ComponentList icon={Terminal} label="Commands" items={c.commands} onFileClick={setViewingFile} />
@@ -580,8 +589,6 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
               ) : (
                 <p className="text-sm text-stone">No component details available.</p>
               )}
-
-              {plugin.installed && <CredentialForm pluginName={plugin.name} />}
 
               {detail?.hasReadme && (
                 <button

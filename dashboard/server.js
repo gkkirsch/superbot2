@@ -1214,8 +1214,9 @@ async function keychainHas(pluginName, key) {
   return (await keychainGet(pluginName, key)) !== null
 }
 
-// Read credential declarations from all SKILL.md files in a plugin
+// Read credential declarations from all SKILL.md files in a plugin, with plugin.json fallback
 async function getPluginCredentials(installPath) {
+  // Check SKILL.md frontmatter first (primary source)
   const skillsDir = join(installPath, 'skills')
   const entries = await safeReaddir(skillsDir)
   for (const entry of entries) {
@@ -1227,6 +1228,11 @@ async function getPluginCredentials(installPath) {
         return fm.credentials
       }
     } catch { /* skip */ }
+  }
+  // Fallback: check plugin.json for credentials
+  const pj = await readJsonFile(join(installPath, '.claude-plugin', 'plugin.json'))
+  if (pj && Array.isArray(pj.credentials) && pj.credentials.length > 0) {
+    return pj.credentials
   }
   return []
 }
