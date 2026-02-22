@@ -25,8 +25,8 @@ fi
 # Also kill anything on the port as a fallback
 lsof -ti:$PORT | xargs kill 2>/dev/null || true
 
-# Start new server
-SUPERBOT2_HOME="$SUPERBOT2_HOME" PORT=$PORT node "$REPO_DIR/dashboard/server.js" &
+# Start new server (nohup so it survives terminal close)
+SUPERBOT2_HOME="$SUPERBOT2_HOME" PORT=$PORT nohup node "$REPO_DIR/dashboard/server.js" > "$SUPERBOT2_HOME/dashboard.log" 2>&1 &
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
 echo "Dashboard server restarted (PID $NEW_PID)"

@@ -291,6 +291,11 @@ if [[ -f "$REPO_DIR/dashboard-ui/package.json" ]]; then
   fi
 fi
 
+# --- Start dashboard server ---
+echo "Starting dashboard server..."
+bash "$REPO_DIR/scripts/restart-dashboard.sh"
+echo "  Dashboard running at http://localhost:3274"
+
 # --- Scheduler ---
 echo "Installing scheduler..."
 bash "$REPO_DIR/scripts/install-scheduler.sh"
