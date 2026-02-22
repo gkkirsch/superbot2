@@ -38,7 +38,7 @@ echo "Building dashboard UI..."
 # --- Copy scripts ---
 echo "Updating scripts..."
 mkdir -p "$DIR/scripts"
-for script in create-space.sh create-project.sh create-task.sh update-task.sh create-escalation.sh resolve-escalation.sh promote-escalation.sh consume-escalation.sh write-session.sh portfolio-status.sh heartbeat-cron.sh scheduler.sh lock-helper.sh update.sh; do
+for script in create-space.sh create-project.sh create-task.sh update-task.sh create-escalation.sh resolve-escalation.sh promote-escalation.sh consume-escalation.sh write-session.sh portfolio-status.sh heartbeat-cron.sh scheduler.sh lock-helper.sh update.sh restart-dashboard.sh; do
   if [[ -f "$REPO_DIR/scripts/$script" ]]; then
     cp "$REPO_DIR/scripts/$script" "$DIR/scripts/$script"
   fi
@@ -80,6 +80,10 @@ for agent_file in "$REPO_DIR"/agents/*.md; do
   cp "$agent_file" "$AGENTS_DIR/$agent_name"
 done
 echo "  Agents updated"
+
+# --- Restart dashboard server ---
+echo "Restarting dashboard server..."
+bash "$REPO_DIR/scripts/restart-dashboard.sh"
 
 # --- Done ---
 echo ""

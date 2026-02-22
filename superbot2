@@ -257,6 +257,7 @@ start_dashboard() {
   echo "Starting dashboard server on http://localhost:3274 ..."
   node "$REPO_DIR/dashboard/server.js" &
   DASHBOARD_PID=$!
+  echo "$DASHBOARD_PID" > "$SUPERBOT2_HOME/dashboard.pid"
   echo "Dashboard server started (PID $DASHBOARD_PID)"
 }
 
@@ -267,6 +268,7 @@ stop_dashboard() {
     echo "Dashboard server stopped."
     DASHBOARD_PID=""
   fi
+  rm -f "$SUPERBOT2_HOME/dashboard.pid"
 }
 
 # Clean up dashboard on exit

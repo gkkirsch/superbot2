@@ -193,7 +193,7 @@ fi
 
 # --- Scripts ---
 echo "Installing scripts..."
-for script in create-space.sh create-project.sh create-task.sh update-task.sh create-escalation.sh resolve-escalation.sh promote-escalation.sh consume-escalation.sh write-session.sh portfolio-status.sh heartbeat-cron.sh scheduler.sh lock-helper.sh update.sh; do
+for script in create-space.sh create-project.sh create-task.sh update-task.sh create-escalation.sh resolve-escalation.sh promote-escalation.sh consume-escalation.sh write-session.sh portfolio-status.sh heartbeat-cron.sh scheduler.sh lock-helper.sh update.sh restart-dashboard.sh; do
   cp "$REPO_DIR/scripts/$script" "$DIR/scripts/$script"
 done
 chmod +x "$DIR/scripts/"*.sh
