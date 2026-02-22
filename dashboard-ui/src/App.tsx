@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Nav } from './components/Nav'
+import { UpdateBanner } from './components/UpdateBanner'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -10,6 +11,7 @@ import { Skills } from './pages/Skills'
 function AppContent() {
   return (
     <>
+      <UpdateBanner />
       <Nav />
       <Routes>
         <Route path="/" element={<Dashboard />} />

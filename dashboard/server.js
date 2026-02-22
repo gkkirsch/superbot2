@@ -2430,6 +2430,78 @@ app.get('/api/images', async (req, res) => {
   }
 })
 
+// --- Updates ---
+
+let updateCheckCache = { data: null, fetchedAt: 0 }
+
+app.get('/api/updates/check', async (_req, res) => {
+  try {
+    const now = Date.now()
+    if (updateCheckCache.data && (now - updateCheckCache.fetchedAt) < 300_000) {
+      return res.json(updateCheckCache.data)
+    }
+
+    const repoDir = join(import.meta.dirname, '..')
+    const { execSync } = await import('node:child_process')
+
+    try {
+      execSync('git fetch origin', { cwd: repoDir, stdio: 'pipe', timeout: 15_000 })
+    } catch {
+      return res.json({ available: false, error: 'Failed to fetch from origin' })
+    }
+
+    const currentCommit = execSync('git rev-parse HEAD', { cwd: repoDir, encoding: 'utf-8' }).trim()
+    const latestCommit = execSync('git rev-parse origin/main', { cwd: repoDir, encoding: 'utf-8' }).trim()
+    const behindBy = parseInt(execSync('git rev-list HEAD..origin/main --count', { cwd: repoDir, encoding: 'utf-8' }).trim(), 10)
+    let latestMessage = ''
+    if (behindBy > 0) {
+      latestMessage = execSync('git log origin/main -1 --format=%s', { cwd: repoDir, encoding: 'utf-8' }).trim()
+    }
+
+    const result = {
+      available: behindBy > 0,
+      currentCommit,
+      latestCommit,
+      behindBy,
+      latestMessage,
+    }
+
+    updateCheckCache = { data: result, fetchedAt: now }
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/updates/run', async (_req, res) => {
+  try {
+    const repoDir = join(import.meta.dirname, '..')
+    const scriptPath = join(repoDir, 'scripts', 'update.sh')
+    const { execSync } = await import('node:child_process')
+
+    const output = execSync(`bash "${scriptPath}"`, {
+      cwd: repoDir,
+      encoding: 'utf-8',
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        SUPERBOT2_HOME: SUPERBOT_DIR,
+        SUPERBOT2_NAME,
+      },
+    })
+
+    // Clear the update cache
+    updateCheckCache = { data: null, fetchedAt: 0 }
+
+    res.json({ ok: true, output })
+
+    // Restart the server after responding so the process manager picks up new code
+    setTimeout(() => process.exit(0), 2000)
+  } catch (err) {
+    res.status(500).json({ error: err.stderr || err.message })
+  }
+})
+
 // --- Static files (production) ---
 
 const DIST_DIR = join(import.meta.dirname, '..', 'dashboard-ui', 'dist')
