@@ -239,6 +239,7 @@ export function ChatSection() {
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isLoadingEarlierRef = useRef(false)
   const dragCounterRef = useRef(0)
+  const initialScrollDoneRef = useRef(false)
   const queryClient = useQueryClient()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
@@ -418,6 +419,12 @@ export function ChatSection() {
     if (isLoadingEarlierRef.current) return
     const container = chatContainerRef.current
     if (!container) return
+    // Always scroll to bottom on initial load
+    if (!initialScrollDoneRef.current && classified.length > 0) {
+      initialScrollDoneRef.current = true
+      container.scrollTop = container.scrollHeight
+      return
+    }
     // Only auto-scroll if user is near the bottom (within 150px)
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
     if (nearBottom) {
