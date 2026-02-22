@@ -943,15 +943,19 @@ app.get('/api/knowledge/:source/:filename', async (req, res) => {
 
 const DEFAULT_DASHBOARD_CONFIG = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
+  centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
     const config = await readJsonFile(join(SUPERBOT_DIR, 'dashboard-config.json'))
+    if (config && !config.centerColumn) {
+      config.centerColumn = ['chat']
+    }
     res.json({ config: config || DEFAULT_DASHBOARD_CONFIG })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -964,18 +968,18 @@ app.put('/api/dashboard-config', async (req, res) => {
     if (!config || typeof config !== 'object') {
       return res.status(400).json({ error: 'Missing or invalid config object' })
     }
-    const { leftColumn, rightColumn, hidden } = config
-    if (!Array.isArray(leftColumn) || !Array.isArray(rightColumn) || !Array.isArray(hidden)) {
-      return res.status(400).json({ error: 'config must have leftColumn, rightColumn, and hidden arrays' })
+    const { leftColumn, centerColumn = [], rightColumn, hidden } = config
+    if (!Array.isArray(leftColumn) || !Array.isArray(centerColumn) || !Array.isArray(rightColumn) || !Array.isArray(hidden)) {
+      return res.status(400).json({ error: 'config must have leftColumn, centerColumn, rightColumn, and hidden arrays' })
     }
-    const allIds = [...leftColumn, ...rightColumn, ...hidden]
+    const allIds = [...leftColumn, ...centerColumn, ...rightColumn, ...hidden]
     const invalidIds = allIds.filter(id => !VALID_SECTION_IDS.includes(id))
     if (invalidIds.length > 0) {
       return res.status(400).json({ error: `Invalid section IDs: ${invalidIds.join(', ')}` })
     }
     const configPath = join(SUPERBOT_DIR, 'dashboard-config.json')
-    await writeFile(configPath, JSON.stringify({ leftColumn, rightColumn, hidden }, null, 2), 'utf-8')
-    res.json({ config: { leftColumn, rightColumn, hidden } })
+    await writeFile(configPath, JSON.stringify({ leftColumn, centerColumn, rightColumn, hidden }, null, 2), 'utf-8')
+    res.json({ config: { leftColumn, centerColumn, rightColumn, hidden } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
