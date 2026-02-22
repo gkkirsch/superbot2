@@ -2518,7 +2518,18 @@ if (existsSync(DIST_DIR)) {
   // SPA fallback (Express 5 wildcard syntax)
   app.get('/{*path}', (_req, res) => {
     if (existsSync(INDEX_HTML)) {
-      res.sendFile(INDEX_HTML)
+      res.sendFile(INDEX_HTML, (err) => {
+        if (err) {
+          console.error('Failed to serve index.html:', err.message)
+          res.status(503).send(`
+            <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+              <h1>Dashboard Error</h1>
+              <p>Failed to serve the dashboard UI: ${err.message}</p>
+              <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+            </body></html>
+          `)
+        }
+      })
     } else {
       res.status(503).send(`
         <html>
