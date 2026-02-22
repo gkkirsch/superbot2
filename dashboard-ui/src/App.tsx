@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { UpdateBanner } from './components/UpdateBanner'
+import { UpdateCheckButton } from './components/UpdateCheckButton'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -21,6 +22,7 @@ function AppContent() {
         <Route path="/skills" element={<Skills />} />
         <Route path="/context" element={<Context />} />
       </Routes>
+      <UpdateCheckButton />
     </>
   )
 }
