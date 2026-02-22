@@ -481,11 +481,13 @@ export async function fetchMessages(background = false): Promise<InboxMessage[]>
   return data.messages
 }
 
-export async function sendMessageToOrchestrator(text: string): Promise<{ ok: boolean }> {
+export async function sendMessageToOrchestrator(text: string, images?: { name: string; data: string }[]): Promise<{ ok: boolean }> {
+  const body: Record<string, unknown> = { text }
+  if (images && images.length > 0) body.images = images
   const response = await fetch(`${API_BASE}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()

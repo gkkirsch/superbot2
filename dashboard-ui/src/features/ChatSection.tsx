@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { Send, X, ChevronUp } from 'lucide-react'
+import { Send, X, ChevronUp, Paperclip } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { useMessages } from '@/hooks/useSpaces'
@@ -160,22 +160,51 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
 
 const MESSAGES_PER_PAGE = 50
 
+interface AttachedImage {
+  file: File
+  preview: string
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      // Strip the data:...;base64, prefix
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+
 export function ChatSection() {
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
   const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE)
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isLoadingEarlierRef = useRef(false)
+  const dragCounterRef = useRef(0)
   const queryClient = useQueryClient()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
 
   const mutation = useMutation({
-    mutationFn: (message: string) => sendMessageToOrchestrator(message),
+    mutationFn: ({ text, images }: { text: string; images?: { name: string; data: string }[] }) =>
+      sendMessageToOrchestrator(text, images),
     onSuccess: () => {
       if (inputRef.current) inputRef.current.value = ''
+      setAttachedImages(prev => {
+        prev.forEach(img => URL.revokeObjectURL(img.preview))
+        return []
+      })
       setSent(true)
       setWaitingForReply(true)
       setTimeout(() => setSent(false), 2000)
@@ -183,13 +212,94 @@ export function ChatSection() {
     },
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const addFiles = useCallback((files: File[]) => {
+    const valid = files.filter(f => ACCEPTED_IMAGE_TYPES.includes(f.type))
+    if (valid.length === 0) return
+    const newImages = valid.map(file => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }))
+    setAttachedImages(prev => [...prev, ...newImages])
+  }, [])
+
+  const removeImage = useCallback((index: number) => {
+    setAttachedImages(prev => {
+      URL.revokeObjectURL(prev[index].preview)
+      return prev.filter((_, i) => i !== index)
+    })
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const value = inputRef.current?.value.trim()
-    if (value && !mutation.isPending) {
-      mutation.mutate(value)
+    if ((!value && attachedImages.length === 0) || mutation.isPending) return
+
+    let images: { name: string; data: string }[] | undefined
+    if (attachedImages.length > 0) {
+      images = await Promise.all(
+        attachedImages.map(async ({ file }) => ({
+          name: file.name,
+          data: await fileToBase64(file),
+        }))
+      )
     }
+
+    mutation.mutate({ text: value || '', images })
   }
+
+  // Drag-and-drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current++
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true)
+    }
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current--
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false)
+    }
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setIsDragging(false)
+    const files = Array.from(e.dataTransfer.files)
+    addFiles(files)
+  }, [addFiles])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      addFiles(Array.from(e.target.files))
+      e.target.value = ''
+    }
+  }, [addFiles])
+
+  // Paste handler for images
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const files: File[] = []
+      for (const item of items) {
+        if (item.kind === 'file' && ACCEPTED_IMAGE_TYPES.includes(item.type)) {
+          const file = item.getAsFile()
+          if (file) files.push(file)
+        }
+      }
+      if (files.length > 0) addFiles(files)
+    }
+    document.addEventListener('paste', handlePaste)
+    return () => document.removeEventListener('paste', handlePaste)
+  }, [addFiles])
 
   const classified = useMemo(() => {
     if (!messages) return []
@@ -266,13 +376,31 @@ export function ChatSection() {
   }, [classified])
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div
+      className="flex flex-col h-[calc(100vh-8rem)]"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="mb-3">
         <h2 className="font-heading text-xl text-parchment">Chat</h2>
       </div>
 
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0">
-        {classified.length === 0 ? (
+      <div
+        ref={chatContainerRef}
+        className={`flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0 transition-colors ${
+          isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
+        }`}
+      >
+        {isDragging ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Paperclip className="h-8 w-8 text-sand/50 mx-auto mb-2" />
+              <p className="text-sm text-sand/70">Drop images here</p>
+            </div>
+          </div>
+        ) : classified.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-stone/50">No messages yet</p>
           </div>
@@ -301,7 +429,46 @@ export function ChatSection() {
         )}
       </div>
 
+      {attachedImages.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {attachedImages.map((img, i) => (
+            <div key={i} className="relative group">
+              <img
+                src={img.preview}
+                alt={img.file.name}
+                className="h-16 w-16 object-cover rounded-lg border border-border-custom"
+              />
+              <button
+                onClick={() => removeImage(i)}
+                className="absolute -top-1.5 -right-1.5 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="h-3 w-3 text-stone/70" />
+              </button>
+              <span className="absolute bottom-0 left-0 right-0 text-[8px] text-parchment/70 bg-ink/80 rounded-b-lg px-1 truncate">
+                {img.file.name}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
+          title="Attach images"
+        >
+          <Paperclip className="h-4 w-4" />
+        </button>
         <input
           ref={inputRef}
           type="text"

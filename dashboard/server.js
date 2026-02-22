@@ -17,7 +17,7 @@ const SUPERBOT_SKILLS_DIR = join(import.meta.dirname, '..', 'skills')
 const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 
 // --- Helpers ---
 
@@ -2322,9 +2322,34 @@ app.get('/api/messages', async (req, res) => {
 
 app.post('/api/messages', async (req, res) => {
   try {
-    const { text } = req.body
-    if (!text || !text.trim()) {
-      return res.status(400).json({ error: 'text is required' })
+    const { text, images } = req.body
+    if ((!text || !text.trim()) && (!images || images.length === 0)) {
+      return res.status(400).json({ error: 'text or images required' })
+    }
+
+    // Save uploaded images to disk
+    const imagePaths = []
+    if (images && images.length > 0) {
+      const uploadsDir = join(SUPERBOT_DIR, 'uploads')
+      await mkdir(uploadsDir, { recursive: true })
+
+      for (const img of images) {
+        const ext = extname(img.name).toLowerCase() || '.png'
+        if (!ALLOWED_IMAGE_EXTS.has(ext)) continue
+        const ts = Date.now()
+        const filename = `${ts}-${Math.random().toString(36).slice(2, 8)}${ext}`
+        const filePath = join(uploadsDir, filename)
+        const buffer = Buffer.from(img.data, 'base64')
+        await writeFile(filePath, buffer)
+        imagePaths.push(filePath)
+      }
+    }
+
+    // Build message text with image paths appended
+    let messageText = (text || '').trim()
+    if (imagePaths.length > 0) {
+      const pathsStr = imagePaths.join('\n')
+      messageText = messageText ? `${messageText}\n${pathsStr}` : pathsStr
     }
 
     const inboxPath = join(TEAM_INBOXES_DIR, 'team-lead.json')
@@ -2332,7 +2357,7 @@ app.post('/api/messages', async (req, res) => {
 
     existing.push({
       from: 'dashboard-user',
-      text: text.trim(),
+      text: messageText,
       timestamp: new Date().toISOString(),
       read: false,
     })
