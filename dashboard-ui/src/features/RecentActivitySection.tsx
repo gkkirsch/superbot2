@@ -6,6 +6,15 @@ import { dismissSession } from '@/lib/api'
 import { SectionHeader } from '@/components/SectionHeader'
 import type { SessionSummary } from '@/lib/types'
 
+function cleanSummary(summary: string, space: string, project: string): string {
+  const trimmed = summary.trim()
+  // Detect raw JSON that leaked into the summary field
+  if (trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('"{')) {
+    return `Worker completed work on ${space}/${project}`
+  }
+  return summary
+}
+
 function SessionCard({ session, onDismiss }: { session: SessionSummary; onDismiss: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -30,7 +39,7 @@ function SessionCard({ session, onDismiss }: { session: SessionSummary; onDismis
           <div className="flex items-center gap-2">
             <span className="text-xs text-sand/80 font-medium">{session.space}/{session.project}</span>
           </div>
-          <p className={`text-sm text-parchment/90 leading-snug mt-0.5${expanded ? '' : ' line-clamp-2'}`}>{session.summary}</p>
+          <p className={`text-sm text-parchment/90 leading-snug mt-0.5${expanded ? '' : ' line-clamp-2'}`}>{cleanSummary(session.summary, session.space, session.project)}</p>
           {!expanded && session.filesChanged.length > 0 && (
             <div className="flex items-center gap-1 mt-1">
               <FileText className="h-3 w-3 text-stone/40" />
