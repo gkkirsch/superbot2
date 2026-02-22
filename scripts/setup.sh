@@ -241,7 +241,11 @@ for skill_dir in "$REPO_DIR"/skills/*/; do
   # Expand ~/.superbot2 paths in skill markdown files
   for md_file in "$SKILLS_DIR/$skill_name"/*.md; do
     [[ -f "$md_file" ]] || continue
-    sed -i '' "s|~/.superbot2|$DIR|g" "$md_file"
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s|~/.superbot2|$DIR|g" "$md_file"
+    else
+      sed -i "s|~/.superbot2|$DIR|g" "$md_file"
+    fi
   done
   echo "  Installed skill: $skill_name"
 done
@@ -264,16 +268,27 @@ echo "Building dashboard..."
 # Install dashboard server dependencies
 if [[ -f "$REPO_DIR/dashboard/package.json" ]]; then
   echo "  Installing dashboard server dependencies..."
-  (cd "$REPO_DIR/dashboard" && npm install --silent 2>&1)
+  if ! (cd "$REPO_DIR/dashboard" && npm install --silent); then
+    echo "  ERROR: Failed to install dashboard server dependencies"
+    echo "  Try running manually: cd $REPO_DIR/dashboard && npm install"
+  fi
 fi
 
 # Install dashboard UI dependencies and build
 if [[ -f "$REPO_DIR/dashboard-ui/package.json" ]]; then
   echo "  Installing dashboard UI dependencies..."
-  (cd "$REPO_DIR/dashboard-ui" && npm install --silent 2>&1)
-  echo "  Building dashboard UI..."
-  (cd "$REPO_DIR/dashboard-ui" && npm run build 2>&1)
-  echo "  Dashboard built to dashboard-ui/dist/"
+  if ! (cd "$REPO_DIR/dashboard-ui" && npm install --silent); then
+    echo "  ERROR: Failed to install dashboard UI dependencies"
+    echo "  Try running manually: cd $REPO_DIR/dashboard-ui && npm install"
+  else
+    echo "  Building dashboard UI..."
+    if ! (cd "$REPO_DIR/dashboard-ui" && npm run build); then
+      echo "  ERROR: Failed to build dashboard UI"
+      echo "  Try running manually: cd $REPO_DIR/dashboard-ui && npm run build"
+    else
+      echo "  Dashboard built to dashboard-ui/dist/"
+    fi
+  fi
 fi
 
 # --- Scheduler ---
