@@ -229,6 +229,7 @@ export interface TodoItem {
 
 export interface DashboardConfig {
   leftColumn: string[]
+  centerColumn: string[]
   rightColumn: string[]
   hidden: string[]
 }

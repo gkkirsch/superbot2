@@ -10,6 +10,7 @@ import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
 import { KnowledgeSection } from '@/features/KnowledgeSection'
+import { ChatSection } from '@/features/ChatSection'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Section wrapper components ---
@@ -142,12 +143,17 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'spaces',
     Component: SpacesDashboardSection,
   },
+  'chat': {
+    id: 'chat',
+    Component: ChatSection,
+  },
 }
 
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
+  centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['spaces'],
 }

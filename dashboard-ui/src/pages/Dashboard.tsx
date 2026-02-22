@@ -22,8 +22,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Settings, X, Plus, RotateCcw } from 'lucide-react'
 import { useDashboardConfig } from '@/hooks/useSpaces'
 import { SECTION_REGISTRY, DEFAULT_DASHBOARD_CONFIG } from '@/features/DashboardSections'
-import { ChatSection } from '@/features/ChatSection'
 import type { DashboardConfig } from '@/lib/types'
+
+type ColumnId = 'leftColumn' | 'centerColumn' | 'rightColumn'
 
 // Human-readable section names for UI
 const SECTION_LABELS: Record<string, string> = {
@@ -35,6 +36,7 @@ const SECTION_LABELS: Record<string, string> = {
   'knowledge': 'Knowledge',
   'extensions': 'Extensions',
   'spaces': 'Spaces & Projects',
+  'chat': 'Chat',
 }
 
 // --- Sortable section item ---
@@ -163,11 +165,17 @@ export function Dashboard() {
 
   // Local layout state for drag operations (committed to server on drag end)
   const [localLayout, setLocalLayout] = useState<DashboardConfig | null>(null)
-  const baseLayout = localLayout || config || DEFAULT_DASHBOARD_CONFIG
+  // Migrate old configs that lack centerColumn
+  const resolvedConfig = useMemo(() => {
+    if (!config) return null
+    if (config.centerColumn) return config
+    return { ...config, centerColumn: ['chat'] }
+  }, [config])
+  const baseLayout = localLayout || resolvedConfig || DEFAULT_DASHBOARD_CONFIG
 
   // Auto-discover new sections not yet in the saved config
   const layout = useMemo(() => {
-    const allKnown = new Set([...baseLayout.leftColumn, ...baseLayout.rightColumn, ...baseLayout.hidden])
+    const allKnown = new Set([...baseLayout.leftColumn, ...baseLayout.centerColumn, ...baseLayout.rightColumn, ...baseLayout.hidden])
     const newSections = Object.keys(SECTION_REGISTRY).filter(id => !allKnown.has(id))
     if (newSections.length === 0) return baseLayout
     return { ...baseLayout, hidden: [...baseLayout.hidden, ...newSections] }
@@ -178,8 +186,9 @@ export function Dashboard() {
     useSensor(KeyboardSensor)
   )
 
-  const findContainer = useCallback((id: string): 'leftColumn' | 'rightColumn' | null => {
+  const findContainer = useCallback((id: string): ColumnId | null => {
     if (layout.leftColumn.includes(id)) return 'leftColumn'
+    if (layout.centerColumn.includes(id)) return 'centerColumn'
     if (layout.rightColumn.includes(id)) return 'rightColumn'
     return null
   }, [layout])
@@ -198,8 +207,8 @@ export function Dashboard() {
     const overId = over.id as string
 
     const activeContainer = findContainer(activeId)
-    let overContainer: 'leftColumn' | 'rightColumn' | null
-    if (overId === 'leftColumn' || overId === 'rightColumn') {
+    let overContainer: ColumnId | null
+    if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
       overContainer = overId
     } else {
       overContainer = findContainer(overId)
@@ -240,8 +249,8 @@ export function Dashboard() {
     const overId = over.id as string
 
     const activeContainer = findContainer(activeId)
-    let overContainer: 'leftColumn' | 'rightColumn' | null
-    if (overId === 'leftColumn' || overId === 'rightColumn') {
+    let overContainer: ColumnId | null
+    if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
       overContainer = overId
     } else {
       overContainer = findContainer(overId)
@@ -278,6 +287,7 @@ export function Dashboard() {
     const current = localLayout || config || DEFAULT_DASHBOARD_CONFIG
     const newConfig: DashboardConfig = {
       leftColumn: current.leftColumn.filter(id => id !== sectionId),
+      centerColumn: current.centerColumn.filter(id => id !== sectionId),
       rightColumn: current.rightColumn.filter(id => id !== sectionId),
       hidden: [...current.hidden.filter(id => id !== sectionId), sectionId],
     }
@@ -289,6 +299,7 @@ export function Dashboard() {
     const current = localLayout || config || DEFAULT_DASHBOARD_CONFIG
     const newConfig: DashboardConfig = {
       leftColumn: current.leftColumn,
+      centerColumn: current.centerColumn,
       rightColumn: [...current.rightColumn, sectionId],
       hidden: current.hidden.filter(id => id !== sectionId),
     }
@@ -348,14 +359,12 @@ export function Dashboard() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_1fr] gap-8 ${isEditing ? 'pl-6' : ''}`}>
+          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_18rem] gap-8 ${isEditing ? 'pl-6' : ''}`}>
             {/* Left column */}
             <DroppableColumn id="leftColumn" sectionIds={layout.leftColumn} isEditing={isEditing} onHide={handleHideSection} />
 
-            {/* Center column — Chat (always fixed) */}
-            <div>
-              <ChatSection />
-            </div>
+            {/* Center column */}
+            <DroppableColumn id="centerColumn" sectionIds={layout.centerColumn} isEditing={isEditing} onHide={handleHideSection} />
 
             {/* Right column */}
             <DroppableColumn id="rightColumn" sectionIds={layout.rightColumn} isEditing={isEditing} onHide={handleHideSection} />
