@@ -2509,8 +2509,8 @@ app.post('/api/updates/run', async (_req, res) => {
 
 // --- Static files (production) ---
 
-const DIST_DIR = join(import.meta.dirname, '..', 'dashboard-ui', 'dist')
-const INDEX_HTML = join(DIST_DIR, 'index.html')
+const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+const INDEX_HTML = resolve(DIST_DIR, 'index.html')
 
 if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
