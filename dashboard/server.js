@@ -2433,13 +2433,31 @@ app.get('/api/images', async (req, res) => {
 // --- Static files (production) ---
 
 const DIST_DIR = join(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+const INDEX_HTML = join(DIST_DIR, 'index.html')
 
 if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
 
   // SPA fallback (Express 5 wildcard syntax)
   app.get('/{*path}', (_req, res) => {
-    res.sendFile(join(DIST_DIR, 'index.html'))
+    if (existsSync(INDEX_HTML)) {
+      res.sendFile(INDEX_HTML)
+    } else {
+      res.status(503).send(`
+        <html>
+          <head><title>Dashboard Not Built</title></head>
+          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard UI Not Built</h1>
+            <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+            <p>Run this command to build it:</p>
+            <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+            <p>Then refresh this page.</p>
+            <hr>
+            <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+          </body>
+        </html>
+      `)
+    }
   })
 }
 
