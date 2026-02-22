@@ -1,8 +1,10 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   DndContext,
   DragOverlay,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
+  closestCenter,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -10,6 +12,7 @@ import {
   type DragStartEvent,
   type DragOverEvent,
   type DragEndEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -115,7 +118,7 @@ function DroppableColumn({ id, sectionIds, isEditing, onHide }: {
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-10 min-h-[100px] transition-colors duration-200 rounded-lg ${
+      className={`space-y-10 min-h-[60px] py-2 transition-colors duration-200 rounded-lg ${
         isEditing && isOver ? 'bg-sand/5 ring-1 ring-sand/20' : ''
       } ${isEditing && sectionIds.length === 0 ? 'border border-dashed border-stone/20 flex items-center justify-center' : ''}`}
     >
@@ -165,6 +168,15 @@ export function Dashboard() {
 
   // Local layout state for drag operations (committed to server on drag end)
   const [localLayout, setLocalLayout] = useState<DashboardConfig | null>(null)
+  const pendingSave = useRef(false)
+
+  // Clear localLayout once the server confirms the save (config updates via onSuccess)
+  useEffect(() => {
+    if (pendingSave.current && config) {
+      pendingSave.current = false
+      setLocalLayout(null)
+    }
+  }, [config])
   // Migrate old configs that lack centerColumn
   const resolvedConfig = useMemo(() => {
     if (!config) return null
@@ -186,12 +198,42 @@ export function Dashboard() {
     useSensor(KeyboardSensor)
   )
 
-  const findContainer = useCallback((id: string): ColumnId | null => {
-    if (layout.leftColumn.includes(id)) return 'leftColumn'
-    if (layout.centerColumn.includes(id)) return 'centerColumn'
-    if (layout.rightColumn.includes(id)) return 'rightColumn'
-    return null
+  // Custom collision detection: check columns first (before items), then use
+  // closestCenter for positioning within that column
+  const collisionDetectionStrategy: CollisionDetection = useCallback((args) => {
+    // Step 1: check if pointer is within any column bounds — do this before items
+    // so item rects don't interfere with cross-column detection
+    const columnContainers = args.droppableContainers.filter(
+      (container) => container.id === 'leftColumn' || container.id === 'centerColumn' || container.id === 'rightColumn'
+    )
+    const columnPointerCollisions = pointerWithin({ ...args, droppableContainers: columnContainers })
+
+    if (columnPointerCollisions.length > 0) {
+      const overColumnId = columnPointerCollisions[0].id as ColumnId
+      const columnItems = layout[overColumnId] || []
+      const filtered = args.droppableContainers.filter(
+        (container) => container.id === overColumnId || columnItems.includes(container.id as string)
+      )
+      if (filtered.length > 0) {
+        return closestCenter({ ...args, droppableContainers: filtered })
+      }
+      return columnPointerCollisions
+    }
+
+    // Fallback: try all droppables, then rectIntersection, then closestCenter
+    const pointerCollisions = pointerWithin(args)
+    if (pointerCollisions.length > 0) return pointerCollisions
+    const rectCollisions = rectIntersection(args)
+    if (rectCollisions.length > 0) return rectCollisions
+    return closestCenter(args)
   }, [layout])
+
+  const findContainerIn = (config: DashboardConfig, id: string): ColumnId | null => {
+    if (config.leftColumn.includes(id)) return 'leftColumn'
+    if (config.centerColumn.includes(id)) return 'centerColumn'
+    if (config.rightColumn.includes(id)) return 'rightColumn'
+    return null
+  }
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string)
@@ -203,38 +245,40 @@ export function Dashboard() {
     const { active, over } = event
     if (!over) return
 
-    const activeId = active.id as string
+    const activeItemId = active.id as string
     const overId = over.id as string
 
-    const activeContainer = findContainer(activeId)
-    let overContainer: ColumnId | null
-    if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
-      overContainer = overId
-    } else {
-      overContainer = findContainer(overId)
-    }
-
-    if (!activeContainer || !overContainer || activeContainer === overContainer) return
-
+    // Use functional updater to always read the latest state
     setLocalLayout((prev) => {
-      if (!prev) return prev
-      const sourceItems = [...prev[activeContainer]]
-      const destItems = [...prev[overContainer]]
+      const current = prev || layout
 
-      const activeIndex = sourceItems.indexOf(activeId)
-      if (activeIndex === -1) return prev
+      const activeContainer = findContainerIn(current, activeItemId)
+      let overContainer: ColumnId | null
+      if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
+        overContainer = overId
+      } else {
+        overContainer = findContainerIn(current, overId)
+      }
+
+      if (!activeContainer || !overContainer || activeContainer === overContainer) return current
+
+      const sourceItems = [...current[activeContainer]]
+      const destItems = [...current[overContainer]]
+
+      const activeIndex = sourceItems.indexOf(activeItemId)
+      if (activeIndex === -1) return current
       sourceItems.splice(activeIndex, 1)
 
       if (overId === overContainer) {
-        destItems.push(activeId)
+        destItems.push(activeItemId)
       } else {
         const overIndex = destItems.indexOf(overId)
-        destItems.splice(overIndex >= 0 ? overIndex : destItems.length, 0, activeId)
+        destItems.splice(overIndex >= 0 ? overIndex : destItems.length, 0, activeItemId)
       }
 
-      return { ...prev, [activeContainer]: sourceItems, [overContainer]: destItems }
+      return { ...current, [activeContainer]: sourceItems, [overContainer]: destItems }
     })
-  }, [findContainer])
+  }, [layout])
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event
@@ -245,43 +289,43 @@ export function Dashboard() {
       return
     }
 
-    const activeId = active.id as string
+    const activeItemId = active.id as string
     const overId = over.id as string
 
-    const activeContainer = findContainer(activeId)
-    let overContainer: ColumnId | null
-    if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
-      overContainer = overId
-    } else {
-      overContainer = findContainer(overId)
-    }
-
-    if (!activeContainer || !overContainer) {
-      setLocalLayout(null)
-      return
-    }
-
-    // Same container reorder
-    if (activeContainer === overContainer && activeId !== overId) {
-      setLocalLayout((prev) => {
-        if (!prev) return prev
-        const items = [...prev[activeContainer]]
-        const oldIndex = items.indexOf(activeId)
-        const newIndex = items.indexOf(overId)
-        if (oldIndex === -1 || newIndex === -1) return prev
-        const reordered = arrayMove(items, oldIndex, newIndex)
-        return { ...prev, [activeContainer]: reordered }
-      })
-    }
-
-    // Save the final layout
+    // Use functional updater to read the latest state and save
     setLocalLayout((prev) => {
-      if (prev) {
-        saveConfig(prev)
+      const current = prev || layout
+
+      const activeContainer = findContainerIn(current, activeItemId)
+      let overContainer: ColumnId | null
+      if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
+        overContainer = overId
+      } else {
+        overContainer = findContainerIn(current, overId)
       }
-      return null
+
+      if (!activeContainer || !overContainer) {
+        return null
+      }
+
+      // Same container reorder
+      let finalLayout = current
+      if (activeContainer === overContainer && activeItemId !== overId) {
+        const items = [...current[activeContainer]]
+        const oldIndex = items.indexOf(activeItemId)
+        const newIndex = items.indexOf(overId)
+        if (oldIndex !== -1 && newIndex !== -1) {
+          finalLayout = { ...current, [activeContainer]: arrayMove(items, oldIndex, newIndex) }
+        }
+      }
+
+      pendingSave.current = true
+      saveConfig(finalLayout)
+      // Keep localLayout set to finalLayout — cleared by useEffect once server confirms.
+      // Returning null here causes a visual bounce as resolvedConfig hasn't updated yet.
+      return finalLayout
     })
-  }, [findContainer, saveConfig])
+  }, [layout, saveConfig])
 
   const handleHideSection = useCallback((sectionId: string) => {
     const current = localLayout || config || DEFAULT_DASHBOARD_CONFIG
@@ -354,12 +398,12 @@ export function Dashboard() {
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={collisionDetectionStrategy}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_1.2fr_18rem] gap-8 ${isEditing ? 'pl-6' : ''}`}>
+          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-8 ${isEditing ? 'pl-6' : ''}`}>
             {/* Left column */}
             <DroppableColumn id="leftColumn" sectionIds={layout.leftColumn} isEditing={isEditing} onHide={handleHideSection} />
 
