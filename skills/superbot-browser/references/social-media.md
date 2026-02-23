@@ -14,32 +14,65 @@ Platform-specific selectors, tips, and gotchas for Facebook, Instagram, and X au
 
 Chrome may be signed in as the account owner but comments must come from a different page/profile. Always verify at session start:
 
-1. Check which profile the comment box shows: `textbox[aria-label="Comment as <Name>"]`
-2. If it shows the wrong name, switch profiles before continuing
-3. After ~6-8 comments, Facebook may show a "Switch profiles to interact" modal — dismiss it and recheck
+1. Navigate to facebook.com
+2. Click "Your profile" (top-right) — confirm the correct profile name is shown
+3. If wrong: click the profile icon → switch to correct profile
+4. After switching, **reload the page** — group-level commenting profile won't update without a reload
+5. Confirm comment boxes show "Comment as [Correct Name]" before engaging
+6. After ~6-8 comments, Facebook shows a "Switch profiles to interact" modal — dismiss it and recheck immediately
+7. Hard session limit: ~6-8 comments before the profile issue becomes persistent. Plan short sessions.
+
+### Proven Comment Workflow (Playwright CDP)
+
+`fill()` is reliable for Facebook's Lexical editor. **Do NOT use `execCommand`** — it's unreliable.
+
+```javascript
+const browser = await chromium.connectOverCDP('http://localhost:9222');
+const context = browser.contexts()[0];
+const page = await context.newPage();
+
+await page.evaluate((url) => { window.location.href = url; }, targetUrl); // see Navigation below
+await page.waitForTimeout(3000);
+
+const commentBox = page.locator(
+  '[aria-label="Comment as Paige Garrett"], [aria-label="Answer as Paige Garrett"]'
+).first();
+await commentBox.scrollIntoViewIfNeeded({ timeout: 10000 });
+await commentBox.click({ timeout: 10000 });
+await page.keyboard.press('Meta+a');
+await page.keyboard.press('Backspace');
+await commentBox.fill(commentText);
+await commentBox.press('Enter'); // submit
+```
+
+### Navigation (CRITICAL: page.goto() times out on Facebook)
+
+Facebook's SPA triggers continuous background requests — `page.goto()` and `waitForLoadState('networkidle')` will time out.
+
+```javascript
+// WRONG — hangs forever
+await page.goto('https://www.facebook.com/groups/...');
+
+// RIGHT — direct location assignment
+await page.evaluate((url) => { window.location.href = url; }, targetUrl);
+await page.waitForTimeout(3000); // wait for load instead of networkidle
+```
 
 ### Selectors
 
 ```javascript
-// Comment input box
-page.getByRole('textbox', { name: /Comment as/i })
-
-// Post authors (in group feeds)
+// Post authors in group feeds
 page.locator('h2')  // heading level 2 contains post author
 
-// Comment buttons follow each post
-page.getByRole('button', { name: /Comment/i })
-```
+// Comment input (aria-label varies by context)
+'[aria-label="Comment as <Name>"]'
+'[aria-label="Answer as <Name>"]'
 
-### Text Entry
+// Group search
+'https://facebook.com/groups/{group_slug}/search/?q={query}'
 
-Standard `fill()` doesn't work reliably for Facebook comment inputs. Use `execCommand`:
-
-```javascript
-await page.focus('textbox[aria-label="Comment as <Name>"]');
-await page.evaluate((text) => {
-  document.execCommand('insertText', false, text);
-}, yourCommentText);
+// To open comment section from search results:
+// Click "X comments" button — NOT "Leave a comment" (that opens new post composer)
 ```
 
 ### Session Limits
@@ -52,13 +85,22 @@ await page.evaluate((text) => {
 
 ```javascript
 // Sort by Recent (not Top Posts)
-await page.goto('https://www.facebook.com/groups/GROUP_ID?sorting_setting=RECENT_ACTIVITY');
+await page.evaluate((url) => { window.location.href = url; },
+  'https://www.facebook.com/groups/GROUP_ID?sorting_setting=RECENT_ACTIVITY');
 
-// Always check post timestamp before engaging
-// Look for time elements near each post — skip anything older than 7 days
+// Always check post timestamp before engaging — skip anything older than 7 days
 ```
 
 ## X (Twitter)
+
+### Algorithm Facts (Inform Strategy)
+
+- **Reply-to-reply**: 75x engagement multiplier — engage in threads, not just top-level
+- **Reposts**: 20x likes
+- **Replies**: 13.5x likes
+- **External links kill reach 50-90%** — never include links in main tweets, only in replies
+- **Tweet lifespan**: 15-30 minutes — timing matters
+- **Peak times**: Weekdays 9AM-2PM EST, Wednesday best, then Tue/Thu
 
 ### Reply Input
 
@@ -74,7 +116,7 @@ page.getByTestId('tweetTextarea_0')
 
 - Twitter aggressively rate-limits automated interactions
 - Wait 60-90 seconds between replies
-- Max ~10 interactions per session
+- Max ~10-15 interactions per session
 - Stop immediately if you see a "You are posting too fast" error
 
 ### Finding Recent Tweets
