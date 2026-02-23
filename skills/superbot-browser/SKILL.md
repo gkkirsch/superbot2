@@ -166,6 +166,32 @@ curl -s http://localhost:9222/json/list | python3 -c "import json,sys; [print(f'
 curl -s http://localhost:9222/json/version | python3 -c "import json,sys; d=json.load(sys.stdin); print(f'Chrome {d[\"Browser\"]}')"
 ```
 
+## Social Media Automation — Use Playwright CDP
+
+For social media automation (Facebook, Instagram, X), use **Playwright via CDP** instead of agent-browser. Playwright creates an isolated page per operation, making it immune to shared Chrome tab conflicts.
+
+```javascript
+const { chromium } = require('playwright');
+
+async function withPage(fn) {
+  const browser = await chromium.connectOverCDP('http://localhost:9222');
+  const context = browser.contexts()[0];
+  const page = await context.newPage(); // fresh isolated tab every time
+  try {
+    return await fn(page);
+  } finally {
+    await page.close(); // always clean up
+  }
+}
+```
+
+- Each operation gets a fresh tab — zero conflict with other workers or user tabs
+- Inherits the user's authenticated Chrome session (cookies/sessions from existing context)
+- Install once: `npm install playwright` in the space's `app/` directory
+- **One Chrome worker at a time** — never run multiple CDP workers concurrently, they override each other
+
+See [references/social-media.md](references/social-media.md) for Facebook, Instagram, and X-specific tips.
+
 ## Deep-Dive Documentation
 
 | Reference | When to Use |
@@ -173,6 +199,7 @@ curl -s http://localhost:9222/json/version | python3 -c "import json,sys; d=json
 | [references/commands.md](references/commands.md) | Full command reference (~20 commands for CDP mode) |
 | [references/patterns.md](references/patterns.md) | Common automation patterns (login, forms, Google/GCP) |
 | [references/troubleshooting.md](references/troubleshooting.md) | What to do when things go wrong |
+| [references/social-media.md](references/social-media.md) | Facebook, Instagram, X selectors and automation tips |
 
 ## Ready-to-Use Templates
 
