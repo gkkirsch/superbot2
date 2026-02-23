@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Types ---
@@ -289,6 +289,10 @@ export function SkillCreator() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
+  const [draftName, setDraftName] = useState<string | null>(null)
+  const [draftFiles, setDraftFiles] = useState<{ path: string; type: string }[]>([])
+  const [isPromoting, setIsPromoting] = useState(false)
+  const [promoteStatus, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -376,6 +380,10 @@ export function SkillCreator() {
         } else if (data.type === 'error') {
           setError(data.message || 'An error occurred')
           setIsProcessing(false)
+        } else if (data.type === 'draft_created') {
+          setDraftName(data.name)
+          setDraftFiles([])
+          setPromoteStatus('idle')
         } else if (data.type === 'process_exit') {
           if (data.code !== 0) {
             setError(`Agent process exited with code ${data.code}`)
@@ -463,6 +471,48 @@ export function SkillCreator() {
     document.addEventListener('paste', handlePaste)
     return () => document.removeEventListener('paste', handlePaste)
   }, [addFiles])
+
+  // Poll draft files when a draft is active
+  useEffect(() => {
+    if (!draftName) return
+    let cancelled = false
+    async function fetchFiles() {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${draftName}/files`)
+        const data = await res.json()
+        if (!cancelled && data.ok) setDraftFiles(data.files)
+      } catch {}
+    }
+    fetchFiles()
+    const interval = setInterval(fetchFiles, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [draftName, isProcessing])
+
+  // Promote draft
+  const handlePromote = useCallback(async () => {
+    if (!draftName || isPromoting) return
+    setIsPromoting(true)
+    setPromoteStatus('idle')
+    try {
+      const res = await fetch('/api/skill-creator/promote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftName }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setPromoteStatus('success')
+        setSkillsRefreshKey(k => k + 1)
+      } else {
+        setPromoteStatus('error')
+        setError(data.error || 'Promote failed')
+      }
+    } catch {
+      setPromoteStatus('error')
+      setError('Failed to promote draft')
+    }
+    setIsPromoting(false)
+  }, [draftName, isPromoting])
 
   // Send message
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -561,6 +611,9 @@ export function SkillCreator() {
       prev.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview) })
       return []
     })
+    setDraftName(null)
+    setDraftFiles([])
+    setPromoteStatus('idle')
 
     // New session
     setSessionId(crypto.randomUUID())
@@ -642,38 +695,6 @@ export function SkillCreator() {
             </div>
           )}
 
-          {/* Attached files preview */}
-          {attachedFiles.length > 0 && (
-            <div className="mx-4 mb-2 flex flex-wrap gap-2">
-              {attachedFiles.map((f, i) => (
-                <div key={i} className="relative group">
-                  {f.preview ? (
-                    <button onClick={() => setLightboxSrc(f.preview)}>
-                      <img
-                        src={f.preview}
-                        alt={f.file.name}
-                        className="h-16 w-16 object-cover rounded-lg border border-border-custom"
-                      />
-                    </button>
-                  ) : (
-                    <div className="h-16 w-16 flex items-center justify-center rounded-lg border border-border-custom bg-ink/40">
-                      <FileText className="h-6 w-6 text-stone/60" />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="absolute -top-1.5 -right-1.5 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-3 w-3 text-stone/70" />
-                  </button>
-                  <span className="absolute bottom-0 left-0 right-0 text-[8px] text-parchment/70 bg-ink/80 rounded-b-lg px-1 truncate">
-                    {f.file.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Input area */}
           <form onSubmit={handleSubmit} className="px-4 pb-4 flex items-end gap-2 shrink-0">
             <input
@@ -722,28 +743,99 @@ export function SkillCreator() {
 
         {/* Right column — File drop + Draft files */}
         <div
-          className="w-72 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col overflow-y-auto"
+          className="w-72 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col"
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
           {/* Drop zone */}
-          <div className={`m-4 p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
+          <div className={`m-4 mb-2 p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
             isDragging ? 'border-sand/50 bg-sand/5' : 'border-border-custom'
           }`}>
-            <Paperclip className="h-6 w-6 text-stone/40 mb-2" />
+            <Upload className="h-5 w-5 text-stone/40 mb-1.5" />
             <p className="text-xs text-stone/50 text-center">
               {isDragging ? 'Drop files here' : 'Drop files to attach'}
             </p>
           </div>
 
-          {/* Draft files placeholder */}
-          <div className="px-4 pb-4 flex-1">
-            <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-3">Draft Files</h2>
-            <div className="flex items-center justify-center h-24 text-center">
-              <p className="text-xs text-stone/40">Files will appear here as the agent creates them</p>
+          {/* Attached files thumbnails */}
+          {attachedFiles.length > 0 && (
+            <div className="mx-4 mb-2 flex flex-wrap gap-1.5">
+              {attachedFiles.map((f, i) => (
+                <div key={i} className="relative group">
+                  {f.preview ? (
+                    <button onClick={() => setLightboxSrc(f.preview)}>
+                      <img src={f.preview} alt={f.file.name} className="h-10 w-10 object-cover rounded border border-border-custom" />
+                    </button>
+                  ) : (
+                    <div className="h-10 w-10 flex items-center justify-center rounded border border-border-custom bg-ink/40">
+                      <FileText className="h-4 w-4 text-stone/60" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeFile(i)}
+                    className="absolute -top-1 -right-1 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-2.5 w-2.5 text-stone/70" />
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
+
+          {/* Draft file tree */}
+          <div className="flex-1 overflow-y-auto px-4">
+            <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-2">
+              {draftName ? `Draft: ${draftName}` : 'Draft Files'}
+            </h2>
+            {!draftName ? (
+              <div className="flex items-center justify-center py-6 text-center">
+                <p className="text-xs text-stone/40">Files will appear here as the agent creates them</p>
+              </div>
+            ) : draftFiles.length === 0 ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {draftFiles.map(f => {
+                  const depth = f.path.split('/').length - 1
+                  const name = f.path.split('/').pop() || f.path
+                  return (
+                    <div key={f.path} className="flex items-center gap-1.5 py-0.5" style={{ paddingLeft: `${depth * 12}px` }}>
+                      {f.type === 'directory' ? (
+                        <FolderOpen className="h-3.5 w-3.5 text-sand/50 shrink-0" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5 text-stone/50 shrink-0" />
+                      )}
+                      <span className="text-xs text-parchment/70 truncate">{name}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Promote button */}
+          <div className="px-4 pb-4 pt-2">
+            <button
+              onClick={handlePromote}
+              disabled={!draftName || draftFiles.length === 0 || isPromoting || promoteStatus === 'success'}
+              className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                promoteStatus === 'success'
+                  ? 'bg-moss/20 text-moss border border-moss/30'
+                  : 'bg-surface/60 text-parchment hover:bg-surface/80 border border-border-custom disabled:opacity-30 disabled:cursor-not-allowed'
+              }`}
+            >
+              {isPromoting ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Promoting...</>
+              ) : promoteStatus === 'success' ? (
+                <><Check className="h-3.5 w-3.5" /> Promoted!</>
+              ) : (
+                'Promote to Installed'
+              )}
+            </button>
           </div>
         </div>
       </div>
