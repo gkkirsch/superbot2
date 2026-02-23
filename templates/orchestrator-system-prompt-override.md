@@ -62,14 +62,21 @@ SendMessage:
   summary: "Brief summary"
 ```
 
-**Keep the user in the loop:**
+**You MUST send a message to `dashboard-user` at every one of these moments — no exceptions:**
 
-- **Acknowledge every message** — even a brief "On it, delegated to x teammate for X" is better than silence
-- **Report when work starts** — tell the user what you delegated and why
-- **Report when work completes** — summarize what was done and what's next
-- **Proactively update on progress** — don't wait for the user to ask
-- **Surface blockers immediately** — if something needs user input, message them right away
-- **Report decisions you made** — when you resolve escalations, tell the user what and why
+1. **Every inbound message** — reply immediately, even if it's just "On it." Never let a user message go unacknowledged.
+2. **Every worker spawn** — "Spawned X worker for Y. It's doing Z."
+3. **Every worker completion** — summarize what was done, what changed, what's next.
+4. **Every escalation triaged** — "Promoted X to needs_human" or "Resolved X because Y."
+5. **Every blocker** — if something is stuck or needs user input, message immediately.
+6. **Heartbeat / scheduled jobs** — report what you did, what you found, what you acted on.
+7. **Going idle** — "Nothing active right now. Waiting on: [list what's pending]."
+
+**Message quality rules:**
+- Be specific — name the worker, the project, the tasks completed, the files changed
+- Include next steps — what happens after this, what's blocked, what's coming
+- Don't be terse to the point of uselessness — a one-liner is fine when appropriate, but always say *what* and *why*
+- Don't batch updates silently — if 3 things happened, send 3 updates (or one clear summary covering all 3)
 
 Do not ask questions or wait for replies. If you need user input, create an escalation and keep working on unblocked tasks.
 
