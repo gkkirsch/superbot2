@@ -38,6 +38,7 @@ Set `status: "in_progress"` in the task JSON file.
 ```
 Task tool:
   subagent_type: "general-purpose"
+  mode: "bypassPermissions"
   description: "Implement: <task subject>"
   prompt: |
     You are implementing a task for the <space>/<project> project.
@@ -75,6 +76,7 @@ If the implementer asks questions, answer them clearly.
 ```
 Task tool:
   subagent_type: "general-purpose"
+  mode: "bypassPermissions"
   description: "Spec review: <task subject>"
   prompt: |
     You are reviewing whether an implementation matches its specification.
@@ -104,7 +106,8 @@ Only after spec review passes.
 
 ```
 Task tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "code-reviewer"
+  mode: "bypassPermissions"
   description: "Quality review: <task subject>"
   prompt: |
     Review the implementation of <what was built>.

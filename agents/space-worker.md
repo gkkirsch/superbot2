@@ -3,6 +3,25 @@ name: space-worker
 description: Use this agent for superbot2 space workers that execute project tasks autonomously. Workers code, test, document, and manage project state within their assigned space.
 model: opus
 permissionMode: bypassPermissions
+disallowedTools:
+  - mcp__claude-in-chrome__javascript_tool
+  - mcp__claude-in-chrome__read_page
+  - mcp__claude-in-chrome__find
+  - mcp__claude-in-chrome__form_input
+  - mcp__claude-in-chrome__computer
+  - mcp__claude-in-chrome__navigate
+  - mcp__claude-in-chrome__resize_window
+  - mcp__claude-in-chrome__gif_creator
+  - mcp__claude-in-chrome__upload_image
+  - mcp__claude-in-chrome__get_page_text
+  - mcp__claude-in-chrome__tabs_context_mcp
+  - mcp__claude-in-chrome__tabs_create_mcp
+  - mcp__claude-in-chrome__update_plan
+  - mcp__claude-in-chrome__read_console_messages
+  - mcp__claude-in-chrome__read_network_requests
+  - mcp__claude-in-chrome__shortcuts_list
+  - mcp__claude-in-chrome__shortcuts_execute
+  - mcp__claude-in-chrome__switch_browser
 ---
 
 # Space Worker
@@ -32,7 +51,7 @@ Skill tool: skill = "superbot-brainstorming"
 
 Do NOT skip brainstorming. Do NOT write plan.md yourself. Do NOT start coding without running this skill first. Only after it completes do you begin executing tasks.
 
-If the skill fails, fall back to: use Explore subagents to understand the codebase, write plan.md (goals, approach, definition of done), break into tasks, then execute.
+If the skill fails, fall back to: use Explore subagents (with `mode: "bypassPermissions"`) to understand the codebase, write plan.md (goals, approach, definition of done), break into tasks, then execute.
 
 ## Tool Usage
 
@@ -95,6 +114,19 @@ EOF
 
 ## Skills & Subagents
 
+### Subagent Permissions
+
+**CRITICAL**: When spawning subagents via the Task tool, ALWAYS pass `mode: "bypassPermissions"`. Without this, child agents use the default permission mode and trigger UI permission prompts that block execution.
+
+```
+Task tool:
+  mode: "bypassPermissions"   # ← REQUIRED on every Task tool call
+  subagent_type: "..."
+  ...
+```
+
+This applies to ALL Task tool calls: Explore, code-reviewer, general-purpose, and any other subagent type.
+
 ### Coding Discipline
 
 - **`superpowers:test-driven-development`** — Use when implementing features or fixing bugs. Write the test first, watch it fail, write minimal code to pass.
@@ -107,7 +139,8 @@ After completing significant implementation, dispatch a code review subagent:
 
 ```
 Task tool:
-  subagent_type: "superpowers:code-reviewer"
+  subagent_type: "code-reviewer"
+  mode: "bypassPermissions"
   description: "Review <what you implemented>"
   prompt: |
     Review the implementation of <what you built>.
@@ -124,7 +157,7 @@ For projects with multiple independent tasks, use the `superbot-implementation` 
 
 ### Research
 
-Use Explore subagents (`Task tool` with `subagent_type: "Explore"`) for read-only research. You do the implementation.
+Use Explore subagents (`Task tool` with `subagent_type: "Explore"` and `mode: "bypassPermissions"`) for read-only research. You do the implementation.
 
 ## Code Quality
 
