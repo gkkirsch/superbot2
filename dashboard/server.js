@@ -2889,7 +2889,7 @@ app.post('/api/skill-creator/chat', async (req, res) => {
     const stderrChunks = []
     child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
 
-    child.on('exit', (code) => {
+    child.on('exit', async (code) => {
       const sseRes = SKILL_CREATOR_SESSIONS.get(sessionId)?.sseResponse
       if (sseRes) {
         if (code !== 0) {
@@ -2899,7 +2899,22 @@ app.post('/api/skill-creator/chat', async (req, res) => {
         sseRes.write(`data: ${JSON.stringify({ type: 'process_exit', code })}\n\n`)
       }
       const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
-      if (sess) sess.process = null
+      if (sess) {
+        sess.process = null
+        // Update draft metadata on process exit
+        if (sess.draftPath) {
+          try {
+            const metaPath = join(sess.draftPath, 'draft-metadata.json')
+            const raw = await readFile(metaPath, 'utf-8')
+            const meta = JSON.parse(raw)
+            if (meta.status === 'in_progress') {
+              meta.status = code === 0 ? 'complete' : 'incomplete'
+              meta.completedAt = new Date().toISOString()
+              await writeFile(metaPath, JSON.stringify(meta, null, 2))
+            }
+          } catch {}
+        }
+      }
     })
 
     // Send the first message
