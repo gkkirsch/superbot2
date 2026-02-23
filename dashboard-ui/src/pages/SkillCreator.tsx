@@ -499,9 +499,9 @@ export function SkillCreator() {
   const isEmpty = messages.length === 0 && !streamingText
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-6 flex flex-col h-[calc(100vh-3.5rem)]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 shrink-0">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Header — full width */}
+      <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border-custom">
         <div className="flex items-center gap-3">
           <Wand2 className="h-5 w-5 text-sand" />
           <h1 className="font-heading text-xl text-parchment">Skill Creator</h1>
@@ -523,138 +523,164 @@ export function SkillCreator() {
         </div>
       </div>
 
-      {/* Chat area */}
-      <div
-        className="flex-1 min-h-0 flex flex-col"
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <div
-          ref={chatContainerRef}
-          className={`flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0 transition-colors ${
-            isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
-          }`}
-        >
-          {isDragging ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Paperclip className="h-8 w-8 text-sand/50 mx-auto mb-2" />
-                <p className="text-sm text-sand/70">Drop files here</p>
-              </div>
+      {/* 3-column layout */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left column — My Skills sidebar */}
+        <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 p-4 overflow-y-auto">
+          <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-3">My Skills</h2>
+          <div className="flex items-center justify-center h-32 text-center">
+            <p className="text-xs text-stone/40">Skills will appear here</p>
+          </div>
+        </div>
+
+        {/* Center column — Chat */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
+          {/* Chat messages */}
+          <div className="flex-1 min-h-0 flex flex-col p-4">
+            <div
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0"
+            >
+              {isEmpty ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <Wand2 className="h-10 w-10 text-stone/25 mx-auto mb-3" />
+                    <p className="text-sm text-stone/50 mb-1">Describe the plugin you want to create</p>
+                    <p className="text-xs text-stone/35">
+                      Upload reference files, paste examples, or just describe what you need.
+                      The agent will scaffold, write, and validate the complete plugin.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {messages.map(msg => (
+                    msg.role === 'user'
+                      ? <UserBubble key={msg.id} msg={msg} />
+                      : <AssistantBubble key={msg.id} msg={msg} />
+                  ))}
+                  {streamingText && <StreamingBubble text={streamingText} />}
+                  {isProcessing && !streamingText && <TypingIndicator />}
+                </>
+              )}
             </div>
-          ) : isEmpty ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <Wand2 className="h-10 w-10 text-stone/25 mx-auto mb-3" />
-                <p className="text-sm text-stone/50 mb-1">Describe the plugin you want to create</p>
-                <p className="text-xs text-stone/35">
-                  Upload reference files, paste examples, or just describe what you need.
-                  The agent will scaffold, write, and validate the complete plugin.
-                </p>
-              </div>
+          </div>
+
+          {/* Error banner */}
+          {error && (
+            <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-ember/10 border border-ember/20 flex items-center justify-between">
+              <span className="text-xs text-ember/80">{error}</span>
+              <button onClick={() => setError(null)} className="text-ember/50 hover:text-ember/70">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-          ) : (
-            <>
-              {messages.map(msg => (
-                msg.role === 'user'
-                  ? <UserBubble key={msg.id} msg={msg} />
-                  : <AssistantBubble key={msg.id} msg={msg} />
-              ))}
-              {streamingText && <StreamingBubble text={streamingText} />}
-              {isProcessing && !streamingText && <TypingIndicator />}
-            </>
           )}
+
+          {/* Attached files preview */}
+          {attachedFiles.length > 0 && (
+            <div className="mx-4 mb-2 flex flex-wrap gap-2">
+              {attachedFiles.map((f, i) => (
+                <div key={i} className="relative group">
+                  {f.preview ? (
+                    <button onClick={() => setLightboxSrc(f.preview)}>
+                      <img
+                        src={f.preview}
+                        alt={f.file.name}
+                        className="h-16 w-16 object-cover rounded-lg border border-border-custom"
+                      />
+                    </button>
+                  ) : (
+                    <div className="h-16 w-16 flex items-center justify-center rounded-lg border border-border-custom bg-ink/40">
+                      <FileText className="h-6 w-6 text-stone/60" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeFile(i)}
+                    className="absolute -top-1.5 -right-1.5 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3 w-3 text-stone/70" />
+                  </button>
+                  <span className="absolute bottom-0 left-0 right-0 text-[8px] text-parchment/70 bg-ink/80 rounded-b-lg px-1 truncate">
+                    {f.file.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input area */}
+          <form onSubmit={handleSubmit} className="px-4 pb-4 flex items-end gap-2 shrink-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_EXTENSIONS}
+              multiple
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
+              title="Attach files"
+            >
+              <Paperclip className="h-4 w-4" />
+            </button>
+            <textarea
+              ref={inputRef}
+              rows={3}
+              placeholder="Describe a plugin to create..."
+              className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  e.currentTarget.form?.requestSubmit()
+                }
+              }}
+              onInput={(e) => {
+                const target = e.currentTarget
+                target.style.height = 'auto'
+                target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+              }}
+            />
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
+              title={isProcessing ? 'Agent is working...' : 'Send message'}
+            >
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
+          </form>
+        </div>
+
+        {/* Right column — File drop + Draft files */}
+        <div
+          className="w-72 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col overflow-y-auto"
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {/* Drop zone */}
+          <div className={`m-4 p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
+            isDragging ? 'border-sand/50 bg-sand/5' : 'border-border-custom'
+          }`}>
+            <Paperclip className="h-6 w-6 text-stone/40 mb-2" />
+            <p className="text-xs text-stone/50 text-center">
+              {isDragging ? 'Drop files here' : 'Drop files to attach'}
+            </p>
+          </div>
+
+          {/* Draft files placeholder */}
+          <div className="px-4 pb-4 flex-1">
+            <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-3">Draft Files</h2>
+            <div className="flex items-center justify-center h-24 text-center">
+              <p className="text-xs text-stone/40">Files will appear here as the agent creates them</p>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Error banner */}
-      {error && (
-        <div className="mt-2 px-3 py-2 rounded-lg bg-ember/10 border border-ember/20 flex items-center justify-between">
-          <span className="text-xs text-ember/80">{error}</span>
-          <button onClick={() => setError(null)} className="text-ember/50 hover:text-ember/70">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Attached files preview */}
-      {attachedFiles.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {attachedFiles.map((f, i) => (
-            <div key={i} className="relative group">
-              {f.preview ? (
-                <button onClick={() => setLightboxSrc(f.preview)}>
-                  <img
-                    src={f.preview}
-                    alt={f.file.name}
-                    className="h-16 w-16 object-cover rounded-lg border border-border-custom"
-                  />
-                </button>
-              ) : (
-                <div className="h-16 w-16 flex items-center justify-center rounded-lg border border-border-custom bg-ink/40">
-                  <FileText className="h-6 w-6 text-stone/60" />
-                </div>
-              )}
-              <button
-                onClick={() => removeFile(i)}
-                className="absolute -top-1.5 -right-1.5 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="h-3 w-3 text-stone/70" />
-              </button>
-              <span className="absolute bottom-0 left-0 right-0 text-[8px] text-parchment/70 bg-ink/80 rounded-b-lg px-1 truncate">
-                {f.file.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Input area */}
-      <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 shrink-0">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_EXTENSIONS}
-          multiple
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
-          title="Attach files"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-        <textarea
-          ref={inputRef}
-          rows={3}
-          placeholder="Describe a plugin to create..."
-          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              e.currentTarget.form?.requestSubmit()
-            }
-          }}
-          onInput={(e) => {
-            const target = e.currentTarget
-            target.style.height = 'auto'
-            target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-          }}
-        />
-        <button
-          type="submit"
-          disabled={isProcessing}
-          className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-          title={isProcessing ? 'Agent is working...' : 'Send message'}
-        >
-          {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </button>
-      </form>
 
       {/* Lightbox */}
       {lightboxSrc && (
