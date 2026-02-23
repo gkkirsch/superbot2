@@ -108,6 +108,9 @@ bash ~/.superbot2/scripts/create-space.sh <slug> "<name>" --description "what th
 # Create a new space pointing to an external codebase
 bash ~/.superbot2/scripts/create-space.sh <slug> "<name>" --code-dir ~/projects/myapp
 
+# Create a new web space with dev server config (auto-assigns port)
+bash ~/.superbot2/scripts/create-space.sh <slug> "<name>" --dev-server --description "a web app"
+
 # Create a new project within a space
 bash ~/.superbot2/scripts/create-project.sh <space-slug> <project-name>
 
