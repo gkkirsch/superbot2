@@ -1,9 +1,9 @@
 import express from 'express'
-import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink } from 'node:fs/promises'
+import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { execFile, spawn } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import yaml from 'js-yaml'
 
 const app = express()
@@ -2955,9 +2955,8 @@ app.get('/api/skill-creator/drafts', async (req, res) => {
 // List files in a draft (recursive)
 app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
   try {
-    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    // Security: ensure we're inside drafts dir
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
       return res.status(400).json({ error: 'Invalid draft name' })
     }
 
@@ -2993,9 +2992,8 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
 // Delete a draft
 app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
   try {
-    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    // Security: ensure we're inside drafts dir
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
       return res.status(400).json({ error: 'Invalid draft name' })
     }
     await rm(draftPath, { recursive: true, force: true })
@@ -3057,8 +3055,8 @@ app.post('/api/skill-creator/promote', async (req, res) => {
     const { draftName } = req.body
     if (!draftName) return res.status(400).json({ error: 'draftName required' })
 
-    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, draftName)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
       return res.status(400).json({ error: 'Invalid draft name' })
     }
 
@@ -3097,8 +3095,7 @@ app.post('/api/skill-creator/promote', async (req, res) => {
     // Run validation (informational — don't block on failure)
     let validationOutput = ''
     try {
-      const { execSync } = await import('node:child_process')
-      validationOutput = execSync(`${CLAUDE_BIN} plugin validate "${draftPath}" 2>&1`, { encoding: 'utf-8', timeout: 15000 })
+      validationOutput = execFileSync(CLAUDE_BIN, ['plugin', 'validate', draftPath], { encoding: 'utf-8', timeout: 15000 })
     } catch (err) {
       validationOutput = err.stdout || err.stderr || err.message || 'Validation failed'
     }
@@ -3108,9 +3105,8 @@ app.post('/api/skill-creator/promote', async (req, res) => {
     const cachePath = join(process.env.HOME, '.claude', 'plugins', 'cache', 'local', pluginName, version)
     await mkdir(cachePath, { recursive: true })
 
-    // Recursive copy using cp
-    const { execSync: execSyncCp } = await import('node:child_process')
-    execSyncCp(`cp -R "${draftPath}/"* "${cachePath}/"`, { encoding: 'utf-8' })
+    // Recursive copy (safe, no shell involved)
+    await cp(draftPath, cachePath, { recursive: true })
     // Remove draft-metadata.json from cache copy
     try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
 
