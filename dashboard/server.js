@@ -471,6 +471,23 @@ app.patch('/api/escalations/:id', async (req, res) => {
       } catch { /* file may already be moved */ }
     }
 
+    // Notify orchestrator immediately via team-lead inbox
+    try {
+      const inboxPath = join(TEAM_INBOXES_DIR, 'team-lead.json')
+      const inbox = await readJsonFile(inboxPath) || []
+      inbox.push({
+        from: 'dashboard-user',
+        type: 'escalations_resolved',
+        text: `User resolved escalation "${escalation.question || id}" for ${escalation.space || 'unknown'}/${escalation.project || 'unknown'}. Check ~/.superbot2/escalations/resolved/ for answers and unblock any blocked workers.`,
+        summary: `Escalation resolved for ${escalation.space || 'unknown'}/${escalation.project || 'unknown'}`,
+        timestamp: new Date().toISOString(),
+        read: false,
+      })
+      await writeFile(inboxPath, JSON.stringify(inbox, null, 2), 'utf-8')
+    } catch (inboxErr) {
+      console.error('Failed to notify orchestrator inbox:', inboxErr.message)
+    }
+
     // Trigger heartbeat on every resolve so the orchestrator picks up the change
     const heartbeatScript = join(SUPERBOT_DIR, 'scripts', 'heartbeat-cron.sh')
     execFile('bash', [heartbeatScript], (err) => {
@@ -963,6 +980,92 @@ app.get('/api/knowledge/:source/:filename', async (req, res) => {
 
     const result = await readMarkdownFile(filePath)
     res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/knowledge/:source/:filename', async (req, res) => {
+  try {
+    const { source, filename } = req.params
+    const { content } = req.body
+    if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' })
+
+    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    if (!safeName.endsWith('.md')) return res.status(400).json({ error: 'Only .md files supported' })
+
+    let filePath
+    if (source === 'global') {
+      filePath = join(KNOWLEDGE_DIR, safeName)
+    } else {
+      const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
+      filePath = join(SPACES_DIR, safeSource, 'knowledge', safeName)
+    }
+
+    await writeFile(filePath, content, 'utf-8')
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/knowledge/:source/:filename', async (req, res) => {
+  try {
+    const { source, filename } = req.params
+    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    if (!safeName.endsWith('.md')) return res.status(400).json({ error: 'Only .md files supported' })
+
+    let filePath
+    if (source === 'global') {
+      filePath = join(KNOWLEDGE_DIR, safeName)
+    } else {
+      const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
+      filePath = join(SPACES_DIR, safeSource, 'knowledge', safeName)
+    }
+
+    await unlink(filePath)
+    res.json({ ok: true })
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/knowledge/:source', async (req, res) => {
+  try {
+    const { source } = req.params
+    const { filename, content } = req.body
+    if (!filename || typeof filename !== 'string') return res.status(400).json({ error: 'Missing filename' })
+
+    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    const fullName = safeName.endsWith('.md') ? safeName : `${safeName}.md`
+
+    let dirPath, filePath
+    if (source === 'global') {
+      dirPath = KNOWLEDGE_DIR
+      filePath = join(KNOWLEDGE_DIR, fullName)
+    } else {
+      const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
+      dirPath = join(SPACES_DIR, safeSource, 'knowledge')
+      filePath = join(dirPath, fullName)
+    }
+
+    if (existsSync(filePath)) return res.status(409).json({ error: 'File already exists' })
+
+    await mkdir(dirPath, { recursive: true })
+    await writeFile(filePath, content || '', 'utf-8')
+    res.json({ ok: true, filename: fullName })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/user', async (req, res) => {
+  try {
+    const { content } = req.body
+    if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' })
+    await writeFile(join(SUPERBOT_DIR, 'USER.md'), content, 'utf-8')
+    res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

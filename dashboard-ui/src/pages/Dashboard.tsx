@@ -163,7 +163,7 @@ function HiddenSectionsTray({ hidden, onRestore }: {
 // --- Main Dashboard ---
 
 export function Dashboard() {
-  const { config, saveConfig } = useDashboardConfig()
+  const { config, saveConfig, saveError } = useDashboardConfig()
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
 
@@ -391,6 +391,10 @@ export function Dashboard() {
             </button>
           </div>
         </div>
+
+        {saveError && (
+          <p className="text-xs text-ember">Failed to save layout: {saveError.message}</p>
+        )}
 
         {/* Hidden sections tray — only visible in edit mode */}
         {isEditing && (

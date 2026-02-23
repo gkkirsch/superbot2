@@ -26,6 +26,10 @@ import {
   deleteTodo,
   fetchPluginCredentials,
   fetchKnowledge,
+  saveKnowledgeFile,
+  deleteKnowledgeFile,
+  createKnowledgeFile,
+  saveUser,
   fetchActiveWorkers,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
@@ -200,6 +204,9 @@ export function useDashboardConfig() {
     onSuccess: (savedConfig) => {
       queryClient.setQueryData(['dashboard-config'], savedConfig)
     },
+    onError: (err: Error) => {
+      console.error('Dashboard config save failed:', err.message)
+    },
   })
 
   return {
@@ -207,6 +214,7 @@ export function useDashboardConfig() {
     isLoading: query.isLoading,
     saveConfig: mutation.mutate,
     isSaving: mutation.isPending,
+    saveError: mutation.error as Error | null,
   }
 }
 
@@ -261,4 +269,48 @@ export function useActiveWorkers() {
 
 export function useKnowledge() {
   return useQuery({ queryKey: ['knowledge'], queryFn: fetchKnowledge, staleTime: 30_000 })
+}
+
+export function useSaveKnowledge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ source, filename, content }: { source: string; filename: string; content: string }) =>
+      saveKnowledgeFile(source, filename, content),
+    onSuccess: (_data, { source, filename }) => {
+      qc.invalidateQueries({ queryKey: ['knowledge'] })
+      qc.invalidateQueries({ queryKey: ['knowledge-content', source, filename] })
+    },
+  })
+}
+
+export function useDeleteKnowledge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ source, filename }: { source: string; filename: string }) =>
+      deleteKnowledgeFile(source, filename),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['knowledge'] })
+    },
+  })
+}
+
+export function useCreateKnowledge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ source, filename, content }: { source: string; filename: string; content?: string }) =>
+      createKnowledgeFile(source, filename, content),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['knowledge'] })
+    },
+  })
+}
+
+export function useSaveUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (content: string) => saveUser(content),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['context', 'user'] })
+    },
+  })
 }
