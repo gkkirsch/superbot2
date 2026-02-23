@@ -253,6 +253,7 @@ export interface DashboardConfig {
 export interface KnowledgeFile {
   name: string
   path: string
+  lastModified?: string
 }
 
 export interface KnowledgeGroup {

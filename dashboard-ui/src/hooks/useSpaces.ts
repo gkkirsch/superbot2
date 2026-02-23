@@ -31,6 +31,7 @@ import {
   createKnowledgeFile,
   saveUser,
   fetchActiveWorkers,
+  uploadKnowledgeFile,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -311,6 +312,17 @@ export function useSaveUser() {
     mutationFn: (content: string) => saveUser(content),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['context', 'user'] })
+    },
+  })
+}
+
+export function useUploadKnowledge() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ source, file }: { source: string; file: File }) =>
+      uploadKnowledgeFile(source, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['knowledge'] })
     },
   })
 }

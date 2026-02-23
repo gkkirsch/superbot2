@@ -653,3 +653,14 @@ export async function saveUser(content: string): Promise<void> {
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
+
+export async function uploadKnowledgeFile(source: string, file: File): Promise<{ filename: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
+  return response.json()
+}

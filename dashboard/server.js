@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import yaml from 'js-yaml'
+import multer from 'multer'
 
 const app = express()
 const PORT = 3274
@@ -918,40 +919,43 @@ app.get('/api/knowledge', async (_req, res) => {
   try {
     const groups = []
 
+    async function getFilesWithMeta(dirPath) {
+      const entries = await safeReaddir(dirPath)
+      const files = entries.filter(f => !f.startsWith('.')).sort()
+      const result = []
+      for (const f of files) {
+        try {
+          const s = await stat(join(dirPath, f))
+          if (!s.isFile()) continue
+          result.push({ name: f, path: f, lastModified: s.mtime.toISOString() })
+        } catch { /* skip */ }
+      }
+      return result
+    }
+
     // Global knowledge
-    const globalFiles = await safeReaddir(KNOWLEDGE_DIR)
-    const globalMd = globalFiles.filter(f => f.endsWith('.md')).sort()
-    if (globalMd.length > 0) {
-      groups.push({
-        source: 'global',
-        label: 'Global',
-        files: globalMd.map(f => ({ name: f.replace(/\.md$/, ''), path: f })),
-      })
+    const globalFiles = await getFilesWithMeta(KNOWLEDGE_DIR)
+    if (globalFiles.length > 0) {
+      groups.push({ source: 'global', label: 'Global', files: globalFiles })
     }
 
     // Per-space knowledge
     const spaceSlugs = await safeReaddir(SPACES_DIR)
     const sortedSlugs = spaceSlugs.sort()
     for (const slug of sortedSlugs) {
-      const spaceKnowledgeDir = join(SPACES_DIR, slug, 'knowledge')
-      const files = await safeReaddir(spaceKnowledgeDir)
-      const mdFiles = files.filter(f => f.endsWith('.md')).sort()
-      if (mdFiles.length === 0) continue
-
-      // Check it's actually a directory
       try {
         const s = await stat(join(SPACES_DIR, slug))
         if (!s.isDirectory()) continue
       } catch { continue }
 
+      const spaceKnowledgeDir = join(SPACES_DIR, slug, 'knowledge')
+      const files = await getFilesWithMeta(spaceKnowledgeDir)
+      if (files.length === 0) continue
+
       const spaceJson = await readJsonFile(join(SPACES_DIR, slug, 'space.json'))
       const label = spaceJson?.name || slug
 
-      groups.push({
-        source: slug,
-        label,
-        files: mdFiles.map(f => ({ name: f.replace(/\.md$/, ''), path: f })),
-      })
+      groups.push({ source: slug, label, files })
     }
 
     res.json({ groups })
@@ -963,17 +967,13 @@ app.get('/api/knowledge', async (_req, res) => {
 app.get('/api/knowledge/:source/:filename', async (req, res) => {
   try {
     const { source, filename } = req.params
-    // Sanitize filename to prevent path traversal
     const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
-    if (!safeName.endsWith('.md')) {
-      return res.status(400).json({ error: 'Only .md files supported' })
-    }
+    if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
     if (source === 'global') {
       filePath = join(KNOWLEDGE_DIR, safeName)
     } else {
-      // Per-space knowledge
       const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
       filePath = join(SPACES_DIR, safeSource, 'knowledge', safeName)
     }
@@ -992,7 +992,7 @@ app.put('/api/knowledge/:source/:filename', async (req, res) => {
     if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' })
 
     const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
-    if (!safeName.endsWith('.md')) return res.status(400).json({ error: 'Only .md files supported' })
+    if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
     if (source === 'global') {
@@ -1013,7 +1013,7 @@ app.delete('/api/knowledge/:source/:filename', async (req, res) => {
   try {
     const { source, filename } = req.params
     const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
-    if (!safeName.endsWith('.md')) return res.status(400).json({ error: 'Only .md files supported' })
+    if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
     if (source === 'global') {
@@ -1038,7 +1038,8 @@ app.post('/api/knowledge/:source', async (req, res) => {
     if (!filename || typeof filename !== 'string') return res.status(400).json({ error: 'Missing filename' })
 
     const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
-    const fullName = safeName.endsWith('.md') ? safeName : `${safeName}.md`
+    // Default to .md if no extension provided
+    const fullName = safeName.includes('.') ? safeName : `${safeName}.md`
 
     let dirPath, filePath
     if (source === 'global') {
@@ -1055,6 +1056,34 @@ app.post('/api/knowledge/:source', async (req, res) => {
     await mkdir(dirPath, { recursive: true })
     await writeFile(filePath, content || '', 'utf-8')
     res.json({ ok: true, filename: fullName })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Upload file to knowledge directory
+const knowledgeUpload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }) // 10MB limit
+app.post('/api/knowledge/:source/upload', knowledgeUpload.single('file'), async (req, res) => {
+  try {
+    const { source } = req.params
+    if (!req.file) return res.status(400).json({ error: 'No file provided' })
+
+    const safeName = req.file.originalname.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
+
+    let dirPath, filePath
+    if (source === 'global') {
+      dirPath = KNOWLEDGE_DIR
+      filePath = join(KNOWLEDGE_DIR, safeName)
+    } else {
+      const safeSource = source.replace(/[^a-zA-Z0-9_\-]/g, '')
+      dirPath = join(SPACES_DIR, safeSource, 'knowledge')
+      filePath = join(dirPath, safeName)
+    }
+
+    await mkdir(dirPath, { recursive: true })
+    await writeFile(filePath, req.file.buffer)
+    res.json({ ok: true, filename: safeName })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
