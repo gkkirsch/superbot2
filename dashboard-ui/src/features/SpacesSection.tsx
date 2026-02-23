@@ -1,8 +1,23 @@
 import { Link } from 'react-router-dom'
-import { useSpaces } from '@/hooks/useSpaces'
-import type { SpaceOverview } from '@/lib/types'
+import { useSpaces, useActiveWorkers } from '@/hooks/useSpaces'
+import type { SpaceOverview, ActiveWorker } from '@/lib/types'
 
-function SpaceCard({ space }: { space: SpaceOverview }) {
+function WorkerIndicator({ workers }: { workers: ActiveWorker[] }) {
+  if (workers.length === 0) return null
+  const label = workers.length === 1 ? 'Worker active' : `${workers.length} workers`
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400/80">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      </span>
+      {label}
+    </span>
+  )
+}
+
+function SpaceCard({ space, workers }: { space: SpaceOverview; workers: ActiveWorker[] }) {
   const projectCount = space.projects.length
   const { completed, total } = space.taskCounts
 
@@ -17,9 +32,12 @@ function SpaceCard({ space }: { space: SpaceOverview }) {
         }`} />
         <div className="min-w-0">
           <p className="text-sm font-medium text-parchment truncate">{space.name}</p>
-          <p className="text-xs text-stone/60 truncate">
-            {projectCount} {projectCount === 1 ? 'project' : 'projects'}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-stone/60 truncate">
+              {projectCount} {projectCount === 1 ? 'project' : 'projects'}
+            </p>
+            <WorkerIndicator workers={workers} />
+          </div>
         </div>
       </div>
       <div className="text-right shrink-0 ml-4">
@@ -34,6 +52,7 @@ function SpaceCard({ space }: { space: SpaceOverview }) {
 
 export function SpacesSection() {
   const { data: spaces, isLoading } = useSpaces()
+  const { data: workers } = useActiveWorkers()
 
   if (isLoading) {
     return (
@@ -53,10 +72,16 @@ export function SpacesSection() {
     )
   }
 
+  const workersBySpace = (workers || []).reduce<Record<string, ActiveWorker[]>>((acc, w) => {
+    if (!acc[w.space]) acc[w.space] = []
+    acc[w.space].push(w)
+    return acc
+  }, {})
+
   return (
     <div className="space-y-2">
       {spaces.map((space) => (
-        <SpaceCard key={space.slug} space={space} />
+        <SpaceCard key={space.slug} space={space} workers={workersBySpace[space.slug] || []} />
       ))}
     </div>
   )

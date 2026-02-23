@@ -227,6 +227,11 @@ export interface TodoItem {
   completed: boolean
 }
 
+export interface ActiveWorker {
+  name: string
+  space: string
+}
+
 export interface DashboardConfig {
   leftColumn: string[]
   centerColumn: string[]

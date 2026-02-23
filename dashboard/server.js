@@ -2268,6 +2268,51 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
   }
 })
 
+// --- Active workers ---
+
+const TEAM_CONFIG_PATH = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'config.json')
+
+let _spaceSlugsCache = null
+let _spaceSlugsTime = 0
+
+async function getSpaceSlugs() {
+  const now = Date.now()
+  if (_spaceSlugsCache && now - _spaceSlugsTime < 60_000) return _spaceSlugsCache
+  const entries = await safeReaddir(SPACES_DIR)
+  // Sort longest-first so "x-authority" matches before "x" would
+  _spaceSlugsCache = entries.sort((a, b) => b.length - a.length)
+  _spaceSlugsTime = now
+  return _spaceSlugsCache
+}
+
+async function extractSpaceFromWorkerName(name) {
+  const slugs = await getSpaceSlugs()
+  for (const slug of slugs) {
+    if (name.startsWith(slug + '-') || name === slug) return slug
+  }
+  return null
+}
+
+app.get('/api/workers', async (_req, res) => {
+  try {
+    const config = await readJsonFile(TEAM_CONFIG_PATH)
+    if (!config || !config.members) {
+      return res.json({ workers: [] })
+    }
+
+    const spaceWorkers = config.members.filter(m => m.agentType === 'space-worker' && m.isActive)
+    const activeWorkers = []
+    for (const m of spaceWorkers) {
+      const space = await extractSpaceFromWorkerName(m.name)
+      if (space) activeWorkers.push({ name: m.name, space })
+    }
+
+    res.json({ workers: activeWorkers })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Messages to orchestrator ---
 
 app.get('/api/messages', async (req, res) => {

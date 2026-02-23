@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker } from './types'
 
 export type { PluginDetail }
 
@@ -61,6 +61,13 @@ export async function fetchProjectPlan(slug: string, project: string): Promise<C
 export async function fetchProjectDocuments(slug: string, project: string): Promise<ProjectDocument[]> {
   const data = await fetchJson<{ documents: ProjectDocument[] }>(`/spaces/${slug}/projects/${project}/documents`)
   return data.documents
+}
+
+// --- Active workers ---
+
+export async function fetchActiveWorkers(): Promise<ActiveWorker[]> {
+  const data = await fetchJson<{ workers: ActiveWorker[] }>('/workers')
+  return data.workers
 }
 
 // --- Escalations ---

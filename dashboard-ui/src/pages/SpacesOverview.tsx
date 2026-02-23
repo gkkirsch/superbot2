@@ -1,6 +1,6 @@
-import { useSpaces } from '@/hooks/useSpaces'
+import { useSpaces, useActiveWorkers } from '@/hooks/useSpaces'
 import { SpaceCard } from '@/features/SpaceCard'
-import type { SpaceOverview as SpaceOverviewType } from '@/lib/types'
+import type { SpaceOverview as SpaceOverviewType, ActiveWorker } from '@/lib/types'
 
 const statusOrder: Record<string, number> = {
   active: 0,
@@ -47,6 +47,13 @@ function SkeletonCard() {
 
 export function SpacesOverview() {
   const { data: spaces, isLoading, error } = useSpaces()
+  const { data: workers } = useActiveWorkers()
+
+  const workersBySpace = (workers || []).reduce<Record<string, ActiveWorker[]>>((acc, w) => {
+    if (!acc[w.space]) acc[w.space] = []
+    acc[w.space].push(w)
+    return acc
+  }, {})
 
   return (
     <div className="min-h-screen bg-ink">
@@ -97,7 +104,7 @@ export function SpacesOverview() {
                       className="mb-6 break-inside-avoid animate-fade-up"
                       style={{ animationDelay: `${i * 80}ms` }}
                     >
-                      <SpaceCard space={space} />
+                      <SpaceCard space={space} workers={workersBySpace[space.slug] || []} />
                     </div>
                   ))}
                 </div>

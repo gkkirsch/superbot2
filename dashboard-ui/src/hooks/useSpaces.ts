@@ -26,6 +26,7 @@ import {
   deleteTodo,
   fetchPluginCredentials,
   fetchKnowledge,
+  fetchActiveWorkers,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -248,6 +249,12 @@ export function useTodoResearch() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
+}
+
+// --- Active workers ---
+
+export function useActiveWorkers() {
+  return useQuery({ queryKey: ['active-workers'], queryFn: fetchActiveWorkers, staleTime: 10_000, refetchInterval: 15_000 })
 }
 
 // --- Knowledge ---

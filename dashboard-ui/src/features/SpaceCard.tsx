@@ -3,7 +3,7 @@ import { FolderOpen } from 'lucide-react'
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 
-import type { SpaceOverview } from '@/lib/types'
+import type { SpaceOverview, ActiveWorker } from '@/lib/types'
 
 function timeAgo(dateString: string | null): string {
   if (!dateString) return 'never'
@@ -26,9 +26,25 @@ interface SpaceCardProps {
   space: SpaceOverview
   variant?: 'compact' | 'full'
   style?: React.CSSProperties
+  workers?: ActiveWorker[]
 }
 
-export function SpaceCard({ space, variant = 'full', style }: SpaceCardProps) {
+function WorkerIndicator({ workers }: { workers: ActiveWorker[] }) {
+  if (!workers || workers.length === 0) return null
+  const label = workers.length === 1 ? 'Worker active' : `${workers.length} workers`
+
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400/80">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      </span>
+      {label}
+    </span>
+  )
+}
+
+export function SpaceCard({ space, variant = 'full', style, workers = [] }: SpaceCardProps) {
   const navigate = useNavigate()
 
   if (variant === 'compact') {
@@ -39,7 +55,10 @@ export function SpaceCard({ space, variant = 'full', style }: SpaceCardProps) {
         style={style}
       >
         <div className="flex items-center justify-between gap-3">
-          <span className="font-medium text-sm text-parchment truncate">{space.name}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-parchment truncate">{space.name}</span>
+            <WorkerIndicator workers={workers} />
+          </div>
           <span className="text-[11px] text-stone/50 shrink-0">{timeAgo(space.lastUpdated)}</span>
         </div>
         <div className="flex items-center gap-3 mt-1.5">
@@ -85,6 +104,7 @@ export function SpaceCard({ space, variant = 'full', style }: SpaceCardProps) {
             {space.escalationCount} escalation{space.escalationCount !== 1 ? 's' : ''}
           </span>
         )}
+        <WorkerIndicator workers={workers} />
       </div>
 
       {space.projects.length > 1 && space.projectTaskCounts && (
