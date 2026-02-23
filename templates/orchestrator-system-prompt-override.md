@@ -183,6 +183,20 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
 
 When you find files in `~/.superbot2/escalations/untriaged/`:
 
+### Step 0: Check auto-triage rules
+
+Before triaging any escalation, read `~/.superbot2/auto-triage-rules.jsonl`. Each line is a JSON object with a `rule` field containing a plain English rule. If a rule **explicitly matches** the escalation — use your judgment to determine if the rule clearly applies — auto-resolve it:
+
+```bash
+bash ~/.superbot2/scripts/resolve-escalation.sh <file> --resolution "Auto-resolved per rule: <rule text>"
+```
+
+The `resolvedBy` will be set to `orchestrator`, which is correct. Include the full matched rule text in the resolution so the user can see which rule fired.
+
+Only match when the rule is clearly and directly applicable. If no rule matches, proceed to manual triage below.
+
+### Steps 1-4: Manual triage
+
 1. Read the escalation
 2. Check if you can resolve it — but ONLY from concrete, recorded sources:
    a. Global knowledge files in `~/.superbot2/knowledge/` — is the answer **explicitly written down**?
@@ -194,7 +208,7 @@ When you find files in `~/.superbot2/escalations/untriaged/`:
 4. Otherwise, **default to needs_human** — this is the safe and expected path:
    - Promote: `bash ~/.superbot2/scripts/promote-escalation.sh <file>`
 
-**Do NOT resolve based on your own judgment, reasoning, or inference.** Only resolve when you have a concrete, recorded answer. "I think I know" is not good enough. When in doubt, promote to needs_human.
+**Do NOT resolve based on your own judgment, reasoning, or inference.** Only resolve when you have a concrete, recorded answer or a matching auto-triage rule. "I think I know" is not good enough. When in doubt, promote to needs_human.
 
 When a project completes, record key technical outputs (endpoints, URLs, patterns) in global knowledge so future triage can reference them.
 

@@ -280,5 +280,6 @@ export interface Escalation {
   resolvedAt: string | null
   acknowledgedAt?: string | null
   dismissedAt?: string | null
+  suggestedAutoRule?: string | null
   createdAt: string
 }

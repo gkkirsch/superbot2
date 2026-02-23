@@ -10,6 +10,7 @@
 #   --option "Label|Description" (repeatable, for decision/question types)
 #   --blocks-task "path/to/task.json"
 #   --blocks-project
+#   --suggested-auto-rule "rule text" (REQUIRED for decision/question types)
 #
 # Examples:
 #   create-escalation.sh decision auth add-auth \
@@ -55,6 +56,7 @@ PRIORITY="medium"
 OPTIONS=()
 BLOCKS_TASK="null"
 BLOCKS_PROJECT="false"
+SUGGESTED_AUTO_RULE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,9 +65,18 @@ while [[ $# -gt 0 ]]; do
     --option) OPTIONS+=("$2"); shift 2 ;;
     --blocks-task) BLOCKS_TASK="\"$2\""; shift 2 ;;
     --blocks-project) BLOCKS_PROJECT="true"; shift ;;
+    --suggested-auto-rule) SUGGESTED_AUTO_RULE="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
+
+# Enforce --suggested-auto-rule for decision/question types
+if [[ "$TYPE" == "decision" || "$TYPE" == "question" ]] && [[ -z "$SUGGESTED_AUTO_RULE" ]]; then
+  echo "Error: --suggested-auto-rule is required for decision and question type escalations." >&2
+  echo "Provide a plain English rule that could auto-resolve similar future escalations." >&2
+  echo "Example: --suggested-auto-rule \"When choosing between X and Y, default to X because...\"" >&2
+  exit 1
+fi
 
 # Generate ID
 DESCRIPTOR=$(echo "$QUESTION" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40 | sed 's/-$//')
@@ -88,6 +99,13 @@ if [[ ${#OPTIONS[@]} -gt 0 ]]; then
   ANSWERS_JSON+="]"
 fi
 
+# Build suggestedAutoRule JSON value
+if [[ -n "$SUGGESTED_AUTO_RULE" ]]; then
+  RULE_JSON=$(jq -n --arg r "$SUGGESTED_AUTO_RULE" '$r')
+else
+  RULE_JSON="null"
+fi
+
 # Write escalation JSON
 jq -n \
   --arg id "$ID" \
@@ -100,6 +118,7 @@ jq -n \
   --arg priority "$PRIORITY" \
   --argjson blocksTask "$BLOCKS_TASK" \
   --argjson blocksProject "$BLOCKS_PROJECT" \
+  --argjson suggestedAutoRule "$RULE_JSON" \
   --arg timestamp "$TIMESTAMP" \
   '{
     id: $id,
@@ -109,6 +128,7 @@ jq -n \
     question: $question,
     context: $context,
     suggestedAnswers: $suggestedAnswers,
+    suggestedAutoRule: $suggestedAutoRule,
     escalatedBy: ($space + "-worker"),
     escalationPath: [($space + "-worker")],
     priority: $priority,

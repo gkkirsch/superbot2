@@ -593,6 +593,18 @@ export async function deleteTodo(id: string): Promise<void> {
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
+// --- Auto-triage rules ---
+
+export async function addAutoTriageRule(rule: string, source?: string, space?: string, project?: string): Promise<{ rule: string; source: string | null; addedAt: string; space: string | null; project: string | null }> {
+  const response = await fetch(`${API_BASE}/auto-triage-rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rule, source, space, project }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
 // --- Knowledge files ---
 
 export async function fetchKnowledge(): Promise<KnowledgeGroup[]> {

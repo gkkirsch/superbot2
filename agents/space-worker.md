@@ -215,10 +215,13 @@ bash ~/.superbot2/scripts/create-escalation.sh <type> <space> <project> "<questi
   --context "why this matters" \
   --option "Option A|Tradeoffs of A" \
   --option "Option B|Tradeoffs of B" \
+  --suggested-auto-rule "When X, do Y because Z" \
   --priority high
 ```
 
 Types: `decision`, `blocker`, `question`, `approval`
+
+**`--suggested-auto-rule` is REQUIRED for `decision` and `question` types.** Suggest a plain English rule that could auto-resolve similar future escalations. The script will error if this flag is missing for these types.
 
 After creating an escalation, move to the next unblocked task. Do not stop working.
 

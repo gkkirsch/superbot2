@@ -537,6 +537,33 @@ app.delete('/api/escalations/:id', async (req, res) => {
   }
 })
 
+// --- POST /api/auto-triage-rules ---
+
+app.post('/api/auto-triage-rules', async (req, res) => {
+  try {
+    const { rule, source, space, project } = req.body
+    if (!rule || typeof rule !== 'string' || !rule.trim()) {
+      return res.status(400).json({ error: 'rule is required and must be a non-empty string' })
+    }
+
+    const entry = {
+      rule: rule.trim(),
+      source: source || null,
+      addedAt: new Date().toISOString(),
+      space: space || null,
+      project: project || null,
+    }
+
+    const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
+    const { appendFile } = await import('node:fs/promises')
+    await appendFile(rulesFile, JSON.stringify(entry) + '\n', 'utf-8')
+
+    res.json(entry)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- GET /api/spaces/:slug/escalations ---
 
 app.get('/api/spaces/:slug/escalations', async (req, res) => {
@@ -2613,6 +2640,7 @@ const SKILL_CREATOR_SESSIONS = new Map()
 const SKILL_CREATOR_UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads', 'skill-creator')
 const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-prompt.md')
 const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
+const CLAUDE_BIN = `${process.env.HOME}/.local/bin/claude`
 
 // SSE stream endpoint
 app.get('/api/skill-creator/stream', (req, res) => {
@@ -2623,6 +2651,7 @@ app.get('/api/skill-creator/stream', (req, res) => {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
   })
   res.write(':connected\n\n')
 
@@ -2639,7 +2668,7 @@ app.get('/api/skill-creator/stream', (req, res) => {
     res.write(':keepalive\n\n')
   }, 30000)
 
-  req.on('close', () => {
+  res.on('close', () => {
     clearInterval(heartbeat)
     const session = SKILL_CREATOR_SESSIONS.get(sessionId)
     // Guard: only clean up if this is still our SSE response (reconnection race fix)
@@ -2673,12 +2702,15 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       return res.json({ ok: true, action: 'message_sent' })
     }
 
-    // Spawn new claude -p process
-    const child = spawn('claude', [
+    // Spawn new claude -p process (absolute path — aliases don't work with spawn)
+    const env = { ...process.env }
+    delete env.CLAUDECODE // Must delete, not set to undefined
+    const child = spawn(CLAUDE_BIN, [
       '-p',
       '--output-format', 'stream-json',
       '--input-format', 'stream-json',
       '--verbose',
+      '--include-partial-messages',
       '--system-prompt', SKILL_CREATOR_PROMPT_PATH,
       '--append-system-prompt', `\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
       '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
@@ -2687,7 +2719,7 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       '--model', 'sonnet'
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, CLAUDECODE: undefined }
+      env
     })
 
     session.process = child
@@ -2702,10 +2734,18 @@ app.post('/api/skill-creator/chat', async (req, res) => {
         const sseRes = SKILL_CREATOR_SESSIONS.get(sessionId)?.sseResponse
         if (!sseRes) return
 
-        if (event.type === 'assistant') {
+        if (event.type === 'stream_event') {
+          // Token-level streaming events (wrapped in stream_event)
+          const inner = event.event
+          if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
+            sseRes.write(`data: ${JSON.stringify({ type: 'text', text: inner.delta.text })}\n\n`)
+          }
+          if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use') {
+            sseRes.write(`data: ${JSON.stringify({ type: 'tool_start', name: inner.content_block.name })}\n\n`)
+          }
+        } else if (event.type === 'assistant') {
           // Complete assistant message with content blocks
           const content = event.message?.content || []
-          // Extract text and tool_use blocks
           const textBlocks = content.filter(b => b.type === 'text').map(b => b.text).join('')
           const toolBlocks = content.filter(b => b.type === 'tool_use').map(b => ({
             name: b.name,
@@ -2714,11 +2754,6 @@ app.post('/api/skill-creator/chat', async (req, res) => {
           sseRes.write(`data: ${JSON.stringify({ type: 'assistant', text: textBlocks, tools: toolBlocks })}\n\n`)
         } else if (event.type === 'result') {
           sseRes.write(`data: ${JSON.stringify({ type: 'result', subtype: event.subtype, cost: event.total_cost_usd, duration: event.duration_ms })}\n\n`)
-        } else if (event.type === 'content_block_delta' || event.type === 'message_delta') {
-          // Stream event — forward text deltas
-          if (event.delta?.type === 'text_delta') {
-            sseRes.write(`data: ${JSON.stringify({ type: 'text', text: event.delta.text })}\n\n`)
-          }
         }
       } catch {
         // Skip unparseable lines

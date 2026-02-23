@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb, ClipboardList } from 'lucide-react'
+import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb, ClipboardList, Zap } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { resolveEscalation, deleteEscalation } from '@/lib/api'
+import { resolveEscalation, deleteEscalation, addAutoTriageRule } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import type { Escalation } from '@/lib/types'
 
@@ -43,6 +43,25 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['escalations'] })
       queryClient.invalidateQueries({ queryKey: ['space-escalations'] })
+    },
+  })
+
+  const [ruleAdded, setRuleAdded] = useState(false)
+  const [ruleError, setRuleError] = useState<string | null>(null)
+
+  const autoRuleMutation = useMutation({
+    mutationFn: () => addAutoTriageRule(
+      escalation.suggestedAutoRule!,
+      escalation.id,
+      escalation.space,
+      escalation.project,
+    ),
+    onSuccess: () => {
+      setRuleAdded(true)
+      setRuleError(null)
+    },
+    onError: (err: Error) => {
+      setRuleError(err.message)
     },
   })
 
@@ -179,11 +198,32 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
       )}
 
       {escalation.status === 'resolved' && (
-        <div className="px-4 pb-3 ml-7">
+        <div className="px-4 pb-3 ml-7 space-y-2">
           <div className="flex items-center gap-1.5 text-xs text-moss">
             <CheckCircle2 className="h-3 w-3" />
             <span>Resolved: {escalation.resolution}</span>
           </div>
+          {escalation.suggestedAutoRule && !ruleAdded && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => autoRuleMutation.mutate()}
+                disabled={autoRuleMutation.isPending}
+                className="text-xs text-sand/70 hover:text-sand transition-colors flex items-center gap-1 disabled:opacity-40"
+              >
+                <Zap className="h-3 w-3" />
+                Add to auto-rules
+              </button>
+              {ruleError && (
+                <span className="text-xs text-ember">{ruleError}</span>
+              )}
+            </div>
+          )}
+          {ruleAdded && (
+            <div className="flex items-center gap-1 text-xs text-moss/70">
+              <Zap className="h-3 w-3" />
+              <span>Rule added</span>
+            </div>
+          )}
         </div>
       )}
     </div>
