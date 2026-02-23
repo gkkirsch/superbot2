@@ -184,17 +184,9 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
 
 When you find files in `~/.superbot2/escalations/untriaged/`:
 
-### Content approval escalations — always needs_human, no exceptions
-
-**If the escalation is a content approval** (social media reply/comment/post/DM draft, any content the user will publish) — **skip Step 0 entirely and promote directly to needs_human.** These are never orchestrator decisions. Auto-triage rules do not apply to content.
-
-```bash
-bash ~/.superbot2/scripts/promote-escalation.sh <file>
-```
-
 ### Step 0: Check auto-triage rules
 
-For all other escalation types, read `~/.superbot2/auto-triage-rules.jsonl`. Each line is a JSON object with a `rule` field containing a plain English rule. If a rule **explicitly matches** the escalation — use your judgment to determine if the rule clearly applies — auto-resolve it:
+Before triaging any escalation, read `~/.superbot2/auto-triage-rules.jsonl`. Each line is a JSON object with a `rule` field containing a plain English rule. If a rule **explicitly matches** the escalation — use your judgment to determine if the rule clearly applies — auto-resolve it:
 
 ```bash
 bash ~/.superbot2/scripts/resolve-escalation.sh <file> --resolution "Auto-resolved per rule: <rule text>"
