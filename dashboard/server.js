@@ -2990,6 +2990,159 @@ app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
   }
 })
 
+// My Skills — list installed plugins with author.name === 'superbot2'
+app.get('/api/skill-creator/my-skills', async (req, res) => {
+  try {
+    const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+    let installedData
+    try {
+      const raw = await readFile(installedPluginsPath, 'utf-8')
+      installedData = JSON.parse(raw)
+    } catch {
+      return res.json({ ok: true, skills: [] })
+    }
+
+    const plugins = installedData.plugins || {}
+    const skills = []
+
+    for (const [key, entries] of Object.entries(plugins)) {
+      if (!Array.isArray(entries)) continue
+      for (const entry of entries) {
+        const installPath = entry.installPath
+        if (!installPath) continue
+        try {
+          const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json')
+          const pluginRaw = await readFile(pluginJsonPath, 'utf-8')
+          const pluginJson = JSON.parse(pluginRaw)
+          const authorName = typeof pluginJson.author === 'string' ? pluginJson.author : pluginJson.author?.name
+          if (authorName === 'superbot2') {
+            skills.push({
+              name: pluginJson.name || key.split('@')[0],
+              description: pluginJson.description || '',
+              version: pluginJson.version || entry.version || '0.0.0',
+              installPath,
+              installedAt: entry.installedAt,
+            })
+          }
+        } catch {
+          // Skip plugins we can't read
+        }
+      }
+    }
+
+    res.json({ ok: true, skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Promote a draft to installed plugin
+app.post('/api/skill-creator/promote', async (req, res) => {
+  try {
+    const { draftName } = req.body
+    if (!draftName) return res.status(400).json({ error: 'draftName required' })
+
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+
+    // Check draft exists
+    try {
+      await stat(draftPath)
+    } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+
+    // Read plugin.json from draft
+    const pluginJsonPath = join(draftPath, '.claude-plugin', 'plugin.json')
+    let pluginJson
+    try {
+      const raw = await readFile(pluginJsonPath, 'utf-8')
+      pluginJson = JSON.parse(raw)
+    } catch {
+      return res.status(400).json({ error: 'Draft missing .claude-plugin/plugin.json — not a valid plugin' })
+    }
+
+    const pluginName = pluginJson.name
+    if (!pluginName) {
+      return res.status(400).json({ error: 'plugin.json missing name field' })
+    }
+
+    // Ensure author.name = 'superbot2'
+    if (typeof pluginJson.author === 'string') {
+      pluginJson.author = { name: 'superbot2' }
+    } else if (!pluginJson.author) {
+      pluginJson.author = { name: 'superbot2' }
+    } else {
+      pluginJson.author.name = 'superbot2'
+    }
+    await writeFile(pluginJsonPath, JSON.stringify(pluginJson, null, 2))
+
+    // Run validation (informational — don't block on failure)
+    let validationOutput = ''
+    try {
+      const { execSync } = await import('node:child_process')
+      validationOutput = execSync(`${CLAUDE_BIN} plugin validate "${draftPath}" 2>&1`, { encoding: 'utf-8', timeout: 15000 })
+    } catch (err) {
+      validationOutput = err.stdout || err.stderr || err.message || 'Validation failed'
+    }
+
+    // Copy draft to cache location
+    const version = pluginJson.version || '1.0.0'
+    const cachePath = join(process.env.HOME, '.claude', 'plugins', 'cache', 'local', pluginName, version)
+    await mkdir(cachePath, { recursive: true })
+
+    // Recursive copy using cp
+    const { execSync: execSyncCp } = await import('node:child_process')
+    execSyncCp(`cp -R "${draftPath}/"* "${cachePath}/"`, { encoding: 'utf-8' })
+    // Remove draft-metadata.json from cache copy
+    try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
+
+    // Register in installed_plugins.json
+    const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+    let installedData
+    try {
+      const raw = await readFile(installedPluginsPath, 'utf-8')
+      installedData = JSON.parse(raw)
+    } catch {
+      installedData = { version: 2, plugins: {} }
+    }
+
+    const pluginKey = `${pluginName}@local`
+    const now = new Date().toISOString()
+    installedData.plugins[pluginKey] = [{
+      scope: 'user',
+      installPath: cachePath,
+      version,
+      installedAt: now,
+      lastUpdated: now,
+    }]
+    await writeFile(installedPluginsPath, JSON.stringify(installedData, null, 2))
+
+    // Update draft metadata
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    try {
+      const raw = await readFile(metaPath, 'utf-8')
+      const meta = JSON.parse(raw)
+      meta.status = 'promoted'
+      meta.promotedAt = now
+      meta.promotedName = pluginName
+      await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    } catch {}
+
+    res.json({
+      ok: true,
+      name: pluginName,
+      installPath: cachePath,
+      version,
+      validation: validationOutput,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // File upload endpoint
 app.post('/api/skill-creator/upload', async (req, res) => {
   try {
