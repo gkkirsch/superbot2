@@ -1,9 +1,17 @@
+import { Link } from 'react-router-dom'
 import { useActiveWorkers } from '@/hooks/useSpaces'
 import type { ActiveWorker } from '@/lib/types'
 
 function WorkerRow({ worker }: { worker: ActiveWorker }) {
+  const to = worker.space
+    ? worker.project ? `/spaces/${worker.space}/${worker.project}` : `/spaces/${worker.space}`
+    : '/spaces'
+
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border-custom bg-surface/40 px-4 py-3">
+    <Link
+      to={to}
+      className="flex items-center justify-between rounded-lg border border-border-custom bg-surface/40 px-4 py-3 transition-colors hover:border-sand/30 hover:bg-surface/60"
+    >
       <div className="flex items-center gap-3 min-w-0">
         <span className="relative flex h-2 w-2 shrink-0">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -27,7 +35,7 @@ function WorkerRow({ worker }: { worker: ActiveWorker }) {
         </p>
         <p className="text-xs text-stone/60">runtime</p>
       </div>
-    </div>
+    </Link>
   )
 }
 
