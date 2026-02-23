@@ -971,13 +971,13 @@ app.get('/api/knowledge/:source/:filename', async (req, res) => {
 // --- Dashboard config ---
 
 const DEFAULT_DASHBOARD_CONFIG = {
-  leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
+  leftColumn: ['workers', 'escalations', 'orchestrator-resolved', 'recent-activity'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
