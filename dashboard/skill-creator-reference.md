@@ -211,7 +211,7 @@ Location: `settings.json` (plugin root)
 
 After creating a plugin, verify:
 
-1. Directory exists at `~/.superbot2/skills/<plugin-name>/`
+1. Directory exists at the draft output path specified in your system context
 2. `.claude-plugin/plugin.json` exists and is valid JSON
 3. `plugin.json` `name` matches the directory name
 4. All paths in `plugin.json` start with `./` and point to existing files/directories

@@ -2741,6 +2741,7 @@ import { createInterface } from 'node:readline'
 
 const SKILL_CREATOR_SESSIONS = new Map()
 const SKILL_CREATOR_UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads', 'skill-creator')
+const SKILL_CREATOR_DRAFTS_DIR = join(SUPERBOT_DIR, 'spaces', 'skill-creator', 'drafts')
 const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-prompt.md')
 const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
 const CLAUDE_BIN = `${process.env.HOME}/.local/bin/claude`
@@ -2805,6 +2806,27 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       return res.json({ ok: true, action: 'message_sent' })
     }
 
+    // Create draft directory for this session
+    const draftName = `draft-${Date.now()}`
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
+    await mkdir(draftPath, { recursive: true })
+
+    // Write draft metadata
+    const draftMetadata = {
+      sessionId,
+      createdAt: new Date().toISOString(),
+      status: 'in_progress',
+    }
+    await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(draftMetadata, null, 2))
+
+    session.draftName = draftName
+    session.draftPath = draftPath
+
+    // Notify frontend of draft creation
+    if (session.sseResponse) {
+      session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath })}\n\n`)
+    }
+
     // Spawn new claude -p process (absolute path — aliases don't work with spawn)
     const env = { ...process.env }
     delete env.CLAUDECODE // Must delete, not set to undefined
@@ -2815,7 +2837,7 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       '--verbose',
       '--include-partial-messages',
       '--system-prompt', SKILL_CREATOR_PROMPT_PATH,
-      '--append-system-prompt', `\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
+      '--append-system-prompt', `\n\nDraft output directory (create ALL plugin files here): ${draftPath}\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
       '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
       '--permission-mode', 'bypassPermissions',
       '--no-session-persistence',
@@ -2887,6 +2909,82 @@ app.post('/api/skill-creator/chat', async (req, res) => {
     }) + '\n')
 
     res.json({ ok: true, action: 'process_spawned' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// List all drafts
+app.get('/api/skill-creator/drafts', async (req, res) => {
+  try {
+    await mkdir(SKILL_CREATOR_DRAFTS_DIR, { recursive: true })
+    const entries = await readdir(SKILL_CREATOR_DRAFTS_DIR, { withFileTypes: true })
+    const drafts = []
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const metaPath = join(SKILL_CREATOR_DRAFTS_DIR, entry.name, 'draft-metadata.json')
+      try {
+        const raw = await readFile(metaPath, 'utf-8')
+        const meta = JSON.parse(raw)
+        drafts.push({ name: entry.name, ...meta })
+      } catch {
+        drafts.push({ name: entry.name, status: 'unknown' })
+      }
+    }
+    res.json({ ok: true, drafts })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// List files in a draft (recursive)
+app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
+  try {
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    // Security: ensure we're inside drafts dir
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+
+    async function listFiles(dir, prefix = '') {
+      const results = []
+      let entries
+      try {
+        entries = await readdir(dir, { withFileTypes: true })
+      } catch {
+        return results
+      }
+      for (const entry of entries) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (entry.name === 'draft-metadata.json') continue
+        if (entry.isDirectory()) {
+          results.push({ path: relPath, type: 'directory' })
+          const children = await listFiles(join(dir, entry.name), relPath)
+          results.push(...children)
+        } else {
+          results.push({ path: relPath, type: 'file' })
+        }
+      }
+      return results
+    }
+
+    const files = await listFiles(draftPath)
+    res.json({ ok: true, files })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Delete a draft
+app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
+  try {
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    // Security: ensure we're inside drafts dir
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR)) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    await rm(draftPath, { recursive: true, force: true })
+    res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
