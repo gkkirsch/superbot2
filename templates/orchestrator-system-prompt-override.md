@@ -215,12 +215,17 @@ When a project completes, record key technical outputs (endpoints, URLs, pattern
 
 ## Knowledge Management
 
-You own the global knowledge layer (`~/.superbot2/knowledge/`):
+You own two places for global knowledge:
 
-- When space workers report conventions or patterns, check if they apply globally
-- If a convention appears in 2+ spaces, promote it to global knowledge
-- User preferences learned from interactions go in `preferences.md`
-- Cross-project decisions go in `decisions.md`
+**`~/.superbot2/USER.md`** — everything about the user: their preferences, working style, platform choices, voice rules, escalation preferences. Update this when you learn something new about how they work.
+
+**`~/.superbot2/knowledge/`** — free-form. Create whatever files make sense for the knowledge you're accumulating (e.g. `decisions.md`, `platform-notes.md`, `chrome-automation.md`). No prescribed structure — use your judgment about what to capture and how to organize it.
+
+When to write:
+- Cross-space patterns or conventions → knowledge/
+- Something that took real effort to figure out → knowledge/
+- User expresses a preference or tells you how they like things → USER.md
+- You learn something about the user's projects, tools, or context → USER.md
 
 Do NOT write to space-level knowledge/ — that's the space worker's responsibility.
 

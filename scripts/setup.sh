@@ -123,7 +123,28 @@ fi
 
 if [[ ! -f "$DIR/USER.md" ]]; then
   cat > "$DIR/USER.md" << 'EOF'
-No user profile configured yet. Edit USER.md in your superbot2 home directory with your name, preferences, and communication style.
+# User Profile
+
+## Who I Am
+
+**Name**: (your name)
+**Projects**: (what you're building)
+
+## Working Style
+
+(How you like to work — decisive, methodical, etc.)
+
+## Technical Preferences
+
+(Languages, frameworks, hosting platforms, etc.)
+
+## Escalation Preferences
+
+(What you want escalated vs. auto-resolved)
+
+## Communication Style
+
+(How you prefer updates and messages)
 EOF
   echo "  Created USER.md"
 else
@@ -139,20 +160,10 @@ else
   echo "  MEMORY.md already exists, skipping"
 fi
 
-# --- Knowledge files (don't overwrite existing) ---
-echo "Creating knowledge files (if missing)..."
-
-for file in decisions preferences; do
-  if [[ ! -f "$DIR/knowledge/$file.md" ]]; then
-    title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
-    echo "# $title" > "$DIR/knowledge/$file.md"
-    echo "" >> "$DIR/knowledge/$file.md"
-    echo "No ${file} recorded yet." >> "$DIR/knowledge/$file.md"
-    echo "  Created knowledge/$file.md"
-  else
-    echo "  knowledge/$file.md already exists, skipping"
-  fi
-done
+# --- Knowledge directory (free-form, orchestrator manages files) ---
+echo "Creating knowledge directory (if missing)..."
+mkdir -p "$DIR/knowledge"
+echo "  knowledge/ ready"
 
 # --- Default space (don't overwrite existing) ---
 echo "Creating default space (if missing)..."
