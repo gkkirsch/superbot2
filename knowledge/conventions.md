@@ -16,6 +16,12 @@ All web projects use this stack unless explicitly overridden:
 
 When starting a new web project, use the `web-project-setup` skill to scaffold it.
 
+## Default Database
+
+- **Database**: PostgreSQL (prefer over SQLite for all backends)
+
+Use Postgres even for simple projects — it's the default. Only use SQLite if there's a specific reason (e.g., embedded/local-only with no server).
+
 ## System File Sync
 
 **Two locations exist. Both must stay in sync. This is a hard rule.**
