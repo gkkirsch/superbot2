@@ -1,45 +1,58 @@
 # Conventions
 
+## Default Web Stack
+
+All web projects use this stack unless explicitly overridden:
+
+- **Runtime**: Node.js
+- **Framework**: React (with Vite)
+- **Styling**: Tailwind CSS v4
+- **Components**: shadcn/ui
+- **Icons**: Lucide React
+- **Fonts**: Google Fonts (Inter as default)
+- **API**: Express
+- **Validation**: Zod
+- **Language**: TypeScript
+
+When starting a new web project, use the `web-project-setup` skill to scaffold it.
+
 ## System File Sync
 
-When modifying system files in `~/.superbot2/` (guides, templates, scripts), always sync changes to `~/dev/superbot2/`. The dev repo is the source of truth; the deployed copy is at `~/.superbot2/`.
+**Two locations exist. Both must stay in sync. This is a hard rule.**
 
-Key mappings:
-- `~/.superbot2/templates/orchestrator-system-prompt-override.md` ↔ `~/dev/superbot2/templates/orchestrator-system-prompt-override.md`
-- `~/.claude/agents/space-worker.md` ↔ `~/dev/superbot2/agents/space-worker.md`
-- `~/.superbot2/hooks/*.sh` ↔ `~/dev/superbot2/hooks/*.sh`
-- `~/.superbot2/scripts/*.sh` ↔ `~/dev/superbot2/scripts/*.sh`
-- Skills: `~/dev/superbot2/skills/` (source, workers edit directly)
+| Location | Purpose |
+|----------|---------|
+| `~/dev/superbot2/` | Source of truth — git repo, commit here |
+| `~/.superbot2/` | Runtime — what actually runs |
 
-**IMPORTANT: Always diff before syncing.** Never blindly copy. Workers may have made changes to the dev repo copy. Always compare, review differences, and merge carefully if both sides have changes.
+### Which files need syncing (both locations)
 
-## Plugin Structure
+| Runtime path | Dev repo path |
+|-------------|---------------|
+| `~/.superbot2/templates/orchestrator-system-prompt-override.md` | `~/dev/superbot2/templates/orchestrator-system-prompt-override.md` |
+| `~/.superbot2/scripts/*.sh` | `~/dev/superbot2/scripts/*.sh` |
+| `~/.superbot2/skills/<name>/` | `~/dev/superbot2/skills/<name>/` |
+| `~/.superbot2/knowledge/*.md` | `~/dev/superbot2/knowledge/*.md` |
+| `~/.claude/agents/space-worker.md` | `~/dev/superbot2/agents/space-worker.md` |
 
-Claude Code plugins follow this structure:
-```
-plugin-name/
-├── .claude-plugin/
-│   └── plugin.json           # Manifest: name, version, description, author, keywords
-├── commands/
-│   └── command-name.md       # User-facing commands (YAML frontmatter + markdown)
-├── skills/
-│   └── skill-name/
-│       ├── SKILL.md          # Skill definition (YAML frontmatter + markdown)
-│       └── references/       # Supporting documentation
-├── agents/                   # Optional: background agents
-│   └── agent-name.md
-├── hooks/                    # Optional: event hooks
-│   └── hooks.json
-└── templates/                # Optional: shell script templates
-```
+Note: `ORCHESTRATOR_GUIDE.md` and `SPACE_WORKER_GUIDE.md` are runtime-only (no dev counterpart — they are injected into prompts at runtime).
 
-## Pack Tags
-Use `pack:<name>` in plugin keywords to group into packs:
-- `pack:developer` — Professional Designer, TS Monorepo, Agent Browser
-- `pack:social-media` — Facebook Navigator, X.com
-- `pack:productivity` — Gmail
-- `pack:marketing` — Marketing
-- `pack:deployment` — Cloudflare Deploy, Heroku Deploy
+### Which files are runtime-only (do NOT sync to dev)
 
-## Bash 3.2 Constraint
-All shell scripts must remain bash 3.2 compatible (macOS default). No associative arrays, no bash 4+ features. Use `grep` + `awk` for hash lookups instead.
+These live only in `~/.superbot2/` and are never committed to the dev repo:
+- `escalations/`, `sessions/`, `todos.json`, `config.json`
+- `spaces/` (space-specific data, knowledge, plans)
+- `knowledge/` (global knowledge — orchestrator-managed, not versioned)
+- `IDENTITY.md`, `USER.md`, `MEMORY.md`
+- `dashboard.pid`, `dashboard.log`, `*.pid`
+
+### The sync rule
+
+**Whenever you modify a system file, sync it to the other location in the same session.**
+
+1. `diff <runtime-file> <dev-file>` — always diff first
+2. If only one side has changes, copy your changes to the other
+3. If both sides have changes, merge manually — never blindly overwrite
+4. Commit the dev repo copy: `git add <file> && git commit -m "..."`
+
+**The orchestrator and workers must both follow this.** If you modified a template, guide, script, skill, or agent definition — check the other copy before you finish.
