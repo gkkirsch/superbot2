@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Types ---
@@ -205,6 +205,76 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
   )
 }
 
+// --- My Skills Sidebar ---
+
+interface InstalledSkill {
+  name: string
+  description: string
+  version: string
+  installPath: string
+}
+
+function MySkillsSidebar({ onNewSkill, refreshKey }: { onNewSkill: () => void; refreshKey: number }) {
+  const [skills, setSkills] = useState<InstalledSkill[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchSkills() {
+      try {
+        const res = await fetch('/api/skill-creator/my-skills')
+        const data = await res.json()
+        if (!cancelled && data.ok) setSkills(data.skills)
+      } catch {}
+      if (!cancelled) setLoading(false)
+    }
+    fetchSkills()
+
+    // Poll every 30s
+    const interval = setInterval(fetchSkills, 30000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [refreshKey])
+
+  return (
+    <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 flex flex-col overflow-hidden">
+      <div className="px-4 pt-4 pb-2">
+        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Skills</h2>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
+          </div>
+        ) : skills.length === 0 ? (
+          <div className="flex items-center justify-center py-8 text-center px-2">
+            <p className="text-xs text-stone/40">No skills yet — create your first one!</p>
+          </div>
+        ) : (
+          <div className="space-y-0.5">
+            {skills.map(skill => (
+              <div key={skill.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
+                <p className="text-sm text-parchment truncate">{skill.name}</p>
+                <p className="text-xs text-stone/60 line-clamp-2 mt-0.5">{skill.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-3 pb-3 pt-2">
+        <button
+          onClick={onNewSkill}
+          className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/30 transition-colors flex items-center justify-center gap-1.5 text-xs"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Skill
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 
 export function SkillCreator() {
@@ -218,6 +288,7 @@ export function SkillCreator() {
   const [isDragging, setIsDragging] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -526,12 +597,7 @@ export function SkillCreator() {
       {/* 3-column layout */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
-        <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 p-4 overflow-y-auto">
-          <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-3">My Skills</h2>
-          <div className="flex items-center justify-center h-32 text-center">
-            <p className="text-xs text-stone/40">Skills will appear here</p>
-          </div>
-        </div>
+        <MySkillsSidebar onNewSkill={handleNewSession} refreshKey={skillsRefreshKey} />
 
         {/* Center column — Chat */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
