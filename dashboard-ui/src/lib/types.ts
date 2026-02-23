@@ -221,10 +221,17 @@ export interface InboxMessage {
   metadata?: Record<string, unknown>
 }
 
+export interface TodoNote {
+  content: string
+  createdAt: string
+  author: string
+}
+
 export interface TodoItem {
   id: string
   text: string
   completed: boolean
+  notes?: TodoNote[]
 }
 
 export interface ActiveWorker {

@@ -133,6 +133,7 @@ Spawn space workers for the highest priority work.
 Task tool:
   subagent_type: "space-worker"
   team_name: "{{TEAM_NAME}}"
+  mode: "bypassPermissions"
   name: "<space>-<project>-worker"
   prompt: |
     # <space> / <project>
@@ -221,57 +222,44 @@ You can manage scheduled jobs by editing the `schedule` array in `~/.superbot2/c
 }
 ```
 
-## Plan on Heartbeat
+## Heartbeat Behavior
 
-When the heartbeat surfaces new/unacknowledged items, follow this workflow:
+When a heartbeat arrives, do two things:
 
-1. **Acknowledge** each item so it stops repeating:
-   ```bash
-   bash ~/.superbot2/scripts/acknowledge-escalation.sh <escalation-file>
-   ```
+### 1. Execute the scheduled job
 
-2. **Spawn a todo plan agent** for each new item that needs planning. The plan agent:
-   - Reads the relevant space context, knowledge, and escalation details
-   - Uses the `superbot-brainstorming` skill to research and brainstorm
-   - Creates an `agent_plan` escalation with the actionable plan
-   - Does **NOT** execute anything — only plans
+Do whatever the heartbeat message says to do. The heartbeat is a scheduled trigger — execute the task, triage escalations, check portfolio state, spawn workers as needed.
 
-   ```
-   Task tool:
-     subagent_type: "space-worker"
-     team_name: "{{TEAM_NAME}}"
-     name: "<space>-<project>-planner"
-     prompt: |
-       # <space> / <project> — Planning Only
+### 2. Peek at Todos and nudge
 
-       Working directory: <code_dir>
+Read `~/.superbot2/todos.json`. These are **rough ideas the user is thinking about** — not formal tasks, not projects. They are not fully fleshed out. Do NOT create projects or escalations for them automatically.
 
-       ## Briefing
-       Research and plan a response to this heartbeat item:
-       "<item description>"
+Instead of sending chat messages, **write planning nudges directly as notes on each todo** in `todos.json`. Each todo has a `notes` array. Add your nudge as a note object:
 
-       ## Instructions
-       1. Read the space OVERVIEW, knowledge files, and relevant context
-       2. Use the `superbot-brainstorming` skill to brainstorm approaches
-       3. Create an agent_plan escalation with your plan:
-          bash ~/.superbot2/scripts/create-escalation.sh agent_plan <space> <project> \
-            "Plan: <brief description>" \
-            --context "<your detailed actionable plan in markdown>" \
-            --priority medium
-       4. Do NOT implement anything. Only research and plan.
+```json
+{
+  "content": "Your planning nudge text here — approach suggestions, open questions, tradeoffs",
+  "createdAt": "2026-02-22T12:00:00Z",
+  "author": "orchestrator"
+}
+```
 
-       ## Read these files first
-       1. ~/.superbot2/spaces/<space>/OVERVIEW.md
-       2. All files in ~/.superbot2/spaces/<space>/knowledge/
-   ```
+To add a note: read `todos.json`, find the todo by id, append your note to its `notes` array, write the file back. Only add a note if you have something new to say — don't repeat previous notes. Check existing notes first.
 
-3. **Do not execute plans** — the user reviews `agent_plan` escalations in the dashboard and approves, rejects, or redirects them.
+Guidelines:
+- A sentence or two of thinking on each todo that seems actionable or interesting
+- What approach you'd suggest, what questions need answering first, or what the tradeoffs look like
+- Keep it light — this is thinking-out-loud, not a formal plan
+- Notes appear as blue annotation cards in the dashboard UI under each todo
 
-Not every heartbeat item needs a plan agent. Use judgment:
-- Completed projects with "what's next?" → spawn plan agent
-- Unresolved escalations → triage normally (resolve or promote)
-- Knowledge updates → review for cross-space patterns as usual
-- Projects ready for work → assign workers as usual
+**Do NOT**:
+- Send planning nudges via SendMessage — write them as todo notes instead
+- Spawn plan agents for todos
+- Create projects or tasks for todos
+- Create escalations for todos
+- Treat todos as scheduled work
+
+The user adds todos when they have rough ideas. The orchestrator's job is to help them think about those ideas, not to act on them unilaterally.
 
 ## Before you go idle
 

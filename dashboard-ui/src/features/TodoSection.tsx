@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { X, ChevronUp, ClipboardList } from 'lucide-react'
+import { X, ChevronUp, ClipboardList, StickyNote } from 'lucide-react'
 import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
 import { MarkdownContent } from '@/features/MarkdownContent'
-import type { Escalation } from '@/lib/types'
+import type { Escalation, TodoNote } from '@/lib/types'
 
 function findResearch(todoText: string, escalations: Escalation[]): Escalation | null {
   const lower = todoText.toLowerCase()
@@ -29,7 +29,7 @@ function findResearch(todoText: string, escalations: Escalation[]): Escalation |
 }
 
 interface TodoItemRowProps {
-  todo: { id: string; text: string; completed: boolean }
+  todo: { id: string; text: string; completed: boolean; notes?: TodoNote[] }
   research: Escalation | null
   onToggle: () => void
   onRemove: () => void
@@ -38,6 +38,7 @@ interface TodoItemRowProps {
 function TodoItemRow({ todo, research, onToggle, onRemove }: TodoItemRowProps) {
   const [expanded, setExpanded] = useState(false)
   const hasResearch = !!research
+  const notes = todo.notes || []
 
   return (
     <div>
@@ -106,6 +107,25 @@ function TodoItemRow({ todo, research, onToggle, onRemove }: TodoItemRowProps) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {notes.length > 0 && (
+        <div className="ml-8 mr-2 mb-1 space-y-1">
+          {notes.map((note, i) => (
+            <div key={i} className="rounded-md border border-blue-400/20 bg-blue-400/[0.06] px-3 py-1.5">
+              <div className="flex items-start gap-1.5">
+                <StickyNote className="h-3 w-3 text-blue-400/50 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-parchment/80 leading-relaxed">{note.content}</p>
+                  <p className="text-[10px] text-stone/40 mt-0.5">
+                    {new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    {note.author && <span className="ml-1.5">{note.author}</span>}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

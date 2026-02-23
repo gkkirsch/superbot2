@@ -798,16 +798,18 @@ app.get('/api/heartbeat/activity', async (_req, res) => {
 const TODOS_FILE = join(SUPERBOT_DIR, 'todos.json')
 
 const DEFAULT_TODOS = [
-  { id: '1', text: 'Better memory/daily summaries', completed: false },
-  { id: '2', text: 'Heartbeat audit', completed: false },
-  { id: '3', text: 'User memory/profile', completed: false },
-  { id: '4', text: 'Identity', completed: false },
-  { id: '5', text: 'Natural language hooks/enforcement', completed: false },
+  { id: '1', text: 'Better memory/daily summaries', completed: false, notes: [] },
+  { id: '2', text: 'Heartbeat audit', completed: false, notes: [] },
+  { id: '3', text: 'User memory/profile', completed: false, notes: [] },
+  { id: '4', text: 'Identity', completed: false, notes: [] },
+  { id: '5', text: 'Natural language hooks/enforcement', completed: false, notes: [] },
 ]
 
 async function readTodos() {
   const data = await readJsonFile(TODOS_FILE)
-  return data || DEFAULT_TODOS
+  if (!data) return DEFAULT_TODOS
+  // Migrate: ensure every todo has a notes array
+  return data.map(t => ({ ...t, notes: t.notes || [] }))
 }
 
 async function writeTodos(todos) {
@@ -830,7 +832,7 @@ app.post('/api/todos', async (req, res) => {
       return res.status(400).json({ error: 'Missing or empty text' })
     }
     const todos = await readTodos()
-    const newTodo = { id: Date.now().toString(), text: text.trim(), completed: false }
+    const newTodo = { id: Date.now().toString(), text: text.trim(), completed: false, notes: [] }
     todos.push(newTodo)
     await writeTodos(todos)
     res.json({ todo: newTodo })
