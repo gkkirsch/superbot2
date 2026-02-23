@@ -135,23 +135,7 @@ Every reply should make the reader think "I didn't know that" or "that's a bette
 
 Every single draft (reply, comment, post, DM) gets its own separate approval escalation. NEVER batch multiple drafts into one escalation. The user wants to approve, reject, or rewrite each one individually.
 
-### Format
-
-```bash
-bash ~/.superbot2/scripts/create-escalation.sh approval <space> <project> \
-  "<icon> <Platform> — reply draft to @handle in [Group/Thread Name]" \
-  --context "Group: [name]\nPost excerpt: \"...\"\nPost date: [date]\nPost URL: [url]\n\nDraft reply:\n\"...\"" \
-  --option "Approve|Post this reply" \
-  --option "Rewrite|Needs rework" \
-  --option "Skip|Don't reply to this one" \
-  --priority high
-```
-
-### Platform Icons
-
-- Facebook: `📘`
-- X (Twitter): `🐦`
-- Instagram: `📸`
+See `~/.superbot2/knowledge/escalations.md` for the exact format, platform emoji, context fields, and examples.
 
 After creating all escalations, report the count to the orchestrator and stop. Do NOT post anything yourself.
 

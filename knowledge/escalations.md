@@ -15,43 +15,47 @@ bash ~/.superbot2/scripts/create-escalation.sh <type> <space> <project> "<subjec
 
 ### `approval` — Content requiring user review before publishing
 
-Use for any content the user will publish: social media drafts, DM campaigns, emails, blog posts. The user reads the drafts and chooses an action.
+Use for any content the user will publish: social media drafts, DM campaigns, emails, blog posts.
+
+**One escalation per draft** — never batch multiple drafts into one escalation. The user approves, rewrites, or skips each piece individually.
 
 **Subject format** (use platform emoji):
-- Facebook: `📘 Facebook — 8 comment drafts for Professional Hosts group`
-- X (Twitter): `🐦 X — 12 reply drafts for Claude Code community`
-- Instagram: `📸 Instagram — 6 comment drafts for AI/tech accounts`
+- Facebook: `📘 Facebook — reply draft to @Handle in Professional Hosts group`
+- X (Twitter): `🐦 X — reply draft to @handle on Claude Code thread`
+- Instagram: `📸 Instagram — comment draft on @account post`
 
-**Context must include** (one block per draft):
+**Context must include:**
 ```
-Draft 1 — @Handle (post excerpt, first ~80 chars...)
-Reply: "your full draft text here"
+Group/Thread: [name]
+Post excerpt: "first ~80 chars of the post..."
+Post date: [date]
+Post URL: [url]
 
-Draft 2 — @OtherHandle (post excerpt...)
-Reply: "your full draft text here"
+Draft reply:
+"your full draft text here"
 ```
 
 **Standard options:**
 ```bash
---option "Approve all|Post all drafts with 45-90s delays between each"
---option "Review individually|I will mark approved: true/false in the drafts file"
---option "Reject — redraft|These need rework before posting"
+--option "Approve|Post this reply"
+--option "Rewrite|Needs rework"
+--option "Skip|Don't reply to this one"
 ```
 
 **Full example:**
 ```bash
 bash ~/.superbot2/scripts/create-escalation.sh approval hostreply facebook-gtm \
-  "📘 Facebook — 8 comment drafts for Professional Hosts group" \
-  --context "$(cat drafts.md)" \
-  --option "Approve all|Post all drafts with 45-90s delays" \
-  --option "Review individually|Mark approved: true/false in drafts file" \
-  --option "Reject — redraft|Need rework before posting" \
+  "📘 Facebook — reply draft to @JaneDoe in Professional Hosts group" \
+  --context "Group: Professional Hosts\nPost excerpt: \"I'm struggling with late night messages from guests...\"\nPost date: 2026-02-23\nPost URL: https://facebook.com/groups/professionalhosts/posts/123\n\nDraft reply:\n\"ugh yes this was my life too. what fixed it for me was automating the repetitive stuff (wifi, checkin, parking) so i only get pinged for real issues. changed everything for my response rate\"" \
+  --option "Approve|Post this reply" \
+  --option "Rewrite|Needs rework" \
+  --option "Skip|Don't reply to this one" \
   --priority high
 ```
 
 **Rules:**
-- One escalation per session/batch — not one per draft
-- Do NOT re-surface in chat — user finds it in the dashboard
+- One escalation per draft — never batch
+- Do NOT re-surface in chat — user finds them in the dashboard
 - Wait for resolution before posting anything
 
 ---
