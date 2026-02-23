@@ -9,6 +9,7 @@ import { ProjectDetail } from './pages/ProjectDetail'
 import { Context } from './pages/Context'
 import { Skills } from './pages/Skills'
 import { SkillCreator } from './pages/SkillCreator'
+import { Learn } from './pages/Learn'
 
 function AppContent() {
   return (
@@ -23,6 +24,7 @@ function AppContent() {
         <Route path="/skills" element={<Skills />} />
         <Route path="/skill-creator" element={<SkillCreator />} />
         <Route path="/context" element={<Context />} />
+        <Route path="/learn" element={<Learn />} />
       </Routes>
       <UpdateCheckButton />
     </>
