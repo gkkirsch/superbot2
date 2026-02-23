@@ -9,10 +9,12 @@ Reference for the superchargeclaudecode.com platform API.
 
 ## Authentication
 
+> **Gotcha**: Auth endpoints use `/auth/` prefix, NOT `/api/auth/`. This is a common mistake.
+
 ### Login
 
 ```bash
-curl -X POST https://superchargeclaudecode.com/api/auth/login \
+curl -X POST https://superchargeclaudecode.com/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "your-email@example.com", "password": "<password>"}'
 ```
@@ -29,6 +31,17 @@ Authorization: Bearer <token>
 curl -X POST https://superchargeclaudecode.com/api/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com", "password": "...", "name": "..."}'
+```
+
+### Admin Password Reset
+
+For admin use only. Requires the `ADMIN_SECRET` env var value.
+
+```bash
+curl -X POST https://superchargeclaudecode.com/auth/reset-password \
+  -H "X-Admin-Secret: <admin-secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "newPassword": "newpassword123"}'
 ```
 
 ## Account
