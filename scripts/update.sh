@@ -81,6 +81,24 @@ for agent_file in "$REPO_DIR"/agents/*.md; do
 done
 echo "  Agents updated"
 
+# --- Copy templates ---
+echo "Updating templates..."
+TEMPLATES_DIR="$DIR/templates"
+mkdir -p "$TEMPLATES_DIR"
+
+for tmpl_file in "$REPO_DIR"/templates/*.md; do
+  [[ ! -f "$tmpl_file" ]] && continue
+  tmpl_name=$(basename "$tmpl_file")
+  dest="$TEMPLATES_DIR/$tmpl_name"
+  # Expand ~/.superbot2 paths to the actual install dir
+  if [[ "$(uname)" == "Darwin" ]]; then
+    sed "s|~/.superbot2|$DIR|g" "$tmpl_file" > "$dest"
+  else
+    sed "s|~/.superbot2|$DIR|g" "$tmpl_file" > "$dest"
+  fi
+done
+echo "  Templates updated"
+
 # --- Restart dashboard server ---
 echo "Restarting dashboard server..."
 bash "$REPO_DIR/scripts/restart-dashboard.sh"

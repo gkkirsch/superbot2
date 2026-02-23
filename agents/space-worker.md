@@ -219,9 +219,24 @@ bash ~/.superbot2/scripts/create-escalation.sh <type> <space> <project> "<questi
   --priority high
 ```
 
-Types: `decision`, `blocker`, `question`, `approval`
+Types and when to use them:
+
+| Type | When |
+|------|------|
+| `decision` | Architectural choices, direction changes, major tradeoffs |
+| `blocker` | Can't proceed without external input or credentials |
+| `question` | Factual question that needs a concrete answer |
+| `approval` | Project is fully complete — propose concrete next steps for user review |
 
 **`--suggested-auto-rule` is REQUIRED for `decision` and `question` types.** Suggest a plain English rule that could auto-resolve similar future escalations. The script will error if this flag is missing for these types.
+
+**End-of-project approval**: When ALL tasks in the project are complete, create one `approval` escalation proposing the next phase:
+
+```bash
+bash ~/.superbot2/scripts/create-escalation.sh approval <space> <project> "Project complete — next steps" \
+  --context "All X tasks complete. Proposed next steps:\n1. ...\n2. ..." \
+  --priority medium
+```
 
 After creating an escalation, move to the next unblocked task. Do not stop working.
 
