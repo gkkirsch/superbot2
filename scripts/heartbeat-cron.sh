@@ -420,6 +420,27 @@ if [[ "$pending_new_count" -gt 0 || "$pending_count" -gt 0 ]]; then
   fi
 fi
 
+# 5b. Running workers — real process list (team config is unreliable)
+running_workers=""
+running_worker_count=0
+if worker_ps=$(ps aux | grep "claude" | grep "agent-id" | grep -v grep 2>/dev/null); then
+  while IFS= read -r line; do
+    agent_id=$(echo "$line" | awk '{for(i=1;i<=NF;i++) if($i=="--agent-id") print $(i+1)}')
+    [[ -n "$agent_id" ]] || continue
+    ((running_worker_count++)) || true
+    running_workers+="- ${agent_id}"$'\n'
+  done <<< "$worker_ps"
+fi
+
+if [[ "$running_worker_count" -gt 0 ]]; then
+  action_details+=$'\n## Running Workers (real process list)\n'
+  action_details+="Cross-reference with portfolio-status.sh. Shut down workers whose projects are 100% done."$'\n'
+  action_details+="$running_workers"
+else
+  action_details+=$'\n## Running Workers\n'
+  action_details+="No active claude workers detected."$'\n'
+fi
+
 # 6. Knowledge files → review for cross-space patterns
 knowledge_updated=false
 k_changed_names=""

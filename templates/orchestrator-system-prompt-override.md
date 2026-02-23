@@ -246,17 +246,11 @@ You can manage scheduled jobs by editing the `schedule` array in `~/.superbot2/c
 
 ## Heartbeat Behavior
 
-When a heartbeat arrives, do three things:
+When a heartbeat arrives, do two things:
 
-### 1. Check for stale workers
+### 1. Execute the scheduled job
 
-Run this to get the real active worker list (team config is unreliable):
-
-```bash
-ps aux | grep "claude" | grep "agent-id" | grep -v grep | awk '{for(i=1;i<=NF;i++) if($i=="--agent-id") print $(i+1)}' | sort
-```
-
-Cross-reference with `portfolio-status.sh`. Shut down any worker whose project is 100% done:
+The heartbeat message includes a **Running Workers** section (real process list from `ps`). Cross-reference it with the portfolio status to identify stale workers and shut them down:
 
 ```
 SendMessage: type shutdown_request → recipient: <worker-name>
@@ -268,16 +262,14 @@ SendMessage: type shutdown_request → recipient: <worker-name>
 - Planner worker after plan.md exists and tasks are created
 - Any worker running 60+ minutes without a completion or status message
 
-**Check-in thresholds:**
+**Check-in thresholds for silent workers:**
 - 30+ min silent → send a check-in message asking for status
 - 60+ min silent → stronger nudge
 - 90+ min silent → consider killing and re-spawning
 
-### 2. Execute the scheduled job
+Then execute the rest of the heartbeat tasks: triage escalations, check portfolio state, spawn workers as needed.
 
-Do whatever the heartbeat message says to do. The heartbeat is a scheduled trigger — execute the task, triage escalations, check portfolio state, spawn workers as needed.
-
-### 3. Peek at Todos and nudge
+### 2. Peek at Todos and nudge
 
 Read `~/.superbot2/todos.json`. These are **rough ideas the user is thinking about** — not formal tasks, not projects. They are not fully fleshed out. Do NOT create projects or escalations for them automatically.
 
