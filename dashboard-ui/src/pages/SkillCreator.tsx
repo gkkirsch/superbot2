@@ -263,6 +263,10 @@ export function SkillCreator() {
         if (data.type === 'text') {
           setStreamingText(prev => prev + data.text)
           setIsProcessing(true)
+        } else if (data.type === 'tool_start') {
+          // Collect tool activity during streaming
+          pendingToolsRef.current = [...pendingToolsRef.current, { name: data.name, input: {} }]
+          setIsProcessing(true)
         } else if (data.type === 'assistant') {
           // Complete assistant message — finalize any streaming text and add tools
           setStreamingText(prev => {
