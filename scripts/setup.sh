@@ -142,16 +142,12 @@ fi
 # --- Knowledge files (don't overwrite existing) ---
 echo "Creating knowledge files (if missing)..."
 
-for file in conventions decisions preferences; do
+for file in decisions preferences; do
   if [[ ! -f "$DIR/knowledge/$file.md" ]]; then
-    if [[ -f "$REPO_DIR/seed/knowledge/$file.md" ]]; then
-      cp "$REPO_DIR/seed/knowledge/$file.md" "$DIR/knowledge/$file.md"
-    else
-      title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
-      echo "# $title" > "$DIR/knowledge/$file.md"
-      echo "" >> "$DIR/knowledge/$file.md"
-      echo "No ${file} recorded yet." >> "$DIR/knowledge/$file.md"
-    fi
+    title=$(echo "$file" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')
+    echo "# $title" > "$DIR/knowledge/$file.md"
+    echo "" >> "$DIR/knowledge/$file.md"
+    echo "No ${file} recorded yet." >> "$DIR/knowledge/$file.md"
     echo "  Created knowledge/$file.md"
   else
     echo "  knowledge/$file.md already exists, skipping"
