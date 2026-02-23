@@ -31,6 +31,7 @@ type ColumnId = 'leftColumn' | 'centerColumn' | 'rightColumn'
 
 // Human-readable section names for UI
 const SECTION_LABELS: Record<string, string> = {
+  'workers': 'Workers',
   'escalations': 'Escalations',
   'orchestrator-resolved': 'Orchestrator Decisions',
   'recent-activity': 'Recent Activity',

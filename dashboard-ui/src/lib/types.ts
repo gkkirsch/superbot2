@@ -237,6 +237,10 @@ export interface TodoItem {
 export interface ActiveWorker {
   name: string
   space: string
+  project?: string | null
+  runtimeSeconds?: number
+  runtimeDisplay?: string
+  agentId?: string
 }
 
 export interface DashboardConfig {

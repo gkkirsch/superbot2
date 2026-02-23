@@ -2295,21 +2295,72 @@ async function extractSpaceFromWorkerName(name) {
   return null
 }
 
+function parseEtime(etime) {
+  // ps etime formats: "MM:SS", "HH:MM:SS", "D-HH:MM:SS"
+  const trimmed = etime.trim()
+  let days = 0, hours = 0, minutes = 0, seconds = 0
+  const dayMatch = trimmed.match(/^(\d+)-(.+)$/)
+  const timePart = dayMatch ? dayMatch[2] : trimmed
+  if (dayMatch) days = parseInt(dayMatch[1], 10)
+  const parts = timePart.split(':').map(Number)
+  if (parts.length === 3) { hours = parts[0]; minutes = parts[1]; seconds = parts[2] }
+  else if (parts.length === 2) { minutes = parts[0]; seconds = parts[1] }
+  return days * 86400 + hours * 3600 + minutes * 60 + seconds
+}
+
+function formatRuntime(totalSeconds) {
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  const minutes = Math.floor(totalSeconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const remainMinutes = minutes % 60
+  if (hours < 24) return remainMinutes > 0 ? `${hours}h ${remainMinutes}m` : `${hours}h`
+  const days = Math.floor(hours / 24)
+  const remainHours = hours % 24
+  return remainHours > 0 ? `${days}d ${remainHours}h` : `${days}d`
+}
+
+function extractProjectFromWorkerName(name, space) {
+  if (!space) return null
+  const remainder = name.slice(space.length + 1) // strip "<space>-"
+  const projMatch = remainder.match(/^(.+?)-worker(?:-\d+)?$/)
+  return projMatch ? projMatch[1] : null
+}
+
 app.get('/api/workers', async (_req, res) => {
   try {
-    const config = await readJsonFile(TEAM_CONFIG_PATH)
-    if (!config || !config.members) {
+    const { execSync } = await import('node:child_process')
+    let psOutput = ''
+    try {
+      psOutput = execSync(
+        'ps -eo pid,etime,args | grep "agent-type space-worker" | grep -v grep',
+        { encoding: 'utf8', timeout: 5000 }
+      )
+    } catch {
+      // grep returns exit code 1 when no matches
       return res.json({ workers: [] })
     }
 
-    const spaceWorkers = config.members.filter(m => m.agentType === 'space-worker' && m.isActive)
-    const activeWorkers = []
-    for (const m of spaceWorkers) {
-      const space = await extractSpaceFromWorkerName(m.name)
-      if (space) activeWorkers.push({ name: m.name, space })
+    const workers = []
+    for (const line of psOutput.trim().split('\n')) {
+      if (!line.trim()) continue
+      const nameMatch = line.match(/--agent-name\s+(\S+)/)
+      const idMatch = line.match(/--agent-id\s+(\S+)/)
+      // etime is the second field after pid
+      const etimeMatch = line.trim().match(/^\d+\s+([\d:-]+)\s+/)
+      if (!nameMatch) continue
+
+      const name = nameMatch[1]
+      const agentId = idMatch ? idMatch[1] : name
+      const space = await extractSpaceFromWorkerName(name)
+      const project = extractProjectFromWorkerName(name, space)
+      const runtimeSeconds = etimeMatch ? parseEtime(etimeMatch[1]) : 0
+      const runtimeDisplay = formatRuntime(runtimeSeconds)
+
+      workers.push({ name, space: space || '', project, runtimeSeconds, runtimeDisplay, agentId })
     }
 
-    res.json({ workers: activeWorkers })
+    res.json({ workers })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
