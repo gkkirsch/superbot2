@@ -167,32 +167,89 @@ Workers follow strict conventions:
 
 The heartbeat is a scheduled pulse that wakes the orchestrator. Think of it as the orchestrator's alarm clock — it ensures the system stays active even when you're not interacting with it.
 
-## What It Checks
+## What the Heartbeat Message Contains
 
-When the heartbeat fires, it generates a summary that includes:
-- **Portfolio status** — which spaces have active projects, task counts, blocked items
-- **New escalations** — unresolved blockers, decisions, and questions from workers
-- **Active workers** — who's running, how long they've been active
-- **Knowledge changes** — which knowledge files were updated since last check
-- **Stale workers** — workers that have been running too long and may be stuck
+When the heartbeat script (\`heartbeat-cron.sh\`) fires, it collects system state and builds a structured message with these sections:
 
-## How It Works
+| Section | What It Reports |
+|---|---|
+| **Triage These Escalations** | New untriaged escalations in \`escalations/untriaged/\` — type, question, which project they block |
+| **Resolved Escalations — Spawn Workers** | Recently resolved but unconsumed escalations — projects that can resume work |
+| **Projects Ready for Work** | Projects with pending tasks, no active worker, and no blocking escalations — includes task subjects and priorities |
+| **Still Blocked** | Projects blocked by \`needs_human\` escalations waiting on user input |
+| **Needs Planning** | Projects with resolved escalations but no tasks created yet (need brainstorming) |
+| **Escalations Waiting on User** | \`needs_human\` escalations the orchestrator promoted — type, priority, blocking status |
+| **Running Workers** | Live process list from \`ps\` — every Claude agent with an \`--agent-id\` flag |
+| **Review Knowledge Changes** | Per-file change tracking (NEW or UPDATED) with section headings for context |
+| **Previously Reviewed** | Acknowledged items collapsed into a summary — no action needed unless state changed |
 
-The heartbeat runs as a cron job (configured in \`~/.superbot2/config.json\`). When it fires:
-1. The heartbeat script (\`heartbeat-cron.sh\`) collects system state
-2. It drops a summary message in the orchestrator's inbox
-3. The orchestrator wakes up, reads the summary, and takes action
-4. It triages escalations, checks on workers, spawns new workers as needed
+Each section only appears when it has items. The message starts with a one-line summary of actions (e.g., "TRIAGE: 2 new untriaged escalation(s), READY: 1 project(s) with pending tasks").
+
+## Orchestrator Sequence When a Heartbeat Fires
+
+When the orchestrator receives a heartbeat, it follows this sequence:
+
+1. **Run portfolio status** — executes \`portfolio-status.sh\` to get the full picture of all spaces, projects, task counts, and escalations
+2. **Shut down stale workers** — cross-references the Running Workers list with portfolio status (see Stale Worker Criteria below)
+3. **Triage escalations** — reads each file in \`escalations/untriaged/\`:
+   - First checks auto-triage rules (\`auto-triage-rules.jsonl\`) for automatic resolution
+   - Then attempts manual resolution from explicit knowledge sources only
+   - Promotes to \`needs_human\` if unsure (the default and safe path)
+4. **Spawn workers** — for projects that are ready (pending tasks, no blocker, no active worker), spawns a space worker with a briefing
+5. **Peek at todos** — reads \`todos.json\` and writes planning nudge notes on actionable items (does NOT create projects or escalations from todos)
+6. **Report to dashboard** — sends a summary message to \`dashboard-user\` covering what was found and what action was taken
+
+## Stale Worker Criteria
+
+The orchestrator identifies stale workers during heartbeat processing. A worker is considered stale when any of these apply:
+
+- **Project 100% done** — all tasks in the worker's project are marked completed
+- **Duplicate suffix** — a worker with a \`-2\` or later suffix when the original (unsuffixed) worker is still running
+- **Planner finished** — a planner worker whose project already has \`plan.md\` and tasks created
+- **Silent 60+ minutes** — any worker running 60+ minutes without sending a completion or status message
+
+## Check-in Thresholds for Silent Workers
+
+The orchestrator uses escalating nudges for workers that haven't reported back:
+
+| Runtime Without Update | Action |
+|---|---|
+| **30+ minutes** | Send a check-in message asking for status |
+| **60+ minutes** | Stronger nudge — demand a progress update |
+| **90+ minutes** | Consider killing the worker and re-spawning a fresh one |
+
+These thresholds help catch workers that are stuck in loops, lost context, or are otherwise unproductive.
 
 ## Deduplication
 
-The heartbeat is smart about not repeating itself. It tracks fingerprints of what it's already reported and skips items that haven't changed. This prevents the orchestrator from seeing the same "3 tasks pending in project X" message every cycle.
+The heartbeat avoids repeating itself through two mechanisms:
+
+- **Fingerprinting** — computes an MD5 hash of all escalation files, knowledge files, task files, and memory. If the fingerprint matches the last run, no message is sent.
+- **Inbox dedup** — if there's already an unread heartbeat message in the orchestrator's inbox, the script skips sending another one (saves the fingerprint but doesn't message).
+- **Per-file knowledge hashes** — tracks individual file hashes in \`.heartbeat-knowledge-hashes\` so it can report exactly which files are NEW vs UPDATED, rather than just "knowledge changed."
+- **Acknowledgment** — the orchestrator marks items as acknowledged after processing them. Acknowledged items appear in a collapsed "Previously Reviewed" section on subsequent heartbeats.
+
+## Schedule Configuration
+
+The heartbeat interval is set in \`~/.superbot2/config.json\`:
+
+\`\`\`json
+{
+  "heartbeat": { "intervalMinutes": 30 }
+}
+\`\`\`
+
+The scheduler daemon checks this config every 60 seconds. When the interval has elapsed since the last heartbeat, it runs \`heartbeat-cron.sh\`, which collects state and drops a message in the orchestrator's inbox.
+
+The heartbeat is independent of scheduled jobs (which have their own \`schedule\` array in the same config file). Scheduled jobs fire at specific times; the heartbeat fires on an interval.
 
 ## What You'd Typically Do
 
 The heartbeat is fully automatic — you don't interact with it directly. You can:
-- **View the Pulse section** in the dashboard to see the last heartbeat time
-- **Adjust the schedule** in config.json if you want more or less frequent checks`,
+- **View the Pulse section** in the dashboard to see the last heartbeat time and whether changes were detected
+- **Adjust the interval** in \`config.json\` (e.g., 15 minutes for more active monitoring, 60 for lighter usage)
+- **Check heartbeat logs** at \`~/.superbot2/logs/heartbeat.log\` for diagnostics
+- **View activity history** at \`~/.superbot2/logs/heartbeat-activity.json\` — tracks the last 48 heartbeat runs with timestamps and whether changes were detected`,
   },
   {
     id: 'scheduler',
