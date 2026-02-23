@@ -72,7 +72,7 @@ function TodoDashboardSection() {
 function KnowledgeDashboardSection() {
   return (
     <section data-section="knowledge">
-      <SectionHeader title="Knowledge" icon={BookOpen} />
+      <SectionHeader title="Knowledge" icon={BookOpen} linkTo="/knowledge" />
       <KnowledgeSection />
     </section>
   )

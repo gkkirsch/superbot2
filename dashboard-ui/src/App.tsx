@@ -6,7 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
 import { ProjectDetail } from './pages/ProjectDetail'
-import { Context } from './pages/Context'
+import { Knowledge } from './pages/Knowledge'
 import { Skills } from './pages/Skills'
 import { SkillCreator } from './pages/SkillCreator'
 import { Learn } from './pages/Learn'
@@ -23,7 +23,7 @@ function AppContent() {
         <Route path="/spaces/:slug/:project" element={<ProjectDetail />} />
         <Route path="/skills" element={<Skills />} />
         <Route path="/skill-creator" element={<SkillCreator />} />
-        <Route path="/context" element={<Context />} />
+        <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/learn" element={<Learn />} />
       </Routes>
       <UpdateCheckButton />

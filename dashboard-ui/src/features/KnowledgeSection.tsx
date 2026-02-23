@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ChevronRight, FileText, BookOpen } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useKnowledge } from '@/hooks/useSpaces'
 import { fetchKnowledgeContent } from '@/lib/api'
@@ -95,6 +96,12 @@ export function KnowledgeSection() {
       {groups.map((group) => (
         <GroupItem key={group.source} group={group} />
       ))}
+      <Link
+        to="/knowledge"
+        className="block text-center text-xs text-stone hover:text-sand transition-colors py-2"
+      >
+        View all &rarr;
+      </Link>
     </div>
   )
 }

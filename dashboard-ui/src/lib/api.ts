@@ -615,3 +615,41 @@ export async function fetchKnowledge(): Promise<KnowledgeGroup[]> {
 export async function fetchKnowledgeContent(source: string, filename: string): Promise<ContextFile> {
   return fetchJson<ContextFile>(`/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`)
 }
+
+export async function saveKnowledgeFile(source: string, filename: string, content: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function deleteKnowledgeFile(source: string, filename: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function createKnowledgeFile(source: string, filename: string, content?: string): Promise<{ filename: string }> {
+  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, content: content || '' }),
+  })
+  if (!response.ok) {
+    if (response.status === 409) throw new Error('File already exists')
+    throw new Error(`API error: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function saveUser(content: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/user`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
