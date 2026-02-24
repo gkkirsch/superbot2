@@ -258,6 +258,32 @@ export function SpaceDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left column */}
           <div className="space-y-8">
+            {/* Recent Sessions */}
+            {sessions && sessions.length > 0 && (
+              <section>
+                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
+                <div className="divide-y divide-border-custom">
+                  {sessions.map((s, i) => (
+                    <div key={s.id} className="py-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-parchment font-medium whitespace-nowrap">
+                          {relativeTime(s.completedAt)}
+                        </span>
+                        <div className="text-xs text-stone/40 truncate">
+                          {s.project && <span>{s.project}</span>}
+                          {s.project && s.worker && <span> · </span>}
+                          {s.worker && <span>{s.worker}</span>}
+                        </div>
+                      </div>
+                      <p className={`text-xs text-parchment/70 leading-relaxed ${i === 0 ? '' : 'line-clamp-2'}`}>
+                        {s.summary}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* Outstanding Tasks */}
             <section>
               <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Outstanding Tasks</h2>
@@ -305,32 +331,6 @@ export function SpaceDetail() {
 
           {/* Right column */}
           <div className="space-y-8">
-            {/* Recent Sessions */}
-            {sessions && sessions.length > 0 && (
-              <section>
-                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
-                <div className="divide-y divide-border-custom">
-                  {sessions.map((s, i) => (
-                    <div key={s.id} className="py-2.5">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs text-parchment font-medium whitespace-nowrap">
-                          {relativeTime(s.completedAt)}
-                        </span>
-                        <div className="text-xs text-stone/40 truncate">
-                          {s.project && <span>{s.project}</span>}
-                          {s.project && s.worker && <span> · </span>}
-                          {s.worker && <span>{s.worker}</span>}
-                        </div>
-                      </div>
-                      <p className={`text-xs text-parchment/70 leading-relaxed ${i === 0 ? '' : 'line-clamp-2'}`}>
-                        {s.summary}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
             {/* Projects */}
             <section>
               <div className="flex items-center gap-2 mb-3">
