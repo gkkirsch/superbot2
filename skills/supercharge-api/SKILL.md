@@ -267,14 +267,14 @@ claude plugin marketplace add https://superchargeclaudecode.com/api/marketplaces
 
 ## Curated Marketplace
 
-The main curated marketplace is **Supercharge Claude Code** at `/m/supercharge-claude-code`.
+The main curated marketplace is **Superbot Marketplace** at `/m/superbot-marketplace`.
 
 Categories: Marketing, Landing Pages, Web Applications, Scraping, Communication.
 
 Install:
 
 ```bash
-claude plugin marketplace add https://superchargeclaudecode.com/api/marketplaces/supercharge-claude-code/marketplace.json
+claude plugin marketplace add https://superchargeclaudecode.com/api/marketplaces/superbot-marketplace/marketplace.json
 ```
 
 ## Deployment
