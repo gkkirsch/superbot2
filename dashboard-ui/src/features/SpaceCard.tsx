@@ -107,12 +107,21 @@ export function SpaceCard({ space, variant = 'full', style, workers = [] }: Spac
         <WorkerIndicator workers={workers} />
       </div>
 
-      {space.projects.length > 1 && space.projectTaskCounts && (
-        <div className="space-y-1.5 mb-3">
-          {space.projects.map((project) => {
-            const counts = space.projectTaskCounts![project]
-            if (!counts || counts.total === 0) return null
-            return (
+      {space.projects.length > 1 && space.projectTaskCounts && (() => {
+        const sorted = [...space.projects]
+          .map((project) => ({ project, counts: space.projectTaskCounts![project] }))
+          .filter((p) => p.counts && p.counts.total > 0)
+          .sort((a, b) => {
+            const aPending = a.counts.pending + a.counts.in_progress
+            const bPending = b.counts.pending + b.counts.in_progress
+            if (bPending !== aPending) return bPending - aPending
+            return b.counts.total - a.counts.total
+          })
+        const visible = sorted.slice(0, 5)
+        const remaining = sorted.length - visible.length
+        return (
+          <div className="space-y-1.5 mb-3">
+            {visible.map(({ project, counts }) => (
               <div key={project} className="flex items-center gap-2">
                 <FolderOpen className="h-3 w-3 shrink-0 text-stone/60" />
                 <span className="truncate text-xs text-stone/80 min-w-0 max-w-[120px]" title={project}>
@@ -126,10 +135,15 @@ export function SpaceCard({ space, variant = 'full', style, workers = [] }: Spac
                   />
                 </div>
               </div>
-            )
-          })}
-        </div>
-      )}
+            ))}
+            {remaining > 0 && (
+              <p className="text-[11px] text-stone/50 pl-5">
+                +{remaining} more project{remaining !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       <div className="flex items-center justify-between pt-2 border-t border-border-custom">
         <StatsBar
