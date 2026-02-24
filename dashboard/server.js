@@ -2953,10 +2953,53 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       return res.json({ ok: true, action: 'message_sent' })
     }
 
-    // Create draft directory for this session
+    // Create draft directory for this session with full plugin scaffold
     const draftName = `draft-${Date.now()}`
     const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
     await mkdir(draftPath, { recursive: true })
+
+    // Scaffold default plugin structure
+    const pluginSlug = draftName
+    await mkdir(join(draftPath, '.claude-plugin'), { recursive: true })
+    await mkdir(join(draftPath, 'skills', pluginSlug), { recursive: true })
+
+    // plugin.json — pre-filled with name and empty description
+    const pluginJson = {
+      name: pluginSlug,
+      version: '1.0.0',
+      description: '',
+      author: { name: 'superbot2' },
+      skills: [`./skills/${pluginSlug}`],
+    }
+    await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
+
+    // SKILL.md — minimal frontmatter template
+    const skillMd = `---
+name: ${pluginSlug}
+description: >
+  TODO: Describe when this skill should be triggered.
+version: 1.0.0
+user-invocable: true
+---
+
+# ${pluginSlug}
+
+TODO: Add skill instructions here.
+`
+    await writeFile(join(draftPath, 'skills', pluginSlug, 'SKILL.md'), skillMd)
+
+    // README.md
+    const readmeMd = `# ${pluginSlug}
+
+A Claude Code plugin.
+
+## Installation
+
+\`\`\`bash
+claude plugin install ${pluginSlug}
+\`\`\`
+`
+    await writeFile(join(draftPath, 'README.md'), readmeMd)
 
     // Write draft metadata
     const draftMetadata = {
@@ -3158,6 +3201,29 @@ app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => 
     res.json({ ok: true, content })
   } catch (err) {
     if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Update a file in a draft (text content)
+app.put('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const relPath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
+    const filePath = resolve(draftPath, relPath)
+    if (!filePath.startsWith(draftPath + '/')) {
+      return res.status(400).json({ error: 'Invalid file path' })
+    }
+    const { content } = req.body
+    if (typeof content !== 'string') {
+      return res.status(400).json({ error: 'content string required' })
+    }
+    await writeFile(filePath, content, 'utf-8')
+    res.json({ ok: true })
+  } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })

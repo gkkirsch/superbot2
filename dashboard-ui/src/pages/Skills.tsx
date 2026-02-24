@@ -1240,7 +1240,7 @@ function BrowsePlugins() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Puzzle className="h-4 w-4 text-sand" />
-          <h2 className="font-heading text-lg text-parchment">Browse Skills / Plugins</h2>
+          <h2 className="font-heading text-lg text-parchment">Browse Plugins</h2>
           <span className="text-xs text-stone bg-surface px-2 py-0.5 rounded-full">{available.length}</span>
         </div>
         {installed.length > 0 && (
@@ -1359,7 +1359,7 @@ export function Skills() {
       <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex items-center gap-2 mb-8">
           <Blocks className="h-5 w-5 text-sand" />
-          <h1 className="font-heading text-2xl text-parchment">Skills</h1>
+          <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
         </div>
         <div className="flex gap-8">
           {/* Left sidebar — 1/3 */}
