@@ -48,10 +48,12 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
 
   const [ruleAdded, setRuleAdded] = useState(false)
   const [ruleError, setRuleError] = useState<string | null>(null)
+  const [showRuleEditor, setShowRuleEditor] = useState(false)
+  const [ruleText, setRuleText] = useState('')
 
   const autoRuleMutation = useMutation({
-    mutationFn: () => addAutoTriageRule(
-      escalation.suggestedAutoRule!,
+    mutationFn: (text: string) => addAutoTriageRule(
+      text,
       escalation.id,
       escalation.space,
       escalation.project,
@@ -59,6 +61,7 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
     onSuccess: () => {
       setRuleAdded(true)
       setRuleError(null)
+      setShowRuleEditor(false)
     },
     onError: (err: Error) => {
       setRuleError(err.message)
@@ -127,14 +130,42 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
               </div>
               <p className="text-xs text-parchment/80 leading-relaxed">{escalation.suggestedAutoRule}</p>
               {!ruleAdded ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); autoRuleMutation.mutate() }}
-                  disabled={autoRuleMutation.isPending}
-                  className="text-xs text-sand/70 hover:text-sand transition-colors flex items-center gap-1 mt-1 disabled:opacity-40"
-                >
-                  <Zap className="h-3 w-3" />
-                  Add to auto-rules
-                </button>
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowRuleEditor(true); setRuleText(escalation.suggestedAutoRule!) }}
+                    disabled={autoRuleMutation.isPending}
+                    className="text-xs text-sand/70 hover:text-sand transition-colors flex items-center gap-1 mt-1 disabled:opacity-40"
+                  >
+                    <Zap className="h-3 w-3" />
+                    Add to auto-rules
+                  </button>
+                  {showRuleEditor && (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        value={ruleText}
+                        onChange={(e) => setRuleText(e.target.value)}
+                        placeholder="Always approve plans for hostreply space"
+                        className="w-full bg-transparent text-xs text-parchment placeholder:text-stone/40 border border-sand/20 rounded-md px-3 py-2 focus:outline-none focus:border-sand/40 transition-colors"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => { setShowRuleEditor(false); setRuleText('') }}
+                          className="text-xs text-stone/60 hover:text-stone px-2 py-1 rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => { if (ruleText.trim()) autoRuleMutation.mutate(ruleText.trim()) }}
+                          disabled={!ruleText.trim() || autoRuleMutation.isPending}
+                          className="text-xs text-ink bg-sky-600 hover:bg-sky-500 px-3 py-1 rounded font-medium transition-colors disabled:opacity-40"
+                        >
+                          Save Rule
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="flex items-center gap-1 text-xs text-moss/70 mt-1">
                   <Zap className="h-3 w-3" />
