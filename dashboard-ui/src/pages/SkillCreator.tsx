@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
+import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 
 // --- Types ---
 
@@ -159,7 +160,7 @@ function AssistantBubble({ msg }: { msg: Message }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] overflow-hidden">
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">skill creator</span>
+        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
         <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
           {isLong && !expanded ? (
             <>
@@ -194,7 +195,7 @@ function StreamingBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] overflow-hidden">
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">skill creator</span>
+        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
         <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
           <MarkdownContent content={text} className="text-parchment/80" />
           <span className="inline-block w-1.5 h-4 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
@@ -208,7 +209,7 @@ function TypingIndicator() {
   return (
     <div className="flex justify-start">
       <div>
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">skill creator</span>
+        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
         <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-[rgba(120,140,160,0.12)]">
           <div className="flex gap-1.5 items-center">
             <span className="typing-dot" />
@@ -297,7 +298,7 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
   return (
     <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 flex flex-col overflow-hidden">
       <div className="px-4 pt-4 pb-2">
-        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Skills</h2>
+        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Plugins</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
@@ -307,7 +308,7 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
           </div>
         ) : !hasContent ? (
           <div className="flex items-center justify-center py-8 text-center px-2">
-            <p className="text-xs text-stone/40">No skills yet — create your first one!</p>
+            <p className="text-xs text-stone/40">No plugins yet — create your first one!</p>
           </div>
         ) : (
           <>
@@ -363,7 +364,7 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
           className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/30 transition-colors flex items-center justify-center gap-1.5 text-xs"
         >
           <Plus className="h-3.5 w-3.5" />
-          New Skill
+          New Plugin
         </button>
       </div>
     </div>
@@ -380,7 +381,6 @@ export function SkillCreator() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [totalCost, setTotalCost] = useState(0)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
-  const [isDragging, setIsDragging] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
@@ -396,13 +396,17 @@ export function SkillCreator() {
   const [frontmatter, setFrontmatter] = useState<Record<string, unknown> | null>(null)
   const [isDraftDragging, setIsDraftDragging] = useState(false)
   const [draftUploading, setDraftUploading] = useState(false)
+  const [fileSheetOpen, setFileSheetOpen] = useState(false)
+  const [fileEditing, setFileEditing] = useState(false)
+  const [fileDraft, setFileDraft] = useState('')
+  const [fileSaving, setFileSaving] = useState(false)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftFileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
-  const dragCounterRef = useRef(0)
+
   const initialScrollDoneRef = useRef(false)
   const pendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
 
@@ -519,37 +523,6 @@ export function SkillCreator() {
     }))
     setAttachedFiles(prev => [...prev, ...newFiles])
   }, [])
-
-  const removeFile = useCallback((index: number) => {
-    setAttachedFiles(prev => {
-      if (prev[index].preview) URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
-    })
-  }, [])
-
-  // Drag-and-drop
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current++
-    if (e.dataTransfer.types.includes('Files')) setIsDragging(true)
-  }, [])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current--
-    if (dragCounterRef.current === 0) setIsDragging(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current = 0
-    setIsDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
-  }, [addFiles])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -738,6 +711,8 @@ export function SkillCreator() {
     setFileContent(null)
     setFrontmatter(null)
     setPromoteStatus('idle')
+    setFileSheetOpen(false)
+    setFileEditing(false)
   }, [])
 
   // Fetch files for the selected draft
@@ -777,16 +752,13 @@ export function SkillCreator() {
     return () => { cancelled = true; clearInterval(interval) }
   }, [selectedDraft])
 
-  // Fetch file content when a file is clicked
+  // Fetch file content when a file is clicked — opens sliding tray
   const handleFileClick = useCallback(async (filePath: string) => {
     if (!selectedDraft) return
-    if (selectedFile === filePath) {
-      setSelectedFile(null)
-      setFileContent(null)
-      return
-    }
     setSelectedFile(filePath)
     setFileContent(null)
+    setFileEditing(false)
+    setFileSheetOpen(true)
     setFileLoading(true)
     try {
       const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${filePath}`)
@@ -798,7 +770,34 @@ export function SkillCreator() {
       setFileContent('Failed to load file')
     }
     setFileLoading(false)
-  }, [selectedDraft, selectedFile])
+  }, [selectedDraft])
+
+  const closeFileSheet = useCallback(() => {
+    setFileSheetOpen(false)
+    setFileEditing(false)
+  }, [])
+
+  const handleFileSave = useCallback(async () => {
+    if (!selectedDraft || !selectedFile) return
+    setFileSaving(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${selectedFile}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: fileDraft }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setFileContent(fileDraft)
+        setFileEditing(false)
+      } else {
+        setError(data.error || 'Save failed')
+      }
+    } catch {
+      setError('Failed to save file')
+    }
+    setFileSaving(false)
+  }, [selectedDraft, selectedFile, fileDraft])
 
   // Upload files to the selected draft
   const handleDraftUpload = useCallback(async (files: File[]) => {
@@ -846,7 +845,7 @@ export function SkillCreator() {
       <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border-custom">
         <div className="flex items-center gap-3">
           <Wand2 className="h-5 w-5 text-sand" />
-          <h1 className="font-heading text-xl text-parchment">Skill Creator</h1>
+          <h1 className="font-heading text-xl text-parchment">Plugin Creator</h1>
         </div>
         <div className="flex items-center gap-3">
           {totalCost > 0 && (
@@ -913,6 +912,33 @@ export function SkillCreator() {
             </div>
           )}
 
+          {/* Attached files indicator */}
+          {attachedFiles.length > 0 && (
+            <div className="mx-4 mb-2 flex flex-wrap gap-1.5">
+              {attachedFiles.map((f, i) => (
+                <div key={i} className="relative group inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface/50 border border-border-custom">
+                  {f.preview ? (
+                    <img src={f.preview} alt={f.file.name} className="h-5 w-5 object-cover rounded" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 text-stone/50" />
+                  )}
+                  <span className="text-[11px] text-parchment/70 truncate max-w-[120px]">{f.file.name}</span>
+                  <button
+                    onClick={() => {
+                      setAttachedFiles(prev => {
+                        if (prev[i].preview) URL.revokeObjectURL(prev[i].preview)
+                        return prev.filter((_, idx) => idx !== i)
+                      })
+                    }}
+                    className="p-0.5 rounded text-stone/40 hover:text-parchment hover:bg-surface/80 transition-colors"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Input area */}
           <form onSubmit={handleSubmit} className="px-4 pb-4 flex items-end gap-2 shrink-0">
             <input
@@ -959,51 +985,8 @@ export function SkillCreator() {
           </form>
         </div>
 
-        {/* Right column — Draft browser + Chat attachments */}
+        {/* Right column — Draft browser */}
         <div className="w-80 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col">
-          {/* Chat attachment drop zone */}
-          <div
-            className="shrink-0"
-            onDragEnter={handleDragEnter}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className={`m-3 mb-1 p-2.5 border-2 border-dashed rounded-lg flex items-center justify-center gap-2 transition-colors ${
-              isDragging ? 'border-sand/50 bg-sand/5' : 'border-border-custom'
-            }`}>
-              <Upload className="h-3.5 w-3.5 text-stone/40" />
-              <p className="text-[11px] text-stone/50">
-                {isDragging ? 'Drop to attach to chat' : 'Drop files to attach to chat'}
-              </p>
-            </div>
-            {attachedFiles.length > 0 && (
-              <div className="mx-3 mb-1 flex flex-wrap gap-1.5">
-                {attachedFiles.map((f, i) => (
-                  <div key={i} className="relative group">
-                    {f.preview ? (
-                      <button onClick={() => setLightboxSrc(f.preview)}>
-                        <img src={f.preview} alt={f.file.name} className="h-8 w-8 object-cover rounded border border-border-custom" />
-                      </button>
-                    ) : (
-                      <div className="h-8 w-8 flex items-center justify-center rounded border border-border-custom bg-ink/40">
-                        <FileText className="h-3 w-3 text-stone/60" />
-                      </div>
-                    )}
-                    <button
-                      onClick={() => removeFile(i)}
-                      className="absolute -top-1 -right-1 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-2 w-2 text-stone/70" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-border-custom mx-3" />
-
           {/* Draft browser section */}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="px-3 pt-3 pb-1.5">
@@ -1083,30 +1066,6 @@ export function SkillCreator() {
                   )}
                 </div>
 
-                {/* File content viewer */}
-                {selectedFile && (
-                  <div className="border-t border-border-custom mx-3 mt-1" />
-                )}
-                {selectedFile && (
-                  <div className="shrink-0 max-h-[40%] overflow-y-auto px-3 py-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-stone/50 font-mono truncate">{selectedFile}</span>
-                      <button onClick={() => { setSelectedFile(null); setFileContent(null) }} className="text-stone/40 hover:text-stone/60">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                    {fileLoading ? (
-                      <div className="flex items-center justify-center py-4">
-                        <Loader2 className="h-3.5 w-3.5 text-stone/40 animate-spin" />
-                      </div>
-                    ) : (
-                      <pre className="text-[11px] text-parchment/70 font-mono whitespace-pre-wrap break-words bg-ink/60 rounded p-2 max-h-60 overflow-y-auto">
-                        {fileContent}
-                      </pre>
-                    )}
-                  </div>
-                )}
-
                 {/* Upload zone for draft */}
                 <div className="shrink-0 px-3 pb-2 pt-1">
                   <input
@@ -1163,6 +1122,76 @@ export function SkillCreator() {
           </div>
         </div>
       </div>
+
+      {/* File viewer Sheet */}
+      {selectedFile && (
+        <Sheet open={fileSheetOpen} onOpenChange={v => { if (!v) closeFileSheet() }}>
+          <SheetHeader>
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                <File className="h-4 w-4 text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-medium text-parchment truncate">{selectedFile}</h3>
+                {selectedDraft && (
+                  <p className="text-xs text-stone/50">{selectedDraft}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {!fileEditing && fileContent && !fileContent.startsWith('[Binary file') && (
+                <button
+                  onClick={() => { setFileDraft(fileContent || ''); setFileEditing(true) }}
+                  className="p-1.5 rounded-md text-stone/50 hover:text-sand hover:bg-sand/10 transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={closeFileSheet}
+                className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/50 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </SheetHeader>
+          <SheetBody className="flex flex-col h-[calc(100vh-65px)]">
+            {fileLoading ? (
+              <div className="space-y-3 py-4">
+                <div className="h-4 w-3/4 rounded bg-surface/50 animate-pulse" />
+                <div className="h-4 w-1/2 rounded bg-surface/50 animate-pulse" />
+                <div className="h-4 w-2/3 rounded bg-surface/50 animate-pulse" />
+              </div>
+            ) : fileEditing ? (
+              <div className="flex flex-col flex-1">
+                <textarea
+                  value={fileDraft}
+                  onChange={e => setFileDraft(e.target.value)}
+                  className="flex-1 bg-ink/50 text-parchment/90 text-sm font-mono rounded-lg border border-border-custom p-3 resize-none focus:outline-none focus:border-sand/50"
+                />
+                <div className="flex items-center gap-2 mt-3 shrink-0">
+                  <button
+                    onClick={handleFileSave}
+                    disabled={fileSaving}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-3 w-3" /> {fileSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => setFileEditing(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-stone hover:text-parchment transition-colors"
+                  >
+                    <X className="h-3 w-3" /> Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <pre className="text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words">{fileContent}</pre>
+            )}
+          </SheetBody>
+        </Sheet>
+      )}
 
       {/* Lightbox */}
       {lightboxSrc && (

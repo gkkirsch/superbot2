@@ -290,7 +290,7 @@ function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () =>
   )
 }
 
-// --- Unified Extensions Section ---
+// --- Unified Plugins Section ---
 
 type ExtensionTab = 'skills' | 'hooks' | 'agents'
 
@@ -344,7 +344,7 @@ export function DashboardExtensionsSection() {
   if (!isLoading && skillCount === 0 && hookCount === 0 && agentCount === 0) {
     return (
       <div className="rounded-lg border border-border-custom bg-surface/50 py-6 text-center">
-        <p className="text-sm text-stone">No extensions installed</p>
+        <p className="text-sm text-stone">No plugins installed</p>
       </div>
     )
   }

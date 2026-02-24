@@ -26,7 +26,12 @@ function groupByStatus(spaces: SpaceOverviewType[]): { label: string; spaces: Sp
 
   return entries.map(([key, items]) => ({
     label: key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' '),
-    spaces: items,
+    spaces: items.sort((a, b) => {
+      const aIncomplete = a.taskCounts.total - a.taskCounts.completed
+      const bIncomplete = b.taskCounts.total - b.taskCounts.completed
+      if (bIncomplete !== aIncomplete) return bIncomplete - aIncomplete
+      return b.taskCounts.total - a.taskCounts.total
+    }),
   }))
 }
 

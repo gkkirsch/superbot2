@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
 import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
@@ -207,6 +208,7 @@ function SkillsPageSkillDetailModal({ skill, onClose }: { skill: SkillInfo; onCl
           {removing ? 'Removing...' : 'Uninstall'}
         </button>
       }
+      belowHeader={skill.pluginName ? <CredentialForm pluginName={skill.pluginName} /> : undefined}
     />
   )
 }
@@ -1240,7 +1242,7 @@ function BrowsePlugins() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Puzzle className="h-4 w-4 text-sand" />
-          <h2 className="font-heading text-lg text-parchment">Browse Skills / Plugins</h2>
+          <h2 className="font-heading text-lg text-parchment">Browse Plugins</h2>
           <span className="text-xs text-stone bg-surface px-2 py-0.5 rounded-full">{available.length}</span>
         </div>
         {installed.length > 0 && (
@@ -1357,9 +1359,29 @@ export function Skills() {
   return (
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="flex items-center gap-2 mb-8">
-          <Blocks className="h-5 w-5 text-sand" />
-          <h1 className="font-heading text-2xl text-parchment">Skills</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-2">
+            <Blocks className="h-5 w-5 text-sand" />
+            <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
+          </div>
+        </div>
+        {/* Build a Plugin callout */}
+        <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
+          <div className="flex items-start gap-3.5 min-w-0">
+            <div className="rounded-lg bg-sand/10 p-2 shrink-0">
+              <Wrench className="h-5 w-5 text-sand" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
+              <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
+            </div>
+          </div>
+          <Link
+            to="/skill-creator"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
+          >
+            Create Plugin <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
         <div className="flex gap-8">
           {/* Left sidebar — 1/3 */}

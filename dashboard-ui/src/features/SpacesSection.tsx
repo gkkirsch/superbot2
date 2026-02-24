@@ -78,9 +78,16 @@ export function SpacesSection() {
     return acc
   }, {})
 
+  const sorted = [...spaces].sort((a, b) => {
+    const aIncomplete = a.taskCounts.total - a.taskCounts.completed
+    const bIncomplete = b.taskCounts.total - b.taskCounts.completed
+    if (bIncomplete !== aIncomplete) return bIncomplete - aIncomplete
+    return b.taskCounts.total - a.taskCounts.total
+  })
+
   return (
     <div className="space-y-2">
-      {spaces.map((space) => (
+      {sorted.map((space) => (
         <SpaceCard key={space.slug} space={space} workers={workersBySpace[space.slug] || []} />
       ))}
     </div>

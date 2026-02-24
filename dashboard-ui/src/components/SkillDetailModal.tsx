@@ -43,9 +43,10 @@ export interface SkillDetailModalProps {
   fetchDetail: (id: string) => Promise<{ fullContent: string; files: string[]; fileTree?: { path: string; type: string }[] }>
   fetchFile: (id: string, filePath: string) => Promise<string>
   headerActions?: ReactNode
+  belowHeader?: ReactNode
 }
 
-export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, headerActions }: SkillDetailModalProps) {
+export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, headerActions, belowHeader }: SkillDetailModalProps) {
   const [detail, setDetail] = useState<{ fullContent: string; files: string[]; fileTree?: { path: string; type: string }[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedFile, setSelectedFile] = useState<string>('SKILL.md')
@@ -103,6 +104,13 @@ export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, heade
             </button>
           </div>
         </div>
+
+        {/* Optional content below header (e.g. credentials) */}
+        {belowHeader && (
+          <div className="px-6 py-3 border-b border-border-custom shrink-0">
+            {belowHeader}
+          </div>
+        )}
 
         {/* Body: two-column layout */}
         <div className="flex-1 flex min-h-0 overflow-hidden">
