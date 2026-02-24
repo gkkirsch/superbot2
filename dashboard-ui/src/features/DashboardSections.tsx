@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Users } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
 import { SectionHeader } from '@/components/SectionHeader'
 import { EscalationsSection } from '@/features/EscalationsSection'
 import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
@@ -10,7 +10,6 @@ import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
 import { KnowledgeSection } from '@/features/KnowledgeSection'
-import { WorkersSection } from '@/features/WorkersSection'
 import { ChatSection } from '@/features/ChatSection'
 import type { DashboardConfig } from '@/lib/types'
 
@@ -87,15 +86,6 @@ function SpacesDashboardSection() {
   )
 }
 
-function WorkersDashboardSection() {
-  return (
-    <section data-section="workers">
-      <SectionHeader title="Workers" icon={Users} />
-      <WorkersSection />
-    </section>
-  )
-}
-
 function ExtensionsDashboardSection() {
   return (
     <section data-section="extensions">
@@ -149,10 +139,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'extensions',
     Component: ExtensionsDashboardSection,
   },
-  'workers': {
-    id: 'workers',
-    Component: WorkersDashboardSection,
-  },
   'spaces': {
     id: 'spaces',
     Component: SpacesDashboardSection,
@@ -169,5 +155,5 @@ export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
-  hidden: ['spaces', 'workers'],
+  hidden: ['spaces'],
 }
