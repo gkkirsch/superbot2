@@ -24,7 +24,10 @@ function FileItem({ source, file }: { source: string; file: { name: string; path
         className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface/60 rounded transition-colors"
       >
         <FileText className="h-3 w-3 text-stone/40 shrink-0" />
-        <span className="text-xs text-parchment/80 truncate">{file.path.includes('/') ? file.path : file.name}</span>
+        <span className="text-xs truncate">
+          <span className="text-parchment/80">{file.name}</span>
+          {file.path.includes('/') && <span className="text-stone/40 ml-1">{file.path.substring(0, file.path.lastIndexOf('/'))}</span>}
+        </span>
       </button>
       {expanded && (
         <div className="mx-3 mb-2 mt-1 rounded-lg border border-border-custom bg-surface/30 p-3 max-h-80 overflow-y-auto">

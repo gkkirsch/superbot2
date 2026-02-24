@@ -671,7 +671,7 @@ export function Knowledge() {
                   /* List view */
                   <div>
                     {group.files.map(file => {
-                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/') + 1) : ''
+                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
                       return (
                         <div
                           key={file.path}
@@ -679,10 +679,10 @@ export function Knowledge() {
                           onClick={() => openFile(group.source, file.path)}
                         >
                           <FileIcon filename={file.name} />
-                          <span className="text-sm flex-1 truncate">
-                            {dirPrefix && <span className="text-stone/40">{dirPrefix}</span>}
-                            <span className="text-parchment/80">{file.name}</span>
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm text-parchment/80 truncate block">{file.name}</span>
+                            {dirPrefix && <span className="text-xs text-stone/40 truncate block">{dirPrefix}</span>}
+                          </div>
                           <span className="text-xs text-stone/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">{formatDate(file.lastModified)}</span>
                           <RowMenu
                             onEdit={() => openFile(group.source, file.path)}
@@ -695,17 +695,23 @@ export function Knowledge() {
                 ) : (
                   /* Grid view */
                   <div className="flex flex-wrap gap-3">
-                    {group.files.map(file => (
-                      <button
-                        key={file.path}
-                        onClick={() => openFile(group.source, file.path)}
-                        className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
-                        title={file.path}
-                      >
-                        <FileIcon filename={file.name} />
-                        <span className="text-xs text-parchment/70 truncate w-full">{file.path.includes('/') ? file.path : file.name}</span>
-                      </button>
-                    ))}
+                    {group.files.map(file => {
+                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
+                      return (
+                        <button
+                          key={file.path}
+                          onClick={() => openFile(group.source, file.path)}
+                          className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
+                          title={file.path}
+                        >
+                          <FileIcon filename={file.name} />
+                          <div className="w-full min-w-0">
+                            <span className="text-xs text-parchment/70 truncate block">{file.name}</span>
+                            {dirPrefix && <span className="text-[10px] text-stone/40 truncate block">{dirPrefix}</span>}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
