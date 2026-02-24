@@ -2973,13 +2973,18 @@ app.post('/api/skill-creator/chat', async (req, res) => {
     }
     await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
 
-    // SKILL.md — minimal frontmatter template
+    // SKILL.md — minimal frontmatter template with credentials example
     const skillMd = `---
 name: ${pluginSlug}
 description: >
   TODO: Describe when this skill should be triggered.
 version: 1.0.0
 user-invocable: true
+# credentials:
+#   - key: MY_API_KEY
+#     label: "My Service API Key"
+#     description: "Get your key at example.com"
+#     required: true
 ---
 
 # ${pluginSlug}

@@ -207,6 +207,7 @@ function SkillsPageSkillDetailModal({ skill, onClose }: { skill: SkillInfo; onCl
           {removing ? 'Removing...' : 'Uninstall'}
         </button>
       }
+      belowHeader={skill.pluginName ? <CredentialForm pluginName={skill.pluginName} /> : undefined}
     />
   )
 }
