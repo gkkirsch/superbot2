@@ -54,7 +54,8 @@ while true; do
       AND m.is_from_me = 0
       AND m.text IS NOT NULL
       AND m.text != ''
-      AND c.chat_identifier = '$APPLE_ID'
+      AND m.account LIKE '%$APPLE_ID%'
+      AND c.chat_identifier != '$APPLE_ID'
     ORDER BY m.rowid ASC
     LIMIT 50;
   " 2>/dev/null || echo "")
