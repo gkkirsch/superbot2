@@ -378,8 +378,11 @@ export async function deletePluginCredential(name: string, key: string): Promise
 
 // --- Session summaries ---
 
-export async function fetchSessions(limit = 20): Promise<SessionSummary[]> {
-  const data = await fetchJson<{ sessions: SessionSummary[] }>(`/sessions?limit=${limit}`)
+export async function fetchSessions(limit = 20, space?: string): Promise<SessionSummary[]> {
+  const qs = new URLSearchParams()
+  qs.set('limit', String(limit))
+  if (space) qs.set('space', space)
+  const data = await fetchJson<{ sessions: SessionSummary[] }>(`/sessions?${qs}`)
   return data.sessions
 }
 

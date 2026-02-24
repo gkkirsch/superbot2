@@ -23,6 +23,7 @@ export interface SpaceOverview {
   hasDevServer?: boolean
   hasDeploy?: boolean
   prodUrl?: string | null
+  devUrl?: string | null
 }
 
 export interface SpaceDetail {

@@ -2498,12 +2498,15 @@ app.post('/api/marketplaces/refresh', async (_req, res) => {
 app.get('/api/sessions', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '20', 10)
+    const spaceFilter = req.query.space || null
     const files = await safeReaddir(SESSIONS_DIR)
     const sessions = []
     for (const file of files) {
       if (!file.endsWith('.json')) continue
       const session = await readJsonFile(join(SESSIONS_DIR, file))
-      if (session) sessions.push(session)
+      if (!session) continue
+      if (spaceFilter && session.space !== spaceFilter) continue
+      sessions.push(session)
     }
     // Sort by timestamp descending (newest first)
     sessions.sort((a, b) => new Date(b.completedAt || b.timestamp || 0).getTime() - new Date(a.completedAt || a.timestamp || 0).getTime())

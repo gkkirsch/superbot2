@@ -178,8 +178,8 @@ export function usePluginCredentials(name: string) {
 
 // --- Sessions ---
 
-export function useSessions(limit = 20) {
-  return useQuery({ queryKey: ['sessions', limit], queryFn: () => fetchSessions(limit), staleTime: 15_000, refetchInterval: 30_000 })
+export function useSessions(limit = 20, space?: string) {
+  return useQuery({ queryKey: ['sessions', limit, space], queryFn: () => fetchSessions(limit, space), enabled: space !== undefined ? !!space : true, staleTime: 15_000, refetchInterval: 30_000 })
 }
 
 // --- Messages ---
