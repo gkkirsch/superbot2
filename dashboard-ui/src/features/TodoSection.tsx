@@ -79,17 +79,6 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
             }
           </button>
         )}
-        {!todo.completed && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onWorkOn() }}
-            disabled={workPending || workSent}
-            className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-sand/70 disabled:opacity-50 transition-all px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1"
-            title="Send to orchestrator"
-          >
-            <Play className="h-3 w-3" />
-            <span>{workSent ? 'Sent' : 'Work on this'}</span>
-          </button>
-        )}
         <button
           onClick={(e) => { e.stopPropagation(); onRemove() }}
           className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
@@ -136,6 +125,19 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
                     <span className="text-xs text-stone/60">{research.resolution}</span>
                   </div>
                 )}
+              </div>
+            )}
+            {!todo.completed && (
+              <div className="pt-2 border-t border-blue-400/10 flex justify-end">
+                <button
+                  onClick={onWorkOn}
+                  disabled={workPending || workSent}
+                  className="text-stone/50 hover:text-sand/80 disabled:opacity-50 transition-colors px-2 py-1 rounded text-[10px] flex items-center gap-1 hover:bg-sand/10"
+                  title="Send to orchestrator"
+                >
+                  <Play className="h-3 w-3" />
+                  <span>{workSent ? 'Sent' : 'Work on this'}</span>
+                </button>
               </div>
             )}
           </div>
