@@ -1574,6 +1574,61 @@ app.get('/api/skills', async (_req, res) => {
       } catch { /* no SKILL.md, skip */ }
     }
 
+    // Superbot2 system skills from ~/.superbot2/skills/
+    const superbot2SkillsDir = join(SUPERBOT_DIR, 'skills')
+    const sb2Entries = await safeReaddir(superbot2SkillsDir)
+    const seenIds = new Set(skills.map(s => s.id))
+    for (const entry of sb2Entries) {
+      if (seenIds.has(entry)) continue
+      const entryPath = join(superbot2SkillsDir, entry)
+      try {
+        const s = await stat(entryPath)
+        if (!s.isDirectory()) continue
+      } catch { continue }
+      const skillMd = join(entryPath, 'SKILL.md')
+      try {
+        const content = await readFile(skillMd, 'utf-8')
+        const fm = parseFrontmatter(content)
+        const files = await safeReaddir(entryPath)
+        skills.push({
+          id: entry,
+          name: fm.name || entry,
+          description: fm.description || '',
+          fileCount: files.length,
+          source: 'superbot2',
+        })
+        seenIds.add(entry)
+      } catch { /* no SKILL.md, skip */ }
+    }
+
+    // Global Claude Code skills from ~/.claude/skills/
+    const globalClaudeSkillsDir = join(homedir(), '.claude', 'skills')
+    if (globalClaudeSkillsDir !== skillsDir) {
+      const globalEntries = await safeReaddir(globalClaudeSkillsDir)
+      for (const entry of globalEntries) {
+        if (seenIds.has(entry)) continue
+        const entryPath = join(globalClaudeSkillsDir, entry)
+        try {
+          const s = await stat(entryPath)
+          if (!s.isDirectory()) continue
+        } catch { continue }
+        const skillMd = join(entryPath, 'SKILL.md')
+        try {
+          const content = await readFile(skillMd, 'utf-8')
+          const fm = parseFrontmatter(content)
+          const files = await safeReaddir(entryPath)
+          skills.push({
+            id: entry,
+            name: fm.name || entry,
+            description: fm.description || '',
+            fileCount: files.length,
+            source: 'user',
+          })
+          seenIds.add(entry)
+        } catch { /* no SKILL.md, skip */ }
+      }
+    }
+
     // Plugin-provided skills (with credential status)
     const pluginDirs = await getInstalledPluginDirs()
     // Pre-compute credential status per plugin
@@ -1883,10 +1938,24 @@ app.post('/api/hooks/:event/test', async (req, res) => {
 
 // --- Skill detail + files + delete ---
 
+// Resolve a skill ID to its directory across all known skill locations
+function resolveSkillDir(id) {
+  const candidates = [
+    join(CLAUDE_DIR, 'skills', id),
+    join(SUPERBOT_DIR, 'skills', id),
+    join(homedir(), '.claude', 'skills', id),
+  ]
+  for (const dir of candidates) {
+    if (existsSync(join(dir, 'SKILL.md'))) return dir
+  }
+  return null
+}
+
 app.get('/api/skills/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const skillDir = join(CLAUDE_DIR, 'skills', id)
+    const skillDir = resolveSkillDir(id)
+    if (!skillDir) return res.status(404).json({ error: 'Skill not found' })
     const skillMd = join(skillDir, 'SKILL.md')
     const content = await readFile(skillMd, 'utf-8')
     const fm = parseFrontmatter(content)
@@ -1907,7 +1976,9 @@ app.get('/api/skills/:id/files/{*filePath}', async (req, res) => {
   try {
     const { id } = req.params
     const filePath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
-    const fullPath = join(CLAUDE_DIR, 'skills', id, filePath)
+    const skillDir = resolveSkillDir(id)
+    if (!skillDir) return res.status(404).json({ error: 'Skill not found' })
+    const fullPath = join(skillDir, filePath)
     const content = await readFile(fullPath, 'utf-8')
     res.json({ content })
   } catch (err) {
@@ -1918,6 +1989,7 @@ app.get('/api/skills/:id/files/{*filePath}', async (req, res) => {
 app.delete('/api/skills/:id', async (req, res) => {
   try {
     const { id } = req.params
+    // Only allow deleting from the user's own skill directory
     const skillDir = join(CLAUDE_DIR, 'skills', id)
     await rm(skillDir, { recursive: true, force: true })
     res.json({ ok: true })

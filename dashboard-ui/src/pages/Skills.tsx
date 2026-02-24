@@ -1002,9 +1002,13 @@ function InstalledSidebar() {
                 className="w-full text-left rounded-md border-l-2 border-l-moss border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-parchment truncate">{s.name}</p>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-xs font-medium text-parchment truncate">{s.name}</p>
+                    {s.source === 'superbot2' && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/70 border border-amber-500/15 shrink-0">sb2</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-moss/70">Installed</span>
                     <ChevronRight className="h-3 w-3 text-stone/40" />
                   </div>
                 </div>
