@@ -61,6 +61,41 @@ function formatCost(cost: number): string {
   return `$${cost.toFixed(2)}`
 }
 
+function parseFrontmatter(content: string): Record<string, unknown> | null {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!match) return null
+  const lines = match[1].split('\n')
+  const result: Record<string, unknown> = {}
+  let currentKey = ''
+  let currentList: string[] | null = null
+  for (const line of lines) {
+    const kvMatch = line.match(/^(\w[\w.-]*)\s*:\s*(.*)$/)
+    if (kvMatch) {
+      if (currentKey && currentList) {
+        result[currentKey] = currentList
+        currentList = null
+      }
+      const [, key, value] = kvMatch
+      if (value.trim() === '') {
+        currentKey = key
+        currentList = []
+      } else {
+        result[key] = value.trim()
+        currentKey = key
+      }
+    } else if (currentList !== null) {
+      const itemMatch = line.match(/^\s+-\s+(.*)$/)
+      if (itemMatch) {
+        currentList.push(itemMatch[1].trim())
+      }
+    }
+  }
+  if (currentKey && currentList) {
+    result[currentKey] = currentList
+  }
+  return Object.keys(result).length > 0 ? result : null
+}
+
 // --- Tool Activity ---
 
 function toolDisplayName(name: string): string {
@@ -221,7 +256,12 @@ interface DraftSkill {
   status: string
 }
 
-function MySkillsSidebar({ onNewSkill, refreshKey }: { onNewSkill: () => void; refreshKey: number }) {
+function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft }: {
+  onNewSkill: () => void
+  refreshKey: number
+  selectedDraft: string | null
+  onSelectDraft: (name: string) => void
+}) {
   const [skills, setSkills] = useState<InstalledSkill[]>([])
   const [drafts, setDrafts] = useState<DraftSkill[]>([])
   const [loading, setLoading] = useState(true)
@@ -275,15 +315,26 @@ function MySkillsSidebar({ onNewSkill, refreshKey }: { onNewSkill: () => void; r
               <div className="mb-3">
                 <p className="text-[10px] font-medium text-stone/40 uppercase tracking-wider px-3 mb-1">Drafts</p>
                 <div className="space-y-0.5">
-                  {drafts.map(draft => (
-                    <div key={draft.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm text-parchment truncate">{draft.name}</p>
-                        <span className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">draft</span>
-                      </div>
-                      <p className="text-xs text-stone/60 mt-0.5">{draft.status === 'complete' ? 'Ready to promote' : draft.status}</p>
-                    </div>
-                  ))}
+                  {drafts.map(draft => {
+                    const isSelected = selectedDraft === draft.name
+                    return (
+                      <button
+                        key={draft.name}
+                        onClick={() => onSelectDraft(draft.name)}
+                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-500/15 border border-blue-500/30'
+                            : 'hover:bg-surface/40 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{draft.name}</p>
+                          <span className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">draft</span>
+                        </div>
+                        <p className="text-xs text-stone/60 mt-0.5">{draft.status === 'complete' ? 'Ready to promote' : draft.status}</p>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -337,9 +388,18 @@ export function SkillCreator() {
   const [draftFiles, setDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [isPromoting, setIsPromoting] = useState(false)
   const [promoteStatus, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [selectedDraft, setSelectedDraft] = useState<string | null>(null)
+  const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [fileContent, setFileContent] = useState<string | null>(null)
+  const [fileLoading, setFileLoading] = useState(false)
+  const [frontmatter, setFrontmatter] = useState<Record<string, unknown> | null>(null)
+  const [isDraftDragging, setIsDraftDragging] = useState(false)
+  const [draftUploading, setDraftUploading] = useState(false)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const draftFileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const dragCounterRef = useRef(0)
@@ -534,14 +594,15 @@ export function SkillCreator() {
 
   // Promote draft
   const handlePromote = useCallback(async () => {
-    if (!draftName || isPromoting) return
+    const promoteName = selectedDraft || draftName
+    if (!promoteName || isPromoting) return
     setIsPromoting(true)
     setPromoteStatus('idle')
     try {
       const res = await fetch('/api/skill-creator/promote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftName }),
+        body: JSON.stringify({ draftName: promoteName }),
       })
       const data = await res.json()
       if (data.ok) {
@@ -556,7 +617,7 @@ export function SkillCreator() {
       setError('Failed to promote draft')
     }
     setIsPromoting(false)
-  }, [draftName, isPromoting])
+  }, [selectedDraft, draftName, isPromoting])
 
   // Send message
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -663,6 +724,113 @@ export function SkillCreator() {
     setSessionId(crypto.randomUUID())
   }, [sessionId])
 
+  // When chat creates a draft, auto-select it
+  useEffect(() => {
+    if (draftName && !selectedDraft) {
+      setSelectedDraft(draftName)
+    }
+  }, [draftName, selectedDraft])
+
+  // Select a draft from sidebar
+  const handleSelectDraft = useCallback((name: string) => {
+    setSelectedDraft(prev => prev === name ? null : name)
+    setSelectedFile(null)
+    setFileContent(null)
+    setFrontmatter(null)
+  }, [])
+
+  // Fetch files for the selected draft
+  useEffect(() => {
+    const activeDraft = selectedDraft
+    if (!activeDraft) {
+      setSelectedDraftFiles([])
+      setFrontmatter(null)
+      return
+    }
+    let cancelled = false
+    async function fetchFiles() {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${activeDraft}/files`)
+        const data = await res.json()
+        if (!cancelled && data.ok) {
+          setSelectedDraftFiles(data.files)
+          // Auto-fetch SKILL.md frontmatter if it exists
+          const hasSkillMd = data.files.some((f: { path: string }) => f.path === 'SKILL.md')
+          if (hasSkillMd) {
+            try {
+              const skillRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/SKILL.md`)
+              const skillData = await skillRes.json()
+              if (!cancelled && skillData.ok) {
+                const fm = parseFrontmatter(skillData.content)
+                setFrontmatter(fm)
+              }
+            } catch {}
+          } else {
+            if (!cancelled) setFrontmatter(null)
+          }
+        }
+      } catch {}
+    }
+    fetchFiles()
+    const interval = setInterval(fetchFiles, 5000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [selectedDraft])
+
+  // Fetch file content when a file is clicked
+  const handleFileClick = useCallback(async (filePath: string) => {
+    if (!selectedDraft) return
+    if (selectedFile === filePath) {
+      setSelectedFile(null)
+      setFileContent(null)
+      return
+    }
+    setSelectedFile(filePath)
+    setFileContent(null)
+    setFileLoading(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${filePath}`)
+      const data = await res.json()
+      if (data.ok) setFileContent(data.content)
+      else setFileContent(`Error: ${data.error}`)
+    } catch {
+      setFileContent('Failed to load file')
+    }
+    setFileLoading(false)
+  }, [selectedDraft, selectedFile])
+
+  // Upload files to the selected draft
+  const handleDraftUpload = useCallback(async (files: File[]) => {
+    if (!selectedDraft || files.length === 0) return
+    setDraftUploading(true)
+    try {
+      const fileData = await Promise.all(
+        files.map(async (file) => ({
+          name: file.name,
+          data: await fileToBase64(file),
+        }))
+      )
+      await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: fileData }),
+      })
+    } catch {}
+    setDraftUploading(false)
+  }, [selectedDraft])
+
+  const handleDraftDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDraftDragging(false)
+    handleDraftUpload(Array.from(e.dataTransfer.files))
+  }, [handleDraftUpload])
+
+  const handleDraftFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      handleDraftUpload(Array.from(e.target.files))
+      e.target.value = ''
+    }
+  }, [handleDraftUpload])
+
   // Memoize empty state check
   const isEmpty = messages.length === 0 && !streamingText
 
@@ -694,7 +862,7 @@ export function SkillCreator() {
       {/* 3-column layout */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
-        <MySkillsSidebar onNewSkill={handleNewSession} refreshKey={skillsRefreshKey} />
+        <MySkillsSidebar onNewSkill={handleNewSession} refreshKey={skillsRefreshKey} selectedDraft={selectedDraft} onSelectDraft={handleSelectDraft} />
 
         {/* Center column — Chat */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -785,101 +953,206 @@ export function SkillCreator() {
           </form>
         </div>
 
-        {/* Right column — File drop + Draft files */}
-        <div
-          className="w-72 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col"
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Drop zone */}
-          <div className={`m-4 mb-2 p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center transition-colors ${
-            isDragging ? 'border-sand/50 bg-sand/5' : 'border-border-custom'
-          }`}>
-            <Upload className="h-5 w-5 text-stone/40 mb-1.5" />
-            <p className="text-xs text-stone/50 text-center">
-              {isDragging ? 'Drop files here' : 'Drop files to attach'}
-            </p>
-          </div>
-
-          {/* Attached files thumbnails */}
-          {attachedFiles.length > 0 && (
-            <div className="mx-4 mb-2 flex flex-wrap gap-1.5">
-              {attachedFiles.map((f, i) => (
-                <div key={i} className="relative group">
-                  {f.preview ? (
-                    <button onClick={() => setLightboxSrc(f.preview)}>
-                      <img src={f.preview} alt={f.file.name} className="h-10 w-10 object-cover rounded border border-border-custom" />
-                    </button>
-                  ) : (
-                    <div className="h-10 w-10 flex items-center justify-center rounded border border-border-custom bg-ink/40">
-                      <FileText className="h-4 w-4 text-stone/60" />
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeFile(i)}
-                    className="absolute -top-1 -right-1 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-2.5 w-2.5 text-stone/70" />
-                  </button>
-                </div>
-              ))}
+        {/* Right column — Draft browser + Chat attachments */}
+        <div className="w-80 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col">
+          {/* Chat attachment drop zone */}
+          <div
+            className="shrink-0"
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className={`m-3 mb-1 p-2.5 border-2 border-dashed rounded-lg flex items-center justify-center gap-2 transition-colors ${
+              isDragging ? 'border-sand/50 bg-sand/5' : 'border-border-custom'
+            }`}>
+              <Upload className="h-3.5 w-3.5 text-stone/40" />
+              <p className="text-[11px] text-stone/50">
+                {isDragging ? 'Drop to attach to chat' : 'Drop files to attach to chat'}
+              </p>
             </div>
-          )}
-
-          {/* Draft file tree */}
-          <div className="flex-1 overflow-y-auto px-4">
-            <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider mb-2">
-              {draftName ? `Draft: ${draftName}` : 'Draft Files'}
-            </h2>
-            {!draftName ? (
-              <div className="flex items-center justify-center py-6 text-center">
-                <p className="text-xs text-stone/40">Files will appear here as the agent creates them</p>
-              </div>
-            ) : draftFiles.length === 0 ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
-              </div>
-            ) : (
-              <div className="space-y-0.5">
-                {draftFiles.map(f => {
-                  const depth = f.path.split('/').length - 1
-                  const name = f.path.split('/').pop() || f.path
-                  return (
-                    <div key={f.path} className="flex items-center gap-1.5 py-0.5" style={{ paddingLeft: `${depth * 12}px` }}>
-                      {f.type === 'directory' ? (
-                        <FolderOpen className="h-3.5 w-3.5 text-sand/50 shrink-0" />
-                      ) : (
-                        <FileText className="h-3.5 w-3.5 text-stone/50 shrink-0" />
-                      )}
-                      <span className="text-xs text-parchment/70 truncate">{name}</span>
-                    </div>
-                  )
-                })}
+            {attachedFiles.length > 0 && (
+              <div className="mx-3 mb-1 flex flex-wrap gap-1.5">
+                {attachedFiles.map((f, i) => (
+                  <div key={i} className="relative group">
+                    {f.preview ? (
+                      <button onClick={() => setLightboxSrc(f.preview)}>
+                        <img src={f.preview} alt={f.file.name} className="h-8 w-8 object-cover rounded border border-border-custom" />
+                      </button>
+                    ) : (
+                      <div className="h-8 w-8 flex items-center justify-center rounded border border-border-custom bg-ink/40">
+                        <FileText className="h-3 w-3 text-stone/60" />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeFile(i)}
+                      className="absolute -top-1 -right-1 bg-ink border border-border-custom rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-2 w-2 text-stone/70" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Promote button */}
-          <div className="px-4 pb-4 pt-2">
-            <button
-              onClick={handlePromote}
-              disabled={!draftName || draftFiles.length === 0 || isPromoting || promoteStatus === 'success'}
-              className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                promoteStatus === 'success'
-                  ? 'bg-moss/20 text-moss border border-moss/30'
-                  : 'bg-surface/60 text-parchment hover:bg-surface/80 border border-border-custom disabled:opacity-30 disabled:cursor-not-allowed'
-              }`}
-            >
-              {isPromoting ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Promoting...</>
-              ) : promoteStatus === 'success' ? (
-                <><Check className="h-3.5 w-3.5" /> Promoted!</>
-              ) : (
-                'Promote to Installed'
-              )}
-            </button>
+          <div className="border-t border-border-custom mx-3" />
+
+          {/* Draft browser section */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="px-3 pt-3 pb-1.5">
+              <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">
+                {selectedDraft ? selectedDraft : 'Draft Files'}
+              </h2>
+            </div>
+
+            {!selectedDraft ? (
+              <div className="flex-1 flex items-center justify-center px-4">
+                <p className="text-xs text-stone/40 text-center">Select a draft from the sidebar to browse its files</p>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Frontmatter card */}
+                {frontmatter && (
+                  <div className="mx-3 mb-2 p-2.5 rounded-lg bg-surface/30 border border-border-custom">
+                    {frontmatter.name && (
+                      <p className="text-sm font-medium text-parchment mb-1">{String(frontmatter.name)}</p>
+                    )}
+                    {frontmatter.description && (
+                      <p className="text-xs text-stone/60 mb-1.5">{String(frontmatter.description)}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {frontmatter.model && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-mono">{String(frontmatter.model)}</span>
+                      )}
+                      {Array.isArray(frontmatter.tools) && frontmatter.tools.map((t: string) => (
+                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 font-mono">{t}</span>
+                      ))}
+                    </div>
+                    {Object.entries(frontmatter).filter(([k]) => !['name', 'description', 'model', 'tools'].includes(k)).map(([key, val]) => (
+                      <div key={key} className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-[10px] text-stone/50 font-mono shrink-0">{key}:</span>
+                        <span className="text-[10px] text-parchment/70 font-mono truncate">
+                          {Array.isArray(val) ? val.join(', ') : String(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* File list */}
+                <div className="flex-1 overflow-y-auto px-3 min-h-0">
+                  {selectedDraftFiles.length === 0 ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {selectedDraftFiles.map(f => {
+                        const depth = f.path.split('/').length - 1
+                        const name = f.path.split('/').pop() || f.path
+                        const isDir = f.type === 'directory'
+                        const isSelected = selectedFile === f.path
+                        const icon = isDir ? '📁' : name.endsWith('.json') ? '📦' : name.endsWith('.md') ? '📄' : '📃'
+                        return (
+                          <button
+                            key={f.path}
+                            onClick={() => !isDir && handleFileClick(f.path)}
+                            disabled={isDir}
+                            className={`w-full text-left flex items-center gap-1.5 py-1 px-1.5 rounded transition-colors ${
+                              isSelected
+                                ? 'bg-blue-500/15 text-blue-300'
+                                : isDir
+                                  ? 'text-stone/50 cursor-default'
+                                  : 'text-parchment/70 hover:bg-surface/40 cursor-pointer'
+                            }`}
+                            style={{ paddingLeft: `${depth * 12 + 6}px` }}
+                          >
+                            <span className="text-xs shrink-0">{icon}</span>
+                            <span className="text-xs truncate">{name}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* File content viewer */}
+                {selectedFile && (
+                  <div className="border-t border-border-custom mx-3 mt-1" />
+                )}
+                {selectedFile && (
+                  <div className="shrink-0 max-h-[40%] overflow-y-auto px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-stone/50 font-mono truncate">{selectedFile}</span>
+                      <button onClick={() => { setSelectedFile(null); setFileContent(null) }} className="text-stone/40 hover:text-stone/60">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    {fileLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-3.5 w-3.5 text-stone/40 animate-spin" />
+                      </div>
+                    ) : (
+                      <pre className="text-[11px] text-parchment/70 font-mono whitespace-pre-wrap break-words bg-ink/60 rounded p-2 max-h-60 overflow-y-auto">
+                        {fileContent}
+                      </pre>
+                    )}
+                  </div>
+                )}
+
+                {/* Upload zone for draft */}
+                <div className="shrink-0 px-3 pb-2 pt-1">
+                  <input
+                    ref={draftFileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleDraftFileSelect}
+                    className="hidden"
+                  />
+                  <div
+                    onDragEnter={(e) => { e.preventDefault(); setIsDraftDragging(true) }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDragLeave={(e) => { e.preventDefault(); setIsDraftDragging(false) }}
+                    onDrop={handleDraftDrop}
+                    onClick={() => draftFileInputRef.current?.click()}
+                    className={`p-2 border-2 border-dashed rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                      isDraftDragging ? 'border-blue-500/50 bg-blue-500/5' : 'border-border-custom hover:border-stone/30'
+                    }`}
+                  >
+                    {draftUploading ? (
+                      <Loader2 className="h-3 w-3 text-stone/40 animate-spin" />
+                    ) : (
+                      <Upload className="h-3 w-3 text-stone/40" />
+                    )}
+                    <span className="text-[11px] text-stone/50">
+                      {draftUploading ? 'Uploading...' : 'Drop files here or click to upload'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Promote button */}
+            <div className="px-3 pb-3 pt-1 shrink-0">
+              <button
+                onClick={handlePromote}
+                disabled={!selectedDraft || selectedDraftFiles.length === 0 || isPromoting || promoteStatus === 'success'}
+                className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                  promoteStatus === 'success'
+                    ? 'bg-moss/20 text-moss border border-moss/30'
+                    : 'bg-surface/60 text-parchment hover:bg-surface/80 border border-border-custom disabled:opacity-30 disabled:cursor-not-allowed'
+                }`}
+              >
+                {isPromoting ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Promoting...</>
+                ) : promoteStatus === 'success' ? (
+                  <><Check className="h-3.5 w-3.5" /> Promoted!</>
+                ) : (
+                  'Promote to Installed'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

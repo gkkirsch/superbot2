@@ -3090,6 +3090,52 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
   }
 })
 
+// Read a specific file from a draft
+app.get('/api/skill-creator/drafts/:name/file/*', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const filePath = resolve(draftPath, req.params[0])
+    if (!filePath.startsWith(draftPath + '/')) {
+      return res.status(400).json({ error: 'Invalid file path' })
+    }
+    const content = await readFile(filePath, 'utf-8')
+    res.json({ ok: true, content })
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Upload a file to a draft
+app.post('/api/skill-creator/drafts/:name/files', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const { files } = req.body
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'files array required' })
+    }
+    await mkdir(draftPath, { recursive: true })
+    const savedPaths = []
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const dest = resolve(draftPath, safeName)
+      if (!dest.startsWith(draftPath + '/')) continue
+      const buffer = Buffer.from(file.data, 'base64')
+      await writeFile(dest, buffer)
+      savedPaths.push(safeName)
+    }
+    res.json({ ok: true, files: savedPaths })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Delete a draft
 app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
   try {
