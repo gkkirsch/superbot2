@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
+import yaml from 'js-yaml'
 
 // --- Types ---
 
@@ -65,36 +66,15 @@ function formatCost(cost: number): string {
 function parseFrontmatter(content: string): Record<string, unknown> | null {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!match) return null
-  const lines = match[1].split('\n')
-  const result: Record<string, unknown> = {}
-  let currentKey = ''
-  let currentList: string[] | null = null
-  for (const line of lines) {
-    const kvMatch = line.match(/^(\w[\w.-]*)\s*:\s*(.*)$/)
-    if (kvMatch) {
-      if (currentKey && currentList) {
-        result[currentKey] = currentList
-        currentList = null
-      }
-      const [, key, value] = kvMatch
-      if (value.trim() === '') {
-        currentKey = key
-        currentList = []
-      } else {
-        result[key] = value.trim()
-        currentKey = key
-      }
-    } else if (currentList !== null) {
-      const itemMatch = line.match(/^\s+-\s+(.*)$/)
-      if (itemMatch) {
-        currentList.push(itemMatch[1].trim())
-      }
+  try {
+    const parsed = yaml.load(match[1])
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
     }
+    return null
+  } catch {
+    return null
   }
-  if (currentKey && currentList) {
-    result[currentKey] = currentList
-  }
-  return Object.keys(result).length > 0 ? result : null
 }
 
 // --- Tool Activity ---
@@ -1247,14 +1227,14 @@ export function SkillCreator() {
                   </div>
                 )}
 
-                {/* Frontmatter card */}
-                {frontmatter && (
+                {/* Frontmatter card (skill type only) */}
+                {selectedDraftType !== 'plugin' && frontmatter && (
                   <div className="mx-3 mb-2 p-2.5 rounded-lg bg-surface/30 border border-border-custom">
                     {!!frontmatter.name && (
                       <p className="text-sm font-medium text-parchment mb-1">{String(frontmatter.name)}</p>
                     )}
                     {!!frontmatter.description && (
-                      <p className="text-xs text-stone/60 mb-1.5">{String(frontmatter.description)}</p>
+                      <p className="text-xs text-stone/60 mb-1.5 line-clamp-3">{String(frontmatter.description).trim()}</p>
                     )}
                     <div className="flex flex-wrap gap-1">
                       {!!frontmatter.model && (
