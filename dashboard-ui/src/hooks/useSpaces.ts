@@ -128,7 +128,7 @@ export function useHeartbeatActivity() {
 // --- Activity ---
 
 export function useActivity(hours = 24) {
-  return useQuery({ queryKey: ['activity', hours], queryFn: () => fetchActivity(hours), staleTime: 60_000, refetchInterval: 120_000 })
+  return useQuery({ queryKey: ['activity', hours], queryFn: () => fetchActivity(hours), staleTime: 20_000, refetchInterval: 30_000 })
 }
 
 // --- Schedule ---

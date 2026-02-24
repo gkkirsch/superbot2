@@ -1148,14 +1148,18 @@ app.put('/api/dashboard-config', async (req, res) => {
 
 // --- Activity (parsed from JSONL transcripts) ---
 
-let activityCache = { data: null, fetchedAt: 0 }
+let activityCache = { data: null, fetchedAt: 0, hourBoundary: 0 }
 
 app.get('/api/activity', async (req, res) => {
   try {
     const hours = parseInt(req.query.hours || '24', 10)
     const now = Date.now()
-    // Cache for 60 seconds to avoid hammering the filesystem
-    if (activityCache.data && (now - activityCache.fetchedAt) < 60_000 && hours === 24) {
+    const currentHourBoundary = now - (now % (60 * 60 * 1000))
+    // Cache for 60 seconds, but also bust when the hour rolls over
+    const cacheIsStale = !activityCache.data ||
+      (now - activityCache.fetchedAt) >= 60_000 ||
+      activityCache.hourBoundary !== currentHourBoundary
+    if (!cacheIsStale && hours === 24) {
       return res.json({ activity: activityCache.data })
     }
 
@@ -1170,7 +1174,7 @@ app.get('/api/activity', async (req, res) => {
 
     const activity = JSON.parse(result)
     if (hours === 24) {
-      activityCache = { data: activity, fetchedAt: now }
+      activityCache = { data: activity, fetchedAt: now, hourBoundary: currentHourBoundary }
     }
     res.json({ activity })
   } catch (err) {
