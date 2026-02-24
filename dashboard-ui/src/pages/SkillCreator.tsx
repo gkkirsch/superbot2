@@ -385,7 +385,7 @@ export function SkillCreator() {
   const [error, setError] = useState<string | null>(null)
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
   const [draftName, setDraftName] = useState<string | null>(null)
-  const [draftFiles, setDraftFiles] = useState<{ path: string; type: string }[]>([])
+  const [, setDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [isPromoting, setIsPromoting] = useState(false)
   const [promoteStatus, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [selectedDraft, setSelectedDraft] = useState<string | null>(null)
@@ -1021,14 +1021,14 @@ export function SkillCreator() {
                 {/* Frontmatter card */}
                 {frontmatter && (
                   <div className="mx-3 mb-2 p-2.5 rounded-lg bg-surface/30 border border-border-custom">
-                    {frontmatter.name && (
+                    {!!frontmatter.name && (
                       <p className="text-sm font-medium text-parchment mb-1">{String(frontmatter.name)}</p>
                     )}
-                    {frontmatter.description && (
+                    {!!frontmatter.description && (
                       <p className="text-xs text-stone/60 mb-1.5">{String(frontmatter.description)}</p>
                     )}
                     <div className="flex flex-wrap gap-1">
-                      {frontmatter.model && (
+                      {!!frontmatter.model && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-mono">{String(frontmatter.model)}</span>
                       )}
                       {Array.isArray(frontmatter.tools) && frontmatter.tools.map((t: string) => (
