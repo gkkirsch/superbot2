@@ -192,27 +192,6 @@ export function ActivitySection() {
         <span className="text-xs text-stone">imessage</span>
       </div>
 
-      {/* Active workers — always visible */}
-      {workers && workers.length > 0 && (
-        <div className="space-y-1 mt-2">
-          {workers.map((w) => (
-            <Link
-              key={w.agentId || w.name}
-              to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
-              className="flex items-center gap-2 text-xs hover:text-sand transition-colors group"
-            >
-              <span className="relative flex h-1.5 w-1.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              </span>
-              <span className="text-parchment/80 truncate group-hover:text-sand">{w.name}</span>
-              <span className="text-stone/50 truncate">{w.space}{w.project ? ' / ' + w.project : ''}</span>
-              <span className="ml-auto text-stone/40 tabular-nums shrink-0">{w.runtimeDisplay || '0s'}</span>
-            </Link>
-          ))}
-        </div>
-      )}
-
       {expanded && (
         <>
           {/* Activity graph */}
@@ -224,6 +203,25 @@ export function ActivitySection() {
             <span>peak {peakSessions} sessions</span>
             <span>last 24h</span>
           </div>
+
+          {/* Active workers — horizontal wrapping chips */}
+          {workers && workers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {workers.map((w) => (
+                <Link
+                  key={w.agentId || w.name}
+                  to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-stone/10 px-2 py-0.5 text-[10px] text-stone/70 hover:text-sand hover:bg-stone/20 transition-colors"
+                >
+                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  </span>
+                  <span className="max-w-[120px] truncate">{w.name}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
