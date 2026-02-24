@@ -3101,6 +3101,12 @@ app.get('/api/skill-creator/drafts/:name/file/*', async (req, res) => {
     if (!filePath.startsWith(draftPath + '/')) {
       return res.status(400).json({ error: 'Invalid file path' })
     }
+    const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.zip', '.tar', '.gz'])
+    const ext = extname(filePath).toLowerCase()
+    if (BINARY_EXTS.has(ext)) {
+      const { size } = await stat(filePath)
+      return res.json({ ok: true, binary: true, size })
+    }
     const content = await readFile(filePath, 'utf-8')
     res.json({ ok: true, content })
   } catch (err) {
@@ -3121,12 +3127,16 @@ app.post('/api/skill-creator/drafts/:name/files', async (req, res) => {
       return res.status(400).json({ error: 'files array required' })
     }
     await mkdir(draftPath, { recursive: true })
+    const MAX_FILE_SIZE = 10 * 1024 * 1024
     const savedPaths = []
     for (const file of files) {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const dest = resolve(draftPath, safeName)
       if (!dest.startsWith(draftPath + '/')) continue
       const buffer = Buffer.from(file.data, 'base64')
+      if (buffer.length > MAX_FILE_SIZE) {
+        return res.status(400).json({ error: `File ${file.name} exceeds 10MB limit` })
+      }
       await writeFile(dest, buffer)
       savedPaths.push(safeName)
     }

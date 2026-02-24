@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Types ---
@@ -737,6 +737,7 @@ export function SkillCreator() {
     setSelectedFile(null)
     setFileContent(null)
     setFrontmatter(null)
+    setPromoteStatus('idle')
   }, [])
 
   // Fetch files for the selected draft
@@ -790,7 +791,8 @@ export function SkillCreator() {
     try {
       const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${filePath}`)
       const data = await res.json()
-      if (data.ok) setFileContent(data.content)
+      if (data.ok && data.binary) setFileContent(`[Binary file — ${(data.size / 1024).toFixed(1)} KB]`)
+      else if (data.ok) setFileContent(data.content)
       else setFileContent(`Error: ${data.error}`)
     } catch {
       setFileContent('Failed to load file')
@@ -809,12 +811,16 @@ export function SkillCreator() {
           data: await fileToBase64(file),
         }))
       )
-      await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`, {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: fileData }),
       })
-    } catch {}
+      const result = await res.json()
+      if (!result.ok) setError(result.error || 'Upload failed')
+    } catch {
+      setError('Failed to upload files to draft')
+    }
     setDraftUploading(false)
   }, [selectedDraft])
 
@@ -1053,7 +1059,7 @@ export function SkillCreator() {
                         const name = f.path.split('/').pop() || f.path
                         const isDir = f.type === 'directory'
                         const isSelected = selectedFile === f.path
-                        const icon = isDir ? '📁' : name.endsWith('.json') ? '📦' : name.endsWith('.md') ? '📄' : '📃'
+                        const IconComponent = isDir ? FolderOpen : name.endsWith('.json') ? Package : name.endsWith('.md') ? FileText : File
                         return (
                           <button
                             key={f.path}
@@ -1068,7 +1074,7 @@ export function SkillCreator() {
                             }`}
                             style={{ paddingLeft: `${depth * 12 + 6}px` }}
                           >
-                            <span className="text-xs shrink-0">{icon}</span>
+                            <IconComponent className={`h-3.5 w-3.5 shrink-0 ${isDir ? 'text-sand/50' : isSelected ? 'text-blue-300' : 'text-stone/50'}`} />
                             <span className="text-xs truncate">{name}</span>
                           </button>
                         )
@@ -1106,6 +1112,7 @@ export function SkillCreator() {
                   <input
                     ref={draftFileInputRef}
                     type="file"
+                    accept={ACCEPTED_EXTENSIONS}
                     multiple
                     onChange={handleDraftFileSelect}
                     className="hidden"
