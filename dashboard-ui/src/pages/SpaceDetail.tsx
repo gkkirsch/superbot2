@@ -310,21 +310,21 @@ export function SpaceDetail() {
               <section>
                 <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
                 <div className="divide-y divide-border-custom">
-                  {sessions.map((s) => (
-                    <div key={s.id} className="flex items-start gap-3 py-2">
-                      <span className="text-xs text-parchment font-medium whitespace-nowrap mt-0.5">
-                        {relativeTime(s.completedAt)}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs text-parchment/70 leading-relaxed line-clamp-2">
-                          {s.summary.length > 100 ? s.summary.slice(0, 100) + '...' : s.summary}
+                  {sessions.map((s, i) => (
+                    <div key={s.id} className="py-2.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs text-parchment font-medium whitespace-nowrap">
+                          {relativeTime(s.completedAt)}
                         </span>
-                        <div className="text-xs text-stone/40 mt-0.5">
+                        <div className="text-xs text-stone/40 truncate">
                           {s.project && <span>{s.project}</span>}
-                          {s.project && s.worker && <span> / </span>}
+                          {s.project && s.worker && <span> · </span>}
                           {s.worker && <span>{s.worker}</span>}
                         </div>
                       </div>
+                      <p className={`text-xs text-parchment/70 leading-relaxed ${i === 0 ? '' : 'line-clamp-2'}`}>
+                        {s.summary}
+                      </p>
                     </div>
                   ))}
                 </div>
