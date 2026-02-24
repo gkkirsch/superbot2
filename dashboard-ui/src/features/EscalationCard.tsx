@@ -119,6 +119,33 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
           {escalation.context && (
             <MarkdownContent content={escalation.context} className="text-stone/80 ml-7" />
           )}
+          {escalation.suggestedAutoRule && (
+            <div className="ml-7 rounded-md border border-sand/15 bg-sand/[0.04] px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-sand/70 uppercase tracking-wide">
+                <Zap className="h-3 w-3" />
+                Suggested auto-rule
+              </div>
+              <p className="text-xs text-parchment/80 leading-relaxed">{escalation.suggestedAutoRule}</p>
+              {!ruleAdded ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); autoRuleMutation.mutate() }}
+                  disabled={autoRuleMutation.isPending}
+                  className="text-xs text-sand/70 hover:text-sand transition-colors flex items-center gap-1 mt-1 disabled:opacity-40"
+                >
+                  <Zap className="h-3 w-3" />
+                  Add to auto-rules
+                </button>
+              ) : (
+                <div className="flex items-center gap-1 text-xs text-moss/70 mt-1">
+                  <Zap className="h-3 w-3" />
+                  <span>Rule added</span>
+                </div>
+              )}
+              {ruleError && (
+                <span className="text-xs text-ember">{ruleError}</span>
+              )}
+            </div>
+          )}
           {escalation.status === 'needs_human' && (
             <div className="ml-7 space-y-2">
               {(escalation.suggestedAnswers ?? []).map((answer) => (
@@ -198,32 +225,11 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
       )}
 
       {escalation.status === 'resolved' && (
-        <div className="px-4 pb-3 ml-7 space-y-2">
+        <div className="px-4 pb-3 ml-7">
           <div className="flex items-center gap-1.5 text-xs text-moss">
             <CheckCircle2 className="h-3 w-3" />
             <span>Resolved: {escalation.resolution}</span>
           </div>
-          {escalation.suggestedAutoRule && !ruleAdded && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => autoRuleMutation.mutate()}
-                disabled={autoRuleMutation.isPending}
-                className="text-xs text-sand/70 hover:text-sand transition-colors flex items-center gap-1 disabled:opacity-40"
-              >
-                <Zap className="h-3 w-3" />
-                Add to auto-rules
-              </button>
-              {ruleError && (
-                <span className="text-xs text-ember">{ruleError}</span>
-              )}
-            </div>
-          )}
-          {ruleAdded && (
-            <div className="flex items-center gap-1 text-xs text-moss/70">
-              <Zap className="h-3 w-3" />
-              <span>Rule added</span>
-            </div>
-          )}
         </div>
       )}
     </div>
