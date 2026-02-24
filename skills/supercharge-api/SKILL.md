@@ -171,6 +171,19 @@ curl -X DELETE https://superchargeclaudecode.com/plugins/<pluginId> \
   -H "Authorization: Bearer <token>"
 ```
 
+### Sync Plugin from GitHub Source (auth required)
+
+Re-fetches all files from the plugin's original GitHub source URL. Deletes existing files and replaces them with fresh ones. Only works for plugins that were imported from a GitHub URL. Owner or trusted publishers only.
+
+```bash
+curl -X POST https://superchargeclaudecode.com/plugins/<pluginId>/sync \
+  -H "Authorization: Bearer <token>"
+```
+
+Returns `{ "success": true, "data": { "ok": true, "filesUpdated": N } }`.
+
+Returns 400 if the plugin has no stored source URL.
+
 ### Get User's Plugins (auth required)
 
 ```bash
