@@ -1,6 +1,15 @@
 ---
 name: supercharge-api
 description: "Use when interacting with the superchargeclaudecode.com platform API. Covers auth, plugin management, marketplace operations, and deployment."
+credentials:
+  - key: SUPERCHARGE_EMAIL
+    label: "Supercharge Claude Code Email"
+    description: "Your account email at superchargeclaudecode.com"
+    required: true
+  - key: SUPERCHARGE_PASSWORD
+    label: "Supercharge Claude Code Password"
+    description: "Your account password at superchargeclaudecode.com"
+    required: true
 ---
 
 # Supercharge Claude Code API

@@ -1960,12 +1960,35 @@ app.get('/api/skills/:id', async (req, res) => {
     const content = await readFile(skillMd, 'utf-8')
     const fm = parseFrontmatter(content)
     const files = await safeReaddir(skillDir)
+    // Build recursive file tree
+    async function listFilesRecursive(dir, prefix = '') {
+      const results = []
+      const entries = await safeReaddir(dir)
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue
+        const relPath = prefix ? `${prefix}/${entry}` : entry
+        const fullPath = join(dir, entry)
+        try {
+          const s = await stat(fullPath)
+          if (s.isDirectory()) {
+            results.push({ path: relPath, type: 'directory' })
+            const children = await listFilesRecursive(fullPath, relPath)
+            results.push(...children)
+          } else {
+            results.push({ path: relPath, type: 'file' })
+          }
+        } catch { /* skip */ }
+      }
+      return results
+    }
+    const fileTree = await listFilesRecursive(skillDir)
     res.json({
       id,
       name: fm.name || id,
       description: fm.description || '',
       fullContent: content,
       files,
+      fileTree,
     })
   } catch (err) {
     res.status(404).json({ error: 'Skill not found' })
@@ -2445,12 +2468,35 @@ app.get('/api/superbot-skills/:id', async (req, res) => {
     }
     const fm = parseFrontmatter(content)
     const files = await safeReaddir(entryPath)
+    // Build recursive file tree
+    async function listFilesRecursive(dir, prefix = '') {
+      const results = []
+      const entries = await safeReaddir(dir)
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue
+        const relPath = prefix ? `${prefix}/${entry}` : entry
+        const fullPath = join(dir, entry)
+        try {
+          const s = await stat(fullPath)
+          if (s.isDirectory()) {
+            results.push({ path: relPath, type: 'directory' })
+            const children = await listFilesRecursive(fullPath, relPath)
+            results.push(...children)
+          } else {
+            results.push({ path: relPath, type: 'file' })
+          }
+        } catch { /* skip */ }
+      }
+      return results
+    }
+    const fileTree = await listFilesRecursive(entryPath)
     res.json({
       id,
       name: fm.name || id,
       description: fm.description || '',
       fullContent: content,
       files,
+      fileTree,
       enabled,
     })
   } catch (err) {
@@ -3085,6 +3131,63 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
 
     const files = await listFiles(draftPath)
     res.json({ ok: true, files })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Read a specific file from a draft
+app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const relPath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
+    const filePath = resolve(draftPath, relPath)
+    if (!filePath.startsWith(draftPath + '/')) {
+      return res.status(400).json({ error: 'Invalid file path' })
+    }
+    const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.zip', '.tar', '.gz'])
+    const ext = extname(filePath).toLowerCase()
+    if (BINARY_EXTS.has(ext)) {
+      const { size } = await stat(filePath)
+      return res.json({ ok: true, binary: true, size })
+    }
+    const content = await readFile(filePath, 'utf-8')
+    res.json({ ok: true, content })
+  } catch (err) {
+    if (err.code === 'ENOENT') return res.status(404).json({ error: 'File not found' })
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Upload a file to a draft
+app.post('/api/skill-creator/drafts/:name/files', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const { files } = req.body
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'files array required' })
+    }
+    await mkdir(draftPath, { recursive: true })
+    const MAX_FILE_SIZE = 10 * 1024 * 1024
+    const savedPaths = []
+    for (const file of files) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const dest = resolve(draftPath, safeName)
+      if (!dest.startsWith(draftPath + '/')) continue
+      const buffer = Buffer.from(file.data, 'base64')
+      if (buffer.length > MAX_FILE_SIZE) {
+        return res.status(400).json({ error: `File ${file.name} exceeds 10MB limit` })
+      }
+      await writeFile(dest, buffer)
+      savedPaths.push(safeName)
+    }
+    res.json({ ok: true, files: savedPaths })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
