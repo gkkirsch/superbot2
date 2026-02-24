@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo } from 'react'
-import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, MessageCircle, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
-import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook } from '@/lib/api'
-import type { HookTestResult } from '@/lib/api'
+import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, resetIMessage } from '@/lib/api'
+import type { HookTestResult, IMessageStatus } from '@/lib/api'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import type { SuperbotSkill, SkillInfo, HookInfo, AgentInfo } from '@/lib/types'
 
@@ -290,16 +290,388 @@ function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () =>
   )
 }
 
+// --- iMessage Setup Modal ---
+
+function IMessageSetupModal({ onClose, onComplete }: { onClose: () => void; onComplete: (status: IMessageStatus) => void }) {
+  const [step, setStep] = useState(1)
+  const [appleId, setAppleId] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [testResult, setTestResult] = useState<{ sent: boolean; error?: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [status, setStatus] = useState<IMessageStatus | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const result = await saveIMessageConfig(appleId, phoneNumber)
+      setStatus(result)
+      setStep(4)
+      onComplete(result)
+    } catch {
+      // stay on current step
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await testIMessage()
+      setTestResult(result)
+    } catch (err) {
+      setTestResult({ sent: false, error: (err as Error).message })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-md max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-xl text-parchment">Set Up iMessage Bridge</h2>
+            <p className="text-sm text-stone mt-1">Step {step} of 4</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {step === 1 && (
+            <>
+              <div>
+                <label className="block text-xs text-sand mb-1.5">superbot2 Apple ID email</label>
+                <input
+                  type="email"
+                  value={appleId}
+                  onChange={e => setAppleId(e.target.value)}
+                  placeholder="superbot@example.com"
+                  className="w-full rounded-lg bg-ink border border-border-custom px-3 py-2 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40"
+                />
+              </div>
+              <p className="text-xs text-stone/60">Create a dedicated Apple ID at appleid.apple.com — this is the address people will text to reach superbot2.</p>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setStep(2)}
+                  disabled={!appleId.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-40"
+                >
+                  Next <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div>
+                <label className="block text-xs text-sand mb-1.5">Your phone number</label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={e => setPhoneNumber(e.target.value)}
+                  placeholder="+18015551234"
+                  className="w-full rounded-lg bg-ink border border-border-custom px-3 py-2 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40"
+                />
+              </div>
+              <p className="text-xs text-stone/60">Replies from superbot2 will be sent to this number.</p>
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <button
+                  onClick={() => setStep(3)}
+                  disabled={!phoneNumber.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-40"
+                >
+                  Next <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
+                <p className="text-sm text-parchment font-medium">Sign into Messages.app</p>
+                <ol className="text-xs text-stone space-y-2 list-decimal list-inside">
+                  <li>Open <span className="text-parchment">Messages.app</span> on this Mac</li>
+                  <li>Go to <span className="text-parchment">Settings → iMessage</span></li>
+                  <li>Sign in with <span className="text-sand">{appleId}</span></li>
+                  <li>Enable &ldquo;Enable Messages in iCloud&rdquo;</li>
+                </ol>
+              </div>
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-moss/20 text-moss hover:bg-moss/30 transition-colors disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Save & Enable <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <div className="flex items-center gap-2 text-moss">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">iMessage bridge is active</span>
+              </div>
+
+              <button
+                onClick={handleTest}
+                disabled={testing}
+                className="w-full text-xs text-parchment bg-ink border border-border-custom hover:border-sand/30 rounded-lg px-4 py-2.5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {testing ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending test...</>
+                ) : (
+                  <>Send Test Message</>
+                )}
+              </button>
+
+              {testResult && (
+                <div className={`rounded-lg px-4 py-3 text-xs ${testResult.sent ? 'bg-moss/10 border border-moss/20 text-moss' : 'bg-ember/10 border border-ember/20 text-ember'}`}>
+                  {testResult.sent ? 'Test message sent successfully!' : `Failed: ${testResult.error}`}
+                </div>
+              )}
+
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  {status?.chatDbReadable ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-moss" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-ember" />
+                  )}
+                  <span className="text-xs text-parchment">Full Disk Access</span>
+                </div>
+                {!status?.chatDbReadable && (
+                  <p className="text-xs text-stone/60">
+                    Grant Full Disk Access to your terminal in System Settings → Privacy & Security → Full Disk Access, then restart your terminal and run: <span className="text-sand font-mono">superbot2 imessage-setup</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- iMessage Integration Card ---
+
+function IMessageIntegration() {
+  const [status, setStatus] = useState<IMessageStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showSetup, setShowSetup] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<{ sent: boolean; error?: string } | null>(null)
+
+  async function fetchStatus() {
+    try {
+      const s = await getIMessageStatus()
+      setStatus(s)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchStatus() }, [])
+
+  async function handleStart() {
+    setActionLoading('start')
+    try {
+      await startIMessageWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleStop() {
+    setActionLoading('stop')
+    try {
+      await stopIMessageWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleTest() {
+    setActionLoading('test')
+    setTestResult(null)
+    try {
+      const result = await testIMessage()
+      setTestResult(result)
+    } catch (err) {
+      setTestResult({ sent: false, error: (err as Error).message })
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleReset() {
+    setActionLoading('reset')
+    try {
+      await resetIMessage()
+      await fetchStatus()
+      setTestResult(null)
+    } finally { setActionLoading(null) }
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
+        <div className="h-5 w-48 rounded bg-ink animate-pulse" />
+      </div>
+    )
+  }
+
+  // Not configured
+  if (!status?.configured) {
+    return (
+      <>
+        <button
+          onClick={() => setShowSetup(true)}
+          className="w-full rounded-lg border border-border-custom bg-surface/50 p-4 flex items-center justify-between hover:bg-ink/50 transition-colors text-left"
+        >
+          <div className="flex items-center gap-3">
+            <MessageCircle className="h-4 w-4 text-sand" />
+            <div>
+              <span className="text-sm text-parchment font-medium">iMessage Bridge</span>
+              <p className="text-xs text-stone mt-0.5">Connect superbot2 to your iPhone</p>
+            </div>
+          </div>
+          <span className="flex items-center gap-1 text-xs text-sand">
+            Set Up <ArrowRight className="h-3 w-3" />
+          </span>
+        </button>
+        {showSetup && (
+          <IMessageSetupModal
+            onClose={() => { setShowSetup(false); fetchStatus() }}
+            onComplete={(s) => setStatus(s)}
+          />
+        )}
+      </>
+    )
+  }
+
+  // Configured
+  const isOnline = status.watcherRunning
+
+  return (
+    <>
+      <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="h-4 w-4 text-sand" />
+            <div>
+              <span className="text-sm text-parchment font-medium">iMessage Bridge</span>
+              <p className="text-xs text-stone mt-0.5">{status.appleId}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isOnline ? (
+              <>
+                <button
+                  onClick={handleTest}
+                  disabled={actionLoading !== null}
+                  className="px-2.5 py-1 text-[11px] rounded-md bg-ink border border-border-custom text-parchment hover:border-sand/30 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === 'test' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Test'}
+                </button>
+                <button
+                  onClick={handleStop}
+                  disabled={actionLoading !== null}
+                  className="px-2.5 py-1 text-[11px] rounded-md bg-ink border border-border-custom text-parchment hover:border-sand/30 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop'}
+                </button>
+                <button
+                  onClick={handleReset}
+                  disabled={actionLoading !== null}
+                  className="px-2.5 py-1 text-[11px] rounded-md bg-ember/10 border border-ember/20 text-ember hover:bg-ember/20 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === 'reset' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reset'}
+                </button>
+                <span className="flex items-center gap-1.5 text-[11px] text-moss ml-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-moss" />
+                  online
+                </span>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleStart}
+                  disabled={actionLoading !== null}
+                  className="px-2.5 py-1 text-[11px] rounded-md bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start'}
+                </button>
+                <span className="flex items-center gap-1.5 text-[11px] text-stone ml-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-stone/40" />
+                  offline
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {testResult && (
+          <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${testResult.sent ? 'bg-moss/10 border border-moss/20 text-moss' : 'bg-ember/10 border border-ember/20 text-ember'}`}>
+            {testResult.sent ? 'Test message sent!' : `Failed: ${testResult.error}`}
+          </div>
+        )}
+      </div>
+
+      {showSetup && (
+        <IMessageSetupModal
+          onClose={() => { setShowSetup(false); fetchStatus() }}
+          onComplete={(s) => setStatus(s)}
+        />
+      )}
+    </>
+  )
+}
+
 // --- Unified Plugins Section ---
 
-type ExtensionTab = 'skills' | 'hooks' | 'agents'
+type ExtensionTab = 'skills' | 'hooks' | 'agents' | 'integrations'
 
 export function DashboardExtensionsSection() {
   const { data: superbotSkills, isLoading: superbotLoading } = useSuperbotSkills()
   const { data: ccSkills } = useSkills()
   const { data: plugins } = usePlugins()
-  const { data: hooks, isLoading: hooksLoading } = useHooks()
-  const { data: agents, isLoading: agentsLoading } = useAgents()
+  const { data: hooks } = useHooks()
+  const { data: agents } = useAgents()
 
   const [activeTab, setActiveTab] = useState<ExtensionTab>('skills')
   const [selectedSuperbotSkill, setSelectedSuperbotSkill] = useState<SuperbotSkill | null>(null)
@@ -328,26 +700,17 @@ export function DashboardExtensionsSection() {
   const hookCount = hooks?.length ?? 0
   const agentCount = agents?.length ?? 0
 
-  const tabs: { id: ExtensionTab; label: string; icon: typeof Webhook; count: number }[] = [
+  const tabs: { id: ExtensionTab; label: string; icon: typeof Webhook; count: number; alwaysShow?: boolean }[] = [
     { id: 'skills', label: 'Skills', icon: Puzzle, count: skillCount },
     { id: 'hooks', label: 'Hooks', icon: Webhook, count: hookCount },
     { id: 'agents', label: 'Agents', icon: Bot, count: agentCount },
+    { id: 'integrations', label: 'Integrations', icon: Cable, count: 1, alwaysShow: true },
   ]
 
-  const visibleTabs = tabs.filter(t => t.count > 0 || (t.id === 'skills' && superbotLoading))
+  const visibleTabs = tabs.filter(t => t.count > 0 || t.alwaysShow || (t.id === 'skills' && superbotLoading))
 
   // Auto-select first visible tab if current tab has no items
   const currentTab = visibleTabs.find(t => t.id === activeTab) ? activeTab : (visibleTabs[0]?.id ?? 'skills')
-
-  const isLoading = superbotLoading || hooksLoading || agentsLoading
-
-  if (!isLoading && skillCount === 0 && hookCount === 0 && agentCount === 0) {
-    return (
-      <div className="rounded-lg border border-border-custom bg-surface/50 py-6 text-center">
-        <p className="text-sm text-stone">No plugins installed</p>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -369,7 +732,7 @@ export function DashboardExtensionsSection() {
               >
                 <Icon className="h-3 w-3" />
                 {tab.label}
-                <span className={`text-[10px] ${isActive ? 'text-sand/70' : 'text-stone/40'}`}>{tab.count}</span>
+                {!tab.alwaysShow && <span className={`text-[10px] ${isActive ? 'text-sand/70' : 'text-stone/40'}`}>{tab.count}</span>}
               </button>
             )
           })}
@@ -484,6 +847,11 @@ export function DashboardExtensionsSection() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Integrations tab content */}
+      {currentTab === 'integrations' && (
+        <IMessageIntegration />
       )}
 
       {/* Modals */}

@@ -846,6 +846,157 @@ app.get('/api/status', async (_req, res) => {
   }
 })
 
+// --- iMessage integration ---
+
+app.get('/api/imessage/status', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const imessage = config?.imessage || {}
+
+    let watcherRunning = false
+    try { execSync('pgrep -f imessage-watcher.sh', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    let chatDbReadable = false
+    try { execSync(`sqlite3 -readonly ${join(homedir(), 'Library/Messages/chat.db')} "SELECT 1;"`, { stdio: 'pipe' }); chatDbReadable = true } catch {}
+
+    res.json({
+      enabled: imessage.enabled ?? false,
+      appleId: imessage.appleId || '',
+      phoneNumber: imessage.phoneNumber || '',
+      watcherRunning,
+      chatDbReadable,
+      configured: !!(imessage.appleId && imessage.appleId.length > 0),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/imessage/save', async (req, res) => {
+  try {
+    const { appleId, phoneNumber } = req.body
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    const config = await readJsonFile(configPath) || {}
+    config.imessage = { ...config.imessage, enabled: true, appleId, phoneNumber }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+
+    // Start watcher if not running
+    const { execSync } = await import('node:child_process')
+    let watcherRunning = false
+    try { execSync('pgrep -f imessage-watcher.sh', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    if (!watcherRunning) {
+      const logsDir = join(SUPERBOT_DIR, 'logs')
+      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
+      const watcherLog = join(logsDir, 'imessage-watcher.log')
+      const watcherScript = join(SUPERBOT_DIR, 'scripts', 'imessage-watcher.sh')
+      const child = spawn('bash', [watcherScript], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      // Pipe output to log file
+      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
+      child.stdout.pipe(logStream)
+      child.stderr.pipe(logStream)
+      child.unref()
+      watcherRunning = true
+    }
+
+    let chatDbReadable = false
+    try { execSync(`sqlite3 -readonly ${join(homedir(), 'Library/Messages/chat.db')} "SELECT 1;"`, { stdio: 'pipe' }); chatDbReadable = true } catch {}
+
+    res.json({
+      enabled: true,
+      appleId,
+      phoneNumber,
+      watcherRunning,
+      chatDbReadable,
+      configured: true,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/imessage/start', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    let watcherRunning = false
+    try { execSync('pgrep -f imessage-watcher.sh', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    if (!watcherRunning) {
+      const logsDir = join(SUPERBOT_DIR, 'logs')
+      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
+      const watcherLog = join(logsDir, 'imessage-watcher.log')
+      const watcherScript = join(SUPERBOT_DIR, 'scripts', 'imessage-watcher.sh')
+      const child = spawn('bash', [watcherScript], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
+      child.stdout.pipe(logStream)
+      child.stderr.pipe(logStream)
+      child.unref()
+    }
+
+    res.json({ watcherRunning: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/imessage/stop', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    try { execSync('pkill -f imessage-watcher.sh', { stdio: 'pipe' }) } catch {}
+    res.json({ watcherRunning: false })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/imessage/test', async (_req, res) => {
+  try {
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const phone = config?.imessage?.phoneNumber
+    if (!phone) return res.status(400).json({ sent: false, error: 'No phone number configured' })
+
+    const sendScript = join(SUPERBOT_DIR, 'scripts', 'send-imessage.sh')
+    const result = await new Promise((resolve) => {
+      execFile('bash', [sendScript, phone, 'superbot2 test ✓'], { timeout: 15_000 }, (err, stdout, stderr) => {
+        if (err) resolve({ sent: false, error: stderr || err.message })
+        else resolve({ sent: true })
+      })
+    })
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ sent: false, error: err.message })
+  }
+})
+
+app.post('/api/imessage/reset', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    // Stop watcher
+    try { execSync('pkill -f imessage-watcher.sh', { stdio: 'pipe' }) } catch {}
+
+    // Clear config
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    const config = await readJsonFile(configPath) || {}
+    config.imessage = { enabled: false, appleId: '', phoneNumber: '' }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+
+    // Delete last-rowid file
+    const rowidFile = join(SUPERBOT_DIR, 'imessage-last-rowid.txt')
+    if (existsSync(rowidFile)) await unlink(rowidFile)
+
+    res.json({ reset: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Heartbeat config ---
 
 app.get('/api/heartbeat', async (_req, res) => {

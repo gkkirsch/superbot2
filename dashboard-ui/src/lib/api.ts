@@ -650,6 +650,52 @@ export async function createKnowledgeFile(source: string, filename: string, cont
   return response.json()
 }
 
+// --- iMessage integration ---
+
+export interface IMessageStatus {
+  enabled: boolean
+  appleId: string
+  phoneNumber: string
+  watcherRunning: boolean
+  chatDbReadable: boolean
+  configured: boolean
+}
+
+export async function getIMessageStatus(): Promise<IMessageStatus> {
+  return fetchJson<IMessageStatus>('/imessage/status')
+}
+
+export async function saveIMessageConfig(appleId: string, phoneNumber: string): Promise<IMessageStatus> {
+  const response = await fetch(`${API_BASE}/imessage/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appleId, phoneNumber }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function startIMessageWatcher(): Promise<void> {
+  const response = await fetch(`${API_BASE}/imessage/start`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function stopIMessageWatcher(): Promise<void> {
+  const response = await fetch(`${API_BASE}/imessage/stop`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function testIMessage(): Promise<{ sent: boolean; error?: string }> {
+  const response = await fetch(`${API_BASE}/imessage/test`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function resetIMessage(): Promise<void> {
+  const response = await fetch(`${API_BASE}/imessage/reset`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
 export async function saveUser(content: string): Promise<void> {
   const response = await fetch(`${API_BASE}/user`, {
     method: 'PUT',
