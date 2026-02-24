@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 
@@ -257,6 +257,18 @@ interface DraftSkill {
   status: string
 }
 
+interface ValidationIssue {
+  file: string
+  field: string | null
+  message: string
+}
+
+interface ValidationResult {
+  valid: boolean
+  errors: ValidationIssue[]
+  warnings: ValidationIssue[]
+}
+
 function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft }: {
   onNewSkill: () => void
   refreshKey: number
@@ -400,6 +412,9 @@ export function SkillCreator() {
   const [fileEditing, setFileEditing] = useState(false)
   const [fileDraft, setFileDraft] = useState('')
   const [fileSaving, setFileSaving] = useState(false)
+  const [validation, setValidation] = useState<ValidationResult | null>(null)
+  const [validating, setValidating] = useState(false)
+  const [validationExpanded, setValidationExpanded] = useState(false)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -713,6 +728,8 @@ export function SkillCreator() {
     setPromoteStatus('idle')
     setFileSheetOpen(false)
     setFileEditing(false)
+    setValidation(null)
+    setValidationExpanded(false)
   }, [])
 
   // Fetch files for the selected draft
@@ -777,27 +794,6 @@ export function SkillCreator() {
     setFileEditing(false)
   }, [])
 
-  const handleFileSave = useCallback(async () => {
-    if (!selectedDraft || !selectedFile) return
-    setFileSaving(true)
-    try {
-      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${selectedFile}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: fileDraft }),
-      })
-      const data = await res.json()
-      if (data.ok) {
-        setFileContent(fileDraft)
-        setFileEditing(false)
-      } else {
-        setError(data.error || 'Save failed')
-      }
-    } catch {
-      setError('Failed to save file')
-    }
-    setFileSaving(false)
-  }, [selectedDraft, selectedFile, fileDraft])
 
   // Upload files to the selected draft
   const handleDraftUpload = useCallback(async (files: File[]) => {
@@ -835,6 +831,56 @@ export function SkillCreator() {
       e.target.value = ''
     }
   }, [handleDraftUpload])
+
+  // Validate a draft
+  const runValidation = useCallback(async (draft: string) => {
+    setValidating(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${draft}/validate`, { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setValidation({ valid: data.valid, errors: data.errors, warnings: data.warnings })
+        if (!data.valid) setValidationExpanded(true)
+      }
+    } catch {
+      // silently fail
+    }
+    setValidating(false)
+  }, [])
+
+  // Auto-validate when draft is selected
+  useEffect(() => {
+    if (selectedDraft) {
+      runValidation(selectedDraft)
+    } else {
+      setValidation(null)
+      setValidationExpanded(false)
+    }
+  }, [selectedDraft, runValidation])
+
+  // Re-validate after file save
+  const handleFileSaveWithValidation = useCallback(async () => {
+    if (!selectedDraft || !selectedFile) return
+    setFileSaving(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${selectedFile}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: fileDraft }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setFileContent(fileDraft)
+        setFileEditing(false)
+        runValidation(selectedDraft)
+      } else {
+        setError(data.error || 'Save failed')
+      }
+    } catch {
+      setError('Failed to save file')
+    }
+    setFileSaving(false)
+  }, [selectedDraft, selectedFile, fileDraft, runValidation])
 
   // Memoize empty state check
   const isEmpty = messages.length === 0 && !streamingText
@@ -1029,6 +1075,86 @@ export function SkillCreator() {
                   </div>
                 )}
 
+                {/* Validation status */}
+                <div className="mx-3 mb-2">
+                  {validating ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface/30 border border-border-custom">
+                      <Loader2 className="h-3.5 w-3.5 text-stone/50 animate-spin" />
+                      <span className="text-xs text-stone/50">Validating...</span>
+                    </div>
+                  ) : validation ? (
+                    <div className={`rounded-lg border ${validation.valid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                      <div className="flex items-center justify-between px-2.5 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          {validation.valid ? (
+                            <>
+                              <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
+                              <span className="text-xs font-medium text-emerald-400">Valid plugin</span>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setValidationExpanded(prev => !prev)}
+                              className="flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <XCircle className="h-3.5 w-3.5 text-red-400" />
+                              <span className="text-xs font-medium text-red-400">
+                                {validation.errors.length} error{validation.errors.length !== 1 ? 's' : ''}
+                              </span>
+                              {validation.warnings.length > 0 && (
+                                <span className="text-xs text-amber-400">
+                                  {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
+                                </span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => selectedDraft && runValidation(selectedDraft)}
+                          className="p-1 rounded text-stone/40 hover:text-parchment hover:bg-surface/40 transition-colors"
+                          title="Re-validate"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {!validation.valid && validationExpanded && (
+                        <div className="px-2.5 pb-2 space-y-1">
+                          {validation.errors.map((err, i) => (
+                            <div key={`e-${i}`} className="flex items-start gap-1.5 text-[11px]">
+                              <XCircle className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
+                              <span className="text-red-300/80">
+                                <span className="text-red-400/60 font-mono">{err.file}{err.field ? `: ${err.field}` : ''}</span>
+                                {' — '}{err.message}
+                              </span>
+                            </div>
+                          ))}
+                          {validation.warnings.map((warn, i) => (
+                            <div key={`w-${i}`} className="flex items-start gap-1.5 text-[11px]">
+                              <AlertTriangle className="h-3 w-3 text-amber-400 mt-0.5 shrink-0" />
+                              <span className="text-amber-300/80">
+                                <span className="text-amber-400/60 font-mono">{warn.file}{warn.field ? `: ${warn.field}` : ''}</span>
+                                {' — '}{warn.message}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {validation.valid && validation.warnings.length > 0 && (
+                        <div className="px-2.5 pb-2 space-y-1">
+                          {validation.warnings.map((warn, i) => (
+                            <div key={`w-${i}`} className="flex items-start gap-1.5 text-[11px]">
+                              <AlertTriangle className="h-3 w-3 text-amber-400 mt-0.5 shrink-0" />
+                              <span className="text-amber-300/80">
+                                <span className="text-amber-400/60 font-mono">{warn.file}{warn.field ? `: ${warn.field}` : ''}</span>
+                                {' — '}{warn.message}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
                 {/* File list */}
                 <div className="flex-1 overflow-y-auto px-3 min-h-0">
                   {selectedDraftFiles.length === 0 ? (
@@ -1172,7 +1298,7 @@ export function SkillCreator() {
                 />
                 <div className="flex items-center gap-2 mt-3 shrink-0">
                   <button
-                    onClick={handleFileSave}
+                    onClick={handleFileSaveWithValidation}
                     disabled={fileSaving}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-50"
                   >

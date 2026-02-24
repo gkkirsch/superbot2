@@ -3281,6 +3281,229 @@ app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
   }
 })
 
+// Validate a draft plugin structure
+app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+
+    try {
+      await stat(draftPath)
+    } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+
+    const errors = []
+    const warnings = []
+    const SEMVER_RE = /^\d+\.\d+\.\d+$/
+    const VALID_HOOK_EVENTS = new Set([
+      'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest',
+      'UserPromptSubmit', 'Notification', 'Stop', 'SubagentStart', 'SubagentStop',
+      'TeammateIdle', 'TaskCompleted', 'PreCompact', 'SessionStart', 'SessionEnd', 'ConfigChange'
+    ])
+
+    // --- Validate .claude-plugin/plugin.json ---
+    const pluginJsonPath = join(draftPath, '.claude-plugin', 'plugin.json')
+    let pluginJson = null
+    try {
+      const raw = await readFile(pluginJsonPath, 'utf-8')
+      pluginJson = JSON.parse(raw)
+    } catch (e) {
+      if (e.code === 'ENOENT') {
+        errors.push({ file: '.claude-plugin/plugin.json', field: null, message: 'File missing — required' })
+      } else {
+        errors.push({ file: '.claude-plugin/plugin.json', field: null, message: `Invalid JSON: ${e.message}` })
+      }
+    }
+
+    if (pluginJson) {
+      if (!pluginJson.name) {
+        errors.push({ file: '.claude-plugin/plugin.json', field: 'name', message: 'Required field missing' })
+      } else if (pluginJson.name !== req.params.name) {
+        // Check if name matches draft dir — only warn since agent may rename
+        warnings.push({ file: '.claude-plugin/plugin.json', field: 'name', message: `Name "${pluginJson.name}" does not match draft directory "${req.params.name}"` })
+      }
+      if (!pluginJson.version) {
+        errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: 'Required field missing' })
+      } else if (!SEMVER_RE.test(pluginJson.version)) {
+        errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: `Invalid semver: "${pluginJson.version}" (expected x.y.z)` })
+      }
+      if (!pluginJson.description && pluginJson.description !== '') {
+        errors.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Required field missing' })
+      } else if (typeof pluginJson.description === 'string' && pluginJson.description.trim() === '') {
+        warnings.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Description is empty' })
+      }
+    }
+
+    // --- Find SKILL.md files in skills/ ---
+    const skillsDir = join(draftPath, 'skills')
+    let skillDirs = []
+    try {
+      const entries = await readdir(skillsDir, { withFileTypes: true })
+      skillDirs = entries.filter(e => e.isDirectory()).map(e => e.name)
+    } catch {
+      // skills/ dir may not exist
+    }
+
+    let foundSkillMd = false
+    for (const skillDir of skillDirs) {
+      const skillMdPath = join(skillsDir, skillDir, 'SKILL.md')
+      try {
+        const raw = await readFile(skillMdPath, 'utf-8')
+        foundSkillMd = true
+        const fmFile = `skills/${skillDir}/SKILL.md`
+
+        // Parse frontmatter
+        const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+        if (!fmMatch) {
+          errors.push({ file: fmFile, field: null, message: 'No frontmatter found' })
+          continue
+        }
+
+        let fm
+        try {
+          fm = yaml.load(fmMatch[1])
+        } catch (e) {
+          errors.push({ file: fmFile, field: null, message: `Invalid YAML frontmatter: ${e.message}` })
+          continue
+        }
+
+        if (!fm || typeof fm !== 'object') {
+          errors.push({ file: fmFile, field: null, message: 'Frontmatter is empty' })
+          continue
+        }
+
+        if (!fm.name) {
+          errors.push({ file: fmFile, field: 'name', message: 'Required field missing' })
+        }
+        if (!fm.description) {
+          errors.push({ file: fmFile, field: 'description', message: 'Required field missing' })
+        } else if (typeof fm.description === 'string' && fm.description.trim().length < 20) {
+          warnings.push({ file: fmFile, field: 'description', message: 'Description is very short' })
+        }
+        if (!fm.version) {
+          warnings.push({ file: fmFile, field: 'version', message: 'Version not specified' })
+        }
+
+        // Validate credentials if present
+        const credentials = fm.metadata?.credentials || fm.credentials
+        if (credentials && Array.isArray(credentials)) {
+          for (let i = 0; i < credentials.length; i++) {
+            const cred = credentials[i]
+            if (!cred.key) {
+              errors.push({ file: fmFile, field: `credentials[${i}].key`, message: 'Credential missing required "key" field' })
+            }
+            if (!cred.label) {
+              errors.push({ file: fmFile, field: `credentials[${i}].label`, message: 'Credential missing required "label" field' })
+            }
+          }
+        }
+      } catch (e) {
+        if (e.code !== 'ENOENT') {
+          errors.push({ file: `skills/${skillDir}/SKILL.md`, field: null, message: `Read error: ${e.message}` })
+        }
+      }
+    }
+
+    if (!foundSkillMd) {
+      errors.push({ file: 'skills/', field: null, message: 'No SKILL.md found — at least one skill is required' })
+    }
+
+    // --- Validate commands/*.md (if any) ---
+    const commandsDir = join(draftPath, 'commands')
+    try {
+      const entries = await readdir(commandsDir)
+      for (const file of entries) {
+        if (!file.endsWith('.md')) continue
+        const cmdPath = join(commandsDir, file)
+        const raw = await readFile(cmdPath, 'utf-8')
+        const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+        if (!fmMatch) {
+          warnings.push({ file: `commands/${file}`, field: null, message: 'No frontmatter found' })
+          continue
+        }
+        try {
+          const fm = yaml.load(fmMatch[1])
+          if (!fm || !fm.name) {
+            errors.push({ file: `commands/${file}`, field: 'name', message: 'Required field missing in frontmatter' })
+          }
+        } catch (e) {
+          errors.push({ file: `commands/${file}`, field: null, message: `Invalid YAML frontmatter: ${e.message}` })
+        }
+      }
+    } catch {
+      // commands/ dir may not exist — that's fine
+    }
+
+    // --- Validate agents/*.md (if any) ---
+    const agentsDir = join(draftPath, 'agents')
+    try {
+      const entries = await readdir(agentsDir)
+      for (const file of entries) {
+        if (!file.endsWith('.md')) continue
+        const agentPath = join(agentsDir, file)
+        const raw = await readFile(agentPath, 'utf-8')
+        const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+        if (!fmMatch) {
+          warnings.push({ file: `agents/${file}`, field: null, message: 'No frontmatter found' })
+          continue
+        }
+        try {
+          const fm = yaml.load(fmMatch[1])
+          if (!fm || !fm.name) {
+            errors.push({ file: `agents/${file}`, field: 'name', message: 'Required field missing in frontmatter' })
+          }
+          if (!fm || !fm.description) {
+            errors.push({ file: `agents/${file}`, field: 'description', message: 'Required field missing in frontmatter' })
+          }
+        } catch (e) {
+          errors.push({ file: `agents/${file}`, field: null, message: `Invalid YAML frontmatter: ${e.message}` })
+        }
+      }
+    } catch {
+      // agents/ dir may not exist — that's fine
+    }
+
+    // --- Validate hooks/hooks.json (if exists) ---
+    const hooksPath = join(draftPath, 'hooks', 'hooks.json')
+    try {
+      const raw = await readFile(hooksPath, 'utf-8')
+      let hooksJson
+      try {
+        hooksJson = JSON.parse(raw)
+      } catch (e) {
+        errors.push({ file: 'hooks/hooks.json', field: null, message: `Invalid JSON: ${e.message}` })
+        hooksJson = null
+      }
+      if (hooksJson) {
+        const hooks = hooksJson.hooks
+        if (!hooks || typeof hooks !== 'object') {
+          errors.push({ file: 'hooks/hooks.json', field: 'hooks', message: 'Missing or invalid "hooks" object' })
+        } else {
+          const eventKeys = Object.keys(hooks)
+          if (eventKeys.length === 0) {
+            errors.push({ file: 'hooks/hooks.json', field: 'hooks', message: 'Must have at least one hook event' })
+          }
+          const invalidKeys = eventKeys.filter(k => !VALID_HOOK_EVENTS.has(k))
+          if (invalidKeys.length > 0) {
+            warnings.push({ file: 'hooks/hooks.json', field: 'hooks', message: `Unknown hook event(s): ${invalidKeys.join(', ')}` })
+          }
+        }
+      }
+    } catch (e) {
+      if (e.code !== 'ENOENT') {
+        errors.push({ file: 'hooks/hooks.json', field: null, message: `Read error: ${e.message}` })
+      }
+    }
+
+    res.json({ ok: true, valid: errors.length === 0, errors, warnings })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // My Skills — list installed plugins with author.name === 'superbot2'
 app.get('/api/skill-creator/my-skills', async (req, res) => {
   try {
