@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { X, ChevronUp, ClipboardList, StickyNote } from 'lucide-react'
+import { X, ChevronUp, ClipboardList, StickyNote, Play } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
+import { sendMessageToOrchestrator } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import type { Escalation, TodoNote } from '@/lib/types'
 
@@ -33,9 +35,12 @@ interface TodoItemRowProps {
   research: Escalation | null
   onToggle: () => void
   onRemove: () => void
+  onWorkOn: () => void
+  workPending?: boolean
+  workSent?: boolean
 }
 
-function TodoItemRow({ todo, research, onToggle, onRemove }: TodoItemRowProps) {
+function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending, workSent }: TodoItemRowProps) {
   const [expanded, setExpanded] = useState(false)
   const hasResearch = !!research
   const notes = todo.notes || []
@@ -72,6 +77,17 @@ function TodoItemRow({ todo, research, onToggle, onRemove }: TodoItemRowProps) {
               ? <ChevronUp className="h-3.5 w-3.5" />
               : <ClipboardList className="h-3.5 w-3.5" />
             }
+          </button>
+        )}
+        {!todo.completed && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onWorkOn() }}
+            disabled={workPending || workSent}
+            className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-sand/70 disabled:opacity-50 transition-all px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1"
+            title="Send to orchestrator"
+          >
+            <Play className="h-3 w-3" />
+            <span>{workSent ? 'Sent' : 'Work on this'}</span>
           </button>
         )}
         <button
@@ -136,6 +152,21 @@ export function TodoSection() {
   const { todos, isLoading, add, toggle, remove } = useTodos()
   const { data: agentPlans } = useTodoResearch()
   const [input, setInput] = useState('')
+  const [sentTodoId, setSentTodoId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const workOnMutation = useMutation({
+    mutationFn: (todoText: string) => sendMessageToOrchestrator(`Work on this: ${todoText}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages'] })
+    },
+  })
+
+  const handleWorkOn = (todo: { id: string; text: string }) => {
+    setSentTodoId(todo.id)
+    workOnMutation.mutate(todo.text)
+    setTimeout(() => setSentTodoId(null), 2000)
+  }
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,6 +212,9 @@ export function TodoSection() {
             research={findResearch(todo.text, plans)}
             onToggle={() => toggle(todo)}
             onRemove={() => remove(todo.id)}
+            onWorkOn={() => handleWorkOn(todo)}
+            workPending={workOnMutation.isPending && sentTodoId === todo.id}
+            workSent={!workOnMutation.isPending && sentTodoId === todo.id}
           />
         ))}
       </div>
@@ -194,6 +228,7 @@ export function TodoSection() {
               research={findResearch(todo.text, plans)}
               onToggle={() => toggle(todo)}
               onRemove={() => remove(todo.id)}
+              onWorkOn={() => {}}
             />
           ))}
         </div>
