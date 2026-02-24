@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wand2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
 import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
@@ -1358,9 +1359,17 @@ export function Skills() {
   return (
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="flex items-center gap-2 mb-8">
-          <Blocks className="h-5 w-5 text-sand" />
-          <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-2">
+            <Blocks className="h-5 w-5 text-sand" />
+            <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
+          </div>
+          <Link
+            to="/skill-creator"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-surface/50 text-parchment/80 rounded-lg hover:bg-surface transition-colors border border-border-custom"
+          >
+            <Wand2 className="h-3.5 w-3.5" /> Create Plugin
+          </Link>
         </div>
         <div className="flex gap-8">
           {/* Left sidebar — 1/3 */}
