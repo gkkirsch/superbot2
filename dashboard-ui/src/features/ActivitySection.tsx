@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSystemStatus, useHeartbeatConfig, useActivity } from '@/hooks/useSpaces'
+import { useSystemStatus, useHeartbeatConfig, useActivity, useActiveWorkers } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import type { ActivityBucket } from '@/lib/types'
 
@@ -115,6 +116,7 @@ export function ActivitySection() {
   const { data: status } = useSystemStatus()
   const { data: hbConfig } = useHeartbeatConfig()
   const { data: activity } = useActivity()
+  const { data: workers } = useActiveWorkers()
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState(true)
   const [editingInterval, setEditingInterval] = useState(false)
@@ -182,6 +184,27 @@ export function ActivitySection() {
           }
         </div>
       </div>
+
+      {/* Active workers — always visible */}
+      {workers && workers.length > 0 && (
+        <div className="space-y-1 mt-2">
+          {workers.map((w) => (
+            <Link
+              key={w.agentId || w.name}
+              to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
+              className="flex items-center gap-2 text-xs hover:text-sand transition-colors group"
+            >
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="text-parchment/80 truncate group-hover:text-sand">{w.name}</span>
+              <span className="text-stone/50 truncate">{w.space}{w.project ? ' / ' + w.project : ''}</span>
+              <span className="ml-auto text-stone/40 tabular-nums shrink-0">{w.runtimeDisplay || '0s'}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {expanded && (
         <>
