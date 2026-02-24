@@ -1,7 +1,7 @@
 import express from 'express'
 import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import yaml from 'js-yaml'
@@ -1954,6 +1954,45 @@ function resolveSkillDir(id) {
   for (const dir of candidates) {
     if (existsSync(join(dir, 'SKILL.md'))) return dir
   }
+  // Search plugin caches: both superbot2 and user ~/.claude
+  const cacheDirs = [
+    PLUGINS_CACHE_DIR,
+    join(homedir(), '.claude', 'plugins', 'cache'),
+  ]
+  for (const cacheDir of cacheDirs) {
+    if (!existsSync(cacheDir)) continue
+    try {
+      for (const marketplace of readdirSync(cacheDir)) {
+        const marketDir = join(cacheDir, marketplace)
+        // Direct match: plugin-name == skill id
+        const pluginDir = join(marketDir, id)
+        if (existsSync(pluginDir)) {
+          const versions = readdirSync(pluginDir).filter(v => !v.startsWith('.')).sort().reverse()
+          for (const version of versions) {
+            const versionDir = join(pluginDir, version)
+            if (existsSync(join(versionDir, '.claude-plugin', 'plugin.json'))) {
+              return versionDir
+            }
+          }
+        }
+        // Nested match: skill is inside a multi-skill plugin
+        const plugins = readdirSync(marketDir).filter(p => !p.startsWith('.'))
+        for (const plugin of plugins) {
+          if (plugin === id) continue // already checked above
+          const pDir = join(marketDir, plugin)
+          try {
+            const vers = readdirSync(pDir).filter(v => !v.startsWith('.')).sort().reverse()
+            for (const ver of vers) {
+              const vDir = join(pDir, ver)
+              if (existsSync(join(vDir, 'skills', id, 'SKILL.md'))) {
+                return vDir
+              }
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { /* skip */ }
+  }
   return null
 }
 
@@ -1962,7 +2001,11 @@ app.get('/api/skills/:id', async (req, res) => {
     const { id } = req.params
     const skillDir = resolveSkillDir(id)
     if (!skillDir) return res.status(404).json({ error: 'Skill not found' })
-    const skillMd = join(skillDir, 'SKILL.md')
+    // SKILL.md may be at root (standalone) or nested in skills/{id}/ (plugin)
+    let skillMd = join(skillDir, 'SKILL.md')
+    if (!existsSync(skillMd)) {
+      skillMd = join(skillDir, 'skills', id, 'SKILL.md')
+    }
     const content = await readFile(skillMd, 'utf-8')
     const fm = parseFrontmatter(content)
     const files = await safeReaddir(skillDir)
@@ -1971,7 +2014,7 @@ app.get('/api/skills/:id', async (req, res) => {
       const results = []
       const entries = await safeReaddir(dir)
       for (const entry of entries) {
-        if (entry.startsWith('.')) continue
+        if (entry.startsWith('.') && entry !== '.claude-plugin') continue
         const relPath = prefix ? `${prefix}/${entry}` : entry
         const fullPath = join(dir, entry)
         try {
