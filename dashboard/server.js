@@ -2842,7 +2842,7 @@ import { createInterface } from 'node:readline'
 
 const SKILL_CREATOR_SESSIONS = new Map()
 const SKILL_CREATOR_UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads', 'skill-creator')
-const SKILL_CREATOR_DRAFTS_DIR = join(SUPERBOT_DIR, 'spaces', 'skill-creator', 'drafts')
+const SKILL_CREATOR_DRAFTS_DIR = join(SUPERBOT_DIR, 'skill-creator', 'drafts')
 const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-prompt.md')
 const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
 const CLAUDE_BIN = `${process.env.HOME}/.local/bin/claude`
