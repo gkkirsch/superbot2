@@ -89,7 +89,7 @@ export interface SkillInfo {
   name: string
   description: string
   fileCount: number
-  source?: 'user' | 'plugin'
+  source?: 'user' | 'plugin' | 'superbot2'
   pluginId?: string
   pluginName?: string
   needsConfig?: boolean
