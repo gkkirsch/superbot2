@@ -1389,8 +1389,10 @@ async function getPluginCredentials(installPath) {
     try {
       const content = await readFile(skillMd, 'utf-8')
       const fm = parseFrontmatter(content)
-      if (Array.isArray(fm.credentials) && fm.credentials.length > 0) {
-        return fm.credentials
+      // Support both metadata.credentials (correct) and top-level credentials (legacy)
+      const creds = fm.metadata?.credentials ?? fm.credentials
+      if (Array.isArray(creds) && creds.length > 0) {
+        return creds
       }
     } catch { /* skip */ }
   }
@@ -2980,11 +2982,12 @@ description: >
   TODO: Describe when this skill should be triggered.
 version: 1.0.0
 user-invocable: true
-# credentials:
-#   - key: MY_API_KEY
-#     label: "My Service API Key"
-#     description: "Get your key at example.com"
-#     required: true
+# metadata:
+#   credentials:
+#     - key: MY_API_KEY
+#       label: "My Service API Key"
+#       description: "Get your key at example.com"
+#       required: true
 ---
 
 # ${pluginSlug}
