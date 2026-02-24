@@ -265,6 +265,8 @@ app.get('/api/spaces/:slug', async (req, res) => {
     const projectCreatedAt = {}
     for (const project of projects) {
       const tasks = await getTasksForProject(spaceDir, project)
+      // Tag each task with its project name for pendingTasks aggregation
+      for (const t of tasks) t._project = project
       allTasks = allTasks.concat(tasks)
       let pp = 0, pip = 0, pc = 0
       for (const t of tasks) {
@@ -289,6 +291,42 @@ app.get('/api/spaces/:slug', async (req, res) => {
     const draftEsc = await getEscalationsFromDir('untriaged')
     const escalationCount = [...pendingEsc, ...draftEsc].filter(e => e.space === slug).length
 
+    // Build pendingTasks: pending + in_progress tasks across all projects
+    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
+    const pendingTasks = allTasks
+      .filter(t => t.status === 'pending' || t.status === 'in_progress')
+      .sort((a, b) => {
+        // in_progress first, then pending
+        if (a.status !== b.status) return a.status === 'in_progress' ? -1 : 1
+        // within same status, sort by priority
+        const pa = priorityOrder[a.priority] ?? 2
+        const pb = priorityOrder[b.priority] ?? 2
+        if (pa !== pb) return pa - pb
+        // then by createdAt asc
+        return (a.createdAt || '').localeCompare(b.createdAt || '')
+      })
+      .map(t => ({
+        id: t.id,
+        subject: t.subject,
+        status: t.status,
+        project: t._project,
+        priority: t.priority || 'medium',
+        createdAt: t.createdAt || null,
+      }))
+
+    // Build knowledgeFiles for this space
+    const spaceKnowledgeDir = join(spaceDir, 'knowledge')
+    const knowledgeEntries = await safeReaddir(spaceKnowledgeDir)
+    const knowledgeFiles = []
+    for (const f of knowledgeEntries.filter(f => !f.startsWith('.')).sort()) {
+      try {
+        const s = await stat(join(spaceKnowledgeDir, f))
+        if (s.isFile()) {
+          knowledgeFiles.push({ name: f, path: f })
+        }
+      } catch { /* skip */ }
+    }
+
     res.json({
       space: {
         name: spaceJson.name,
@@ -309,6 +347,8 @@ app.get('/api/spaces/:slug', async (req, res) => {
       },
       overview,
       projects,
+      pendingTasks,
+      knowledgeFiles,
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

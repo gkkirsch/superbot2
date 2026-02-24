@@ -26,10 +26,26 @@ export interface SpaceOverview {
   devUrl?: string | null
 }
 
+export interface PendingTask {
+  id: string
+  subject: string
+  status: 'pending' | 'in_progress'
+  project: string
+  priority: string
+  createdAt: string | null
+}
+
+export interface KnowledgeFile {
+  name: string
+  path: string
+}
+
 export interface SpaceDetail {
   space: SpaceOverview
   overview: { content: string; exists: boolean }
   projects: string[]
+  pendingTasks: PendingTask[]
+  knowledgeFiles: KnowledgeFile[]
 }
 
 export interface Task {

@@ -1,13 +1,15 @@
-import { useState, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, FolderOpen, ArrowRight, MessageCircleQuestion, Play, Square, Loader2, Rocket, ExternalLink, Check, Clock } from 'lucide-react'
+import { useMemo } from 'react'
+import { useParams, Link } from 'react-router-dom'
+import { ArrowLeft, Check, FileText, FolderOpen, Circle, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
-import { ProjectView } from '@/features/ProjectView'
-import { useSpace, useSpaceEscalations, useServerStatus, useSessions } from '@/hooks/useSpaces'
-import { startServer, stopServer, deployServer } from '@/lib/api'
+import { useSpace, useSpaceEscalations, useSessions } from '@/hooks/useSpaces'
 import { useQueryClient } from '@tanstack/react-query'
+import { startServer, stopServer, deployServer } from '@/lib/api'
+import { useServerStatus } from '@/hooks/useSpaces'
+import { useState } from 'react'
+import { Play, Square, Rocket, ExternalLink, MessageCircleQuestion } from 'lucide-react'
 
 function DetailSkeleton() {
   return (
@@ -145,16 +147,17 @@ function SpaceActions({ slug }: { slug: string }) {
 
 export function SpaceDetail() {
   const { slug } = useParams<{ slug: string }>()
-  const navigate = useNavigate()
   const { data, isLoading, error } = useSpace(slug ?? '')
   const { data: escalations } = useSpaceEscalations(slug ?? '')
-  const { data: sessions } = useSessions(5, slug)
+  const { data: sessions } = useSessions(8, slug)
 
   const space = data?.space
   const projects = data?.projects ?? []
+  const pendingTasks = data?.pendingTasks ?? []
+  const knowledgeFiles = data?.knowledgeFiles ?? []
   const pendingEscalations = (escalations ?? []).filter(e => e.status === 'needs_human')
 
-  // Sort projects: incomplete first (most active at top), then complete
+  // Sort projects: incomplete first, then complete
   const sortedProjects = useMemo(() => {
     if (!space) return []
     return [...projects].sort((a, b) => {
@@ -168,19 +171,6 @@ export function SpaceDetail() {
       return activeB - activeA
     })
   }, [projects, space])
-
-  // Default to first incomplete project
-  const defaultProject = useMemo(() => {
-    if (!space || sortedProjects.length === 0) return null
-    const incomplete = sortedProjects.find((p) => {
-      const c = space.projectTaskCounts?.[p]
-      return !c || c.completed < c.total
-    })
-    return incomplete ?? sortedProjects[0]
-  }, [sortedProjects, space])
-
-  const [selectedProject, setSelectedProject] = useState<string | null>(null)
-  const activeProject = selectedProject ?? defaultProject
 
   if (isLoading) return <DetailSkeleton />
 
@@ -213,9 +203,12 @@ export function SpaceDetail() {
     overviewText = overviewText.slice(headingMatch[0].length).trim()
   }
 
+  const displayTasks = pendingTasks.slice(0, 15)
+  const extraTaskCount = pendingTasks.length - 15
+
   return (
     <div className="min-h-screen bg-ink">
-      <div className="px-6 py-10">
+      <div className="mx-auto max-w-5xl px-6 py-10">
         <Link
           to="/spaces"
           className="inline-flex items-center gap-1.5 text-sm text-stone hover:text-sand transition-colors mb-6"
@@ -224,72 +217,146 @@ export function SpaceDetail() {
           Back to Spaces
         </Link>
 
-        {/* Two-column layout on lg+ */}
-        <div className="flex gap-8">
-          {/* Left column: sidebar */}
-          <div className="w-full lg:w-[300px] lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:pb-10">
-            {/* Header */}
-            <header className="mb-6">
-              <div className="flex items-start justify-between mb-2 gap-3">
-                <h1 className="font-heading text-2xl text-parchment">{space!.name}</h1>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <StatusBadge status={space!.status} />
-                <StatsBar
-                  pending={space!.taskCounts.pending}
-                  inProgress={space!.taskCounts.in_progress}
-                  completed={space!.taskCounts.completed}
-                />
-              </div>
-              <SpaceActions slug={slug ?? ''} />
-              {overviewText && (
-                <p className="text-sm text-stone leading-relaxed mt-3">{overviewText}</p>
-              )}
-            </header>
+        {/* Header */}
+        <header className="mb-8">
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="font-heading text-2xl text-parchment">{space!.name}</h1>
+              <StatusBadge status={space!.status} />
+              <StatsBar
+                pending={space!.taskCounts.pending}
+                inProgress={space!.taskCounts.in_progress}
+                completed={space!.taskCounts.completed}
+              />
+            </div>
+          </div>
+          <SpaceActions slug={slug ?? ''} />
+          {overviewText && (
+            <p className="text-sm text-stone leading-relaxed mt-3">{overviewText}</p>
+          )}
+        </header>
 
-            {/* Projects list */}
-            <section className="mb-8">
+        {/* Escalations banner */}
+        {pendingEscalations.length > 0 && (
+          <section className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageCircleQuestion className="h-4 w-4 text-sand" />
+              <h2 className="text-xs text-stone uppercase tracking-wider">
+                Escalations
+                <span className="ml-1.5 text-stone/60">({pendingEscalations.length})</span>
+              </h2>
+            </div>
+            <div className="space-y-3">
+              {(escalations ?? []).map((e) => (
+                <EscalationCard key={e.id} escalation={e} showSpace={false} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Two-column grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left column */}
+          <div className="space-y-8">
+            {/* Outstanding Tasks */}
+            <section>
+              <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Outstanding Tasks</h2>
+              {displayTasks.length === 0 ? (
+                <p className="text-sm text-stone/50">All caught up</p>
+              ) : (
+                <div className="divide-y divide-border-custom">
+                  {displayTasks.map((task) => (
+                    <div key={task.id} className="flex items-start gap-2 py-2">
+                      {task.status === 'in_progress' ? (
+                        <Loader2 className="h-3.5 w-3.5 text-amber-400 animate-spin mt-0.5 shrink-0" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 text-stone/40 mt-0.5 shrink-0" />
+                      )}
+                      <span className="text-sm text-parchment flex-1 leading-snug">{task.subject}</span>
+                      <span className="text-xs text-stone/50 shrink-0">{task.project}</span>
+                    </div>
+                  ))}
+                  {extraTaskCount > 0 && (
+                    <div className="py-2 text-xs text-stone/50">+{extraTaskCount} more</div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* Knowledge */}
+            {knowledgeFiles.length > 0 && (
+              <section>
+                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Knowledge</h2>
+                <div className="divide-y divide-border-custom">
+                  {knowledgeFiles.map((file) => (
+                    <Link
+                      key={file.path}
+                      to="/knowledge"
+                      className="flex items-center gap-2 py-2 text-sm text-parchment/80 hover:text-sand transition-colors"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-stone/40 shrink-0" />
+                      {file.name}
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-8">
+            {/* Recent Sessions */}
+            {sessions && sessions.length > 0 && (
+              <section>
+                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
+                <div className="divide-y divide-border-custom">
+                  {sessions.map((s) => (
+                    <div key={s.id} className="flex items-start gap-3 py-2">
+                      <span className="text-xs text-parchment font-medium whitespace-nowrap mt-0.5">
+                        {relativeTime(s.completedAt)}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs text-parchment/70 leading-relaxed line-clamp-2">
+                          {s.summary.length > 100 ? s.summary.slice(0, 100) + '...' : s.summary}
+                        </span>
+                        <div className="text-xs text-stone/40 mt-0.5">
+                          {s.project && <span>{s.project}</span>}
+                          {s.project && s.worker && <span> / </span>}
+                          {s.worker && <span>{s.worker}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Projects */}
+            <section>
               <div className="flex items-center gap-2 mb-3">
-                <FolderOpen className="h-4 w-4 text-sand" />
-                <h2 className="font-heading text-sm text-stone uppercase tracking-wider">Projects</h2>
+                <FolderOpen className="h-3.5 w-3.5 text-stone/50" />
+                <h2 className="text-xs text-stone uppercase tracking-wider">Projects</h2>
               </div>
               {sortedProjects.length === 0 ? (
-                <div className="rounded-lg border border-border-custom bg-surface/20 py-6 text-center">
-                  <p className="text-sm text-stone/50">No projects yet</p>
-                </div>
+                <p className="text-sm text-stone/50">No projects yet</p>
               ) : (
-                <div className="space-y-0.5">
+                <div className="divide-y divide-border-custom">
                   {sortedProjects.map((project) => {
                     const counts = space!.projectTaskCounts?.[project]
                     const allDone = counts && counts.total > 0 && counts.completed >= counts.total
-                    const isSelected = activeProject === project
 
                     return (
-                      <div
+                      <Link
                         key={project}
-                        className={`flex items-center justify-between px-3 py-2 text-sm rounded-md cursor-pointer transition-colors ${
-                          isSelected
-                            ? 'border-l-2 border-sand bg-surface/30 text-sand'
-                            : 'border-l-2 border-transparent hover:bg-surface/20 text-parchment'
-                        }`}
-                        onClick={() => {
-                          // On small screens, navigate; on lg+, select inline
-                          if (window.innerWidth < 1024) {
-                            navigate(`/spaces/${slug}/${project}`)
-                          } else {
-                            setSelectedProject(project)
-                          }
-                        }}
+                        to={`/spaces/${slug}/${project}`}
+                        className="flex items-center justify-between py-2 text-sm text-parchment hover:text-sand transition-colors"
                       >
-                        <span className="truncate">
-                          {isSelected && <ArrowRight className="inline h-3 w-3 mr-1.5 text-sand" />}
-                          {project}
-                        </span>
+                        <span>{project}</span>
                         <span className="text-xs tabular-nums shrink-0 ml-2">
                           {counts ? (
                             allDone ? (
                               <span className="inline-flex items-center gap-1 text-emerald-400">
-                                <Check className="h-3 w-3" />
+                                {counts.completed}/{counts.total} <Check className="h-3 w-3" />
                               </span>
                             ) : (
                               <span className="text-stone/60">{counts.completed}/{counts.total}</span>
@@ -298,64 +365,12 @@ export function SpaceDetail() {
                             <span className="text-stone/40">pending</span>
                           )}
                         </span>
-                      </div>
+                      </Link>
                     )
                   })}
                 </div>
               )}
             </section>
-
-            {/* Recent Sessions */}
-            {sessions && sessions.length > 0 && (
-              <section className="mb-8">
-                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
-                <div className="space-y-2">
-                  {sessions.map((s) => (
-                    <div key={s.id} className="flex items-start gap-2 text-sm py-1">
-                      <span className="text-stone/50 text-xs whitespace-nowrap mt-0.5">
-                        <Clock className="inline h-3 w-3 mr-1" />
-                        {relativeTime(s.completedAt)}
-                      </span>
-                      <span className="text-parchment/80 line-clamp-2 flex-1 text-xs leading-relaxed">
-                        {s.summary.length > 100 ? s.summary.slice(0, 100) + '...' : s.summary}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Escalations */}
-            {pendingEscalations.length > 0 && (
-              <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                  <MessageCircleQuestion className="h-4 w-4 text-sand" />
-                  <h2 className="text-xs text-stone uppercase tracking-wider">
-                    Escalations
-                    <span className="ml-1.5 text-stone/60">({pendingEscalations.length})</span>
-                  </h2>
-                </div>
-                <div className="space-y-3">
-                  {(escalations ?? []).map((e) => (
-                    <EscalationCard key={e.id} escalation={e} showSpace={false} />
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-
-          {/* Right column: project detail (lg+ only) */}
-          <div className="hidden lg:block flex-1 min-w-0 overflow-y-auto">
-            {activeProject ? (
-              <div>
-                <h2 className="font-heading text-xl text-parchment mb-5">{activeProject}</h2>
-                <ProjectView slug={slug ?? ''} project={activeProject} />
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-64">
-                <p className="text-sm text-stone/50">Select a project to view details</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
