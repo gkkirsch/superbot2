@@ -18,14 +18,12 @@ Reference for the superchargeclaudecode.com platform API.
 
 ## Authentication
 
-> **Gotcha**: Auth endpoints use `/auth/` prefix, NOT `/api/auth/`. This is a common mistake.
-
 ### Login
 
 ```bash
 curl -X POST https://superchargeclaudecode.com/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "your-email@example.com", "password": "<password>"}'
+  -d '{"email": "superbot2@superchargeclaudecode.com", "password": "<password>"}'
 ```
 
 Response includes a JWT token. Use it for all authenticated requests:
@@ -37,25 +35,14 @@ Authorization: Bearer <token>
 ### Signup
 
 ```bash
-curl -X POST https://superchargeclaudecode.com/api/auth/signup \
+curl -X POST https://superchargeclaudecode.com/auth/signup \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com", "password": "...", "name": "..."}'
 ```
 
-### Admin Password Reset
-
-For admin use only. Requires the `ADMIN_SECRET` env var value.
-
-```bash
-curl -X POST https://superchargeclaudecode.com/auth/reset-password \
-  -H "X-Admin-Secret: <admin-secret>" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "newPassword": "newpassword123"}'
-```
-
 ## Account
 
-- Use your registered account email for authenticated API requests
+- **superbot2**: superbot2@superchargeclaudecode.com (trusted publisher, `isTrustedPublisher: true`)
 
 ## Plugins
 
@@ -76,16 +63,118 @@ curl https://superchargeclaudecode.com/api/plugins/:name
 Returns all approved plugins (85+) in standard marketplace.json format.
 
 ```bash
-curl https://superchargeclaudecode.com/api/marketplaces/supercharge-claude-code/marketplace.json
+curl https://superchargeclaudecode.com/api/marketplace.json
 ```
 
 ### Import Plugin from GitHub (auth required)
 
 ```bash
-curl -X POST https://superchargeclaudecode.com/api/plugins/import-url \
+curl -X POST https://superchargeclaudecode.com/plugins/import-url \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://github.com/user/repo"}'
+```
+
+Also supports subdirectory URLs (e.g., `https://github.com/owner/repo/tree/main/skills/my-skill`).
+
+For trusted publishers, imported plugins are auto-approved.
+
+### Plugin Upload — Folder/File Upload (auth required)
+
+Upload a local plugin folder via the multi-step API. There is no single zip endpoint — upload files individually with their relative paths.
+
+**Step 1: Create a plugin draft**
+
+```bash
+curl -X POST https://superchargeclaudecode.com/plugins \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-plugin",
+    "description": "What this plugin does",
+    "version": "1.0.0",
+    "tags": ["tag1", "tag2"]
+  }'
+```
+
+Response includes `data.id` (the pluginId for subsequent calls) and `data.slug`.
+
+Required fields: `name` (2-50 chars, alphanumeric/hyphens/underscores), `description`, `version` (semver).
+Optional fields: `shortDesc`, `authorName`, `tags` (max 10), `repositoryUrl`.
+
+**Step 2: Upload files one at a time**
+
+```bash
+curl -X POST https://superchargeclaudecode.com/plugins/<pluginId>/files \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@./skills/my-skill/SKILL.md" \
+  -F "relativePath=skills/my-skill/SKILL.md"
+```
+
+- `file`: The file content (multipart/form-data, max 5MB per file)
+- `relativePath`: Path within the plugin directory structure (preserves folder hierarchy)
+
+The server auto-detects file type (SKILL, COMMAND, AGENT, HOOK, MCP_CONFIG, OTHER) from the path.
+
+System files (.DS_Store, Thumbs.db, desktop.ini, ._* files) are silently skipped.
+
+**Step 3: Submit for review**
+
+```bash
+curl -X POST https://superchargeclaudecode.com/plugins/<pluginId>/submit \
+  -H "Authorization: Bearer <token>"
+```
+
+For trusted publishers (e.g., superbot2), plugins are auto-approved on submit.
+
+**Full example — upload a plugin folder via bash:**
+
+```bash
+# Login
+TOKEN=$(curl -s -X POST https://superchargeclaudecode.com/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"$SUPERCHARGE_EMAIL","password":"$SUPERCHARGE_PASSWORD"}' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['token'])")
+
+# Create plugin
+PLUGIN_ID=$(curl -s -X POST https://superchargeclaudecode.com/plugins \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-plugin","description":"My plugin","version":"1.0.0"}' \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['id'])")
+
+# Upload each file (preserving relative paths)
+for file in skills/my-skill/SKILL.md .claude-plugin/plugin.json README.md; do
+  curl -s -X POST "https://superchargeclaudecode.com/plugins/${PLUGIN_ID}/files" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@./${file}" \
+    -F "relativePath=${file}"
+done
+
+# Submit for review
+curl -s -X POST "https://superchargeclaudecode.com/plugins/${PLUGIN_ID}/submit" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Delete File from Plugin (auth required)
+
+```bash
+curl -X DELETE https://superchargeclaudecode.com/plugins/<pluginId>/files/<fileId> \
+  -H "Authorization: Bearer <token>"
+```
+
+### Delete Plugin (auth required)
+
+```bash
+curl -X DELETE https://superchargeclaudecode.com/plugins/<pluginId> \
+  -H "Authorization: Bearer <token>"
+```
+
+### Get User's Plugins (auth required)
+
+```bash
+curl https://superchargeclaudecode.com/plugins/my-plugins \
+  -H "Authorization: Bearer <token>"
 ```
 
 ## Custom Marketplaces
@@ -173,6 +262,13 @@ Install:
 ```bash
 claude plugin marketplace add https://superchargeclaudecode.com/api/marketplaces/supercharge-claude-code/marketplace.json
 ```
+
+## Deployment
+
+- **Heroku app**: supercharge-claude-code
+- **Source**: ~/dev/personal/plugin-viewer
+- **Deploy**: `git push heroku main` from the source directory
+- **Post-build**: prisma generate, build, db push
 
 ## API Docs
 
