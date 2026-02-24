@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Parses Claude Code JSONL transcripts and buckets activity into 30-min slots.
+// Parses Claude Code JSONL transcripts and buckets activity into 1-hour slots.
+// Always returns exactly `hoursBack` entries (default 24), with zeros for empty hours.
 // Usage: node parse-activity.mjs [hoursBack]
 // Output: JSON array of { ts, tools, messages, sessions }
 
@@ -12,16 +13,16 @@ const CLAUDE_PROJECTS = join(SUPERBOT_DIR, '.claude', 'projects')
 const hoursBack = parseInt(process.argv[2] || '24', 10)
 
 async function parseActivity(hoursBack) {
-  const cutoff = Date.now() - hoursBack * 60 * 60 * 1000
-  const bucketMs = 30 * 60 * 1000
+  const now = Date.now()
+  const cutoff = now - hoursBack * 60 * 60 * 1000
+  const bucketMs = 60 * 60 * 1000
   const buckets = new Map()
 
   let projectDirs
   try {
     projectDirs = await readdir(CLAUDE_PROJECTS, { withFileTypes: true })
   } catch {
-    console.log('[]')
-    return
+    projectDirs = []
   }
 
   for (const dir of projectDirs) {
@@ -78,14 +79,26 @@ async function parseActivity(hoursBack) {
     }
   }
 
-  const sorted = [...buckets.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([, v]) => ({
-      ts: v.ts, tools: v.tools, messages: v.messages, sessions: v.sessions.size,
-      skills: [...v.skills], subagents: [...v.subagents]
-    }))
+  // Build exactly `hoursBack` hourly slots, merging actual data
+  const currentHourStart = now - (now % bucketMs)
+  const result = []
+  for (let i = hoursBack - 1; i >= 0; i--) {
+    const slotStart = currentHourStart - i * bucketMs
+    const b = buckets.get(slotStart)
+    if (b) {
+      result.push({
+        ts: b.ts, tools: b.tools, messages: b.messages, sessions: b.sessions.size,
+        skills: [...b.skills], subagents: [...b.subagents]
+      })
+    } else {
+      result.push({
+        ts: new Date(slotStart).toISOString(), tools: 0, messages: 0, sessions: 0,
+        skills: [], subagents: []
+      })
+    }
+  }
 
-  console.log(JSON.stringify(sorted))
+  console.log(JSON.stringify(result))
 }
 
 parseActivity(hoursBack)

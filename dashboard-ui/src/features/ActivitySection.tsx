@@ -10,39 +10,31 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const graphRef = useRef<HTMLDivElement>(null)
 
-  if (activity.length === 0) {
-    return <div className="text-xs text-stone/50 py-2">No activity yet</div>
-  }
+  // Backend always returns 24 hourly buckets; pad if somehow fewer
+  const bars: ActivityBucket[] = activity.length >= 24 ? activity : [
+    ...Array.from({ length: 24 - activity.length }, (_, i) => ({
+      ts: new Date(Date.now() - (24 - i) * 3600000).toISOString(),
+      tools: 0, messages: 0, sessions: 0, skills: [] as string[], subagents: [] as string[],
+    })),
+    ...activity,
+  ]
 
-  const maxTools = Math.max(...activity.map(b => b.tools), 1)
+  const maxTools = Math.max(...bars.map(b => b.tools), 1)
 
   const formatTime = (ts: string) => {
     const d = new Date(ts)
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
 
-  // Fill in gaps so the graph shows idle periods
-  const bucketMs = 30 * 60 * 1000
-  const filled: (ActivityBucket | null)[] = []
-  const first = new Date(activity[0].ts).getTime()
-  const last = new Date(activity[activity.length - 1].ts).getTime()
-  const bucketMap = new Map(activity.map(b => [new Date(b.ts).getTime(), b]))
-
-  for (let t = first; t <= last; t += bucketMs) {
-    filled.push(bucketMap.get(t) || null)
-  }
-
-  const hoveredBucket = hoveredIndex !== null ? filled[hoveredIndex] : null
-  const tooltipLeftPct = hoveredIndex !== null ? ((hoveredIndex + 0.5) / filled.length) * 100 : 0
+  const hoveredBucket = hoveredIndex !== null ? bars[hoveredIndex] : null
+  const tooltipLeftPct = hoveredIndex !== null ? ((hoveredIndex + 0.5) / bars.length) * 100 : 0
   const flipTooltip = tooltipLeftPct > 75
 
   const getTooltipStyle = (): React.CSSProperties => {
     if (hoveredIndex === null || !graphRef.current) return { display: 'none' }
     const rect = graphRef.current.getBoundingClientRect()
-    const leftPct = (hoveredIndex + 0.5) / filled.length
+    const leftPct = (hoveredIndex + 0.5) / bars.length
     const left = rect.left + rect.width * leftPct
-    // If the graph is near the top of the viewport, the tooltip above would
-    // overlap or go behind the sticky navbar. Flip it below the graph instead.
     const showBelow = rect.top < 160
     return {
       position: 'fixed',
@@ -57,22 +49,16 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
   return (
     <div className="relative" ref={graphRef} onMouseLeave={() => setHoveredIndex(null)}>
       <div className="flex items-end gap-px h-14">
-        {filled.map((bucket, i) => {
-          if (!bucket) {
-            return (
-              <div
-                key={i}
-                className="flex-1 min-w-[3px] max-w-[10px] h-[2px] rounded-t-sm bg-stone/10"
-                onMouseEnter={() => setHoveredIndex(i)}
-              />
-            )
-          }
-          const pct = Math.max(8, (bucket.tools / maxTools) * 100)
+        {bars.map((bucket, i) => {
+          const hasActivity = bucket.tools > 0
+          const pct = hasActivity ? Math.max(8, (bucket.tools / maxTools) * 100) : 0
           return (
             <div
               key={i}
-              className="flex-1 min-w-[3px] max-w-[10px] rounded-t-sm bg-ember transition-colors hover:bg-ember/80"
-              style={{ height: `${pct}%` }}
+              className={`flex-1 min-w-[3px] max-w-[10px] rounded-t-sm transition-colors ${
+                hasActivity ? 'bg-ember hover:bg-ember/80' : 'bg-stone/10'
+              }`}
+              style={{ height: hasActivity ? `${pct}%` : '2px' }}
               onMouseEnter={() => setHoveredIndex(i)}
             />
           )
