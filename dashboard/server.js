@@ -919,15 +919,21 @@ app.get('/api/knowledge', async (_req, res) => {
   try {
     const groups = []
 
-    async function getFilesWithMeta(dirPath) {
+    async function getFilesWithMeta(dirPath, prefix = '') {
       const entries = await safeReaddir(dirPath)
-      const files = entries.filter(f => !f.startsWith('.')).sort()
+      const sorted = entries.filter(f => !f.startsWith('.')).sort()
       const result = []
-      for (const f of files) {
+      for (const f of sorted) {
+        const fullPath = join(dirPath, f)
+        const relPath = prefix ? `${prefix}/${f}` : f
         try {
-          const s = await stat(join(dirPath, f))
-          if (!s.isFile()) continue
-          result.push({ name: f, path: f, lastModified: s.mtime.toISOString() })
+          const s = await stat(fullPath)
+          if (s.isDirectory()) {
+            const nested = await getFilesWithMeta(fullPath, relPath)
+            result.push(...nested)
+          } else if (s.isFile()) {
+            result.push({ name: f, path: relPath, lastModified: s.mtime.toISOString() })
+          }
         } catch { /* skip */ }
       }
       return result
@@ -967,7 +973,7 @@ app.get('/api/knowledge', async (_req, res) => {
 app.get('/api/knowledge/:source/:filename', async (req, res) => {
   try {
     const { source, filename } = req.params
-    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    const safeName = filename.replace(/\.\./g, '').replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\/+/g, '/').replace(/^\/|\/$/g, '')
     if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
@@ -991,7 +997,7 @@ app.put('/api/knowledge/:source/:filename', async (req, res) => {
     const { content } = req.body
     if (typeof content !== 'string') return res.status(400).json({ error: 'Missing content' })
 
-    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    const safeName = filename.replace(/\.\./g, '').replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\/+/g, '/').replace(/^\/|\/$/g, '')
     if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
@@ -1002,6 +1008,9 @@ app.put('/api/knowledge/:source/:filename', async (req, res) => {
       filePath = join(SPACES_DIR, safeSource, 'knowledge', safeName)
     }
 
+    // Ensure parent directory exists for nested paths
+    const parentDir = filePath.substring(0, filePath.lastIndexOf('/'))
+    await mkdir(parentDir, { recursive: true })
     await writeFile(filePath, content, 'utf-8')
     res.json({ ok: true })
   } catch (err) {
@@ -1012,7 +1021,7 @@ app.put('/api/knowledge/:source/:filename', async (req, res) => {
 app.delete('/api/knowledge/:source/:filename', async (req, res) => {
   try {
     const { source, filename } = req.params
-    const safeName = filename.replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    const safeName = filename.replace(/\.\./g, '').replace(/[^a-zA-Z0-9_\-\.\/]/g, '').replace(/\/+/g, '/').replace(/^\/|\/$/g, '')
     if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
 
     let filePath
@@ -3929,40 +3938,40 @@ const INDEX_HTML = resolve(DIST_DIR, 'index.html')
 
 if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
-
-  // SPA fallback (Express 5 wildcard syntax)
-  app.get('/{*path}', (_req, res) => {
-    if (existsSync(INDEX_HTML)) {
-      res.sendFile(INDEX_HTML, (err) => {
-        if (err) {
-          console.error('Failed to serve index.html:', err.message)
-          res.status(503).send(`
-            <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
-              <h1>Dashboard Error</h1>
-              <p>Failed to serve the dashboard UI: ${err.message}</p>
-              <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
-            </body></html>
-          `)
-        }
-      })
-    } else {
-      res.status(503).send(`
-        <html>
-          <head><title>Dashboard Not Built</title></head>
-          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
-            <h1>Dashboard UI Not Built</h1>
-            <p>The dashboard server is running, but the UI hasn't been built yet.</p>
-            <p>Run this command to build it:</p>
-            <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
-            <p>Then refresh this page.</p>
-            <hr>
-            <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
-          </body>
-        </html>
-      `)
-    }
-  })
 }
+
+// SPA fallback — always registered so non-API routes return a useful response
+app.get('/{*path}', (_req, res) => {
+  if (existsSync(INDEX_HTML)) {
+    res.sendFile(INDEX_HTML, (err) => {
+      if (err) {
+        console.error('Failed to serve index.html:', err.message)
+        res.status(503).send(`
+          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard Error</h1>
+            <p>Failed to serve the dashboard UI: ${err.message}</p>
+            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+          </body></html>
+        `)
+      }
+    })
+  } else {
+    res.status(503).send(`
+      <html>
+        <head><title>Dashboard Not Built</title></head>
+        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+          <h1>Dashboard UI Not Built</h1>
+          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+          <p>Run this command to build it:</p>
+          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+          <p>Then refresh this page.</p>
+          <hr>
+          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+        </body>
+      </html>
+    `)
+  }
+})
 
 // --- Start ---
 

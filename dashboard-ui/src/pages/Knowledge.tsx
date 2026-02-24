@@ -530,7 +530,7 @@ export function Knowledge() {
       filtered = filtered
         .map(g => ({
           ...g,
-          files: g.files.filter(f => f.name.toLowerCase().includes(q)),
+          files: g.files.filter(f => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q)),
         }))
         .filter(g => g.files.length > 0)
     }
@@ -670,21 +670,27 @@ export function Knowledge() {
                 {viewMode === 'list' ? (
                   /* List view */
                   <div>
-                    {group.files.map(file => (
-                      <div
-                        key={file.path}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group cursor-pointer"
-                        onClick={() => openFile(group.source, file.path)}
-                      >
-                        <FileIcon filename={file.name} />
-                        <span className="text-sm text-parchment/80 flex-1 truncate">{file.name}</span>
-                        <span className="text-xs text-stone/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">{formatDate(file.lastModified)}</span>
-                        <RowMenu
-                          onEdit={() => openFile(group.source, file.path)}
-                          onDelete={() => handleDelete(group.source, file.path)}
-                        />
-                      </div>
-                    ))}
+                    {group.files.map(file => {
+                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/') + 1) : ''
+                      return (
+                        <div
+                          key={file.path}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group cursor-pointer"
+                          onClick={() => openFile(group.source, file.path)}
+                        >
+                          <FileIcon filename={file.name} />
+                          <span className="text-sm flex-1 truncate">
+                            {dirPrefix && <span className="text-stone/40">{dirPrefix}</span>}
+                            <span className="text-parchment/80">{file.name}</span>
+                          </span>
+                          <span className="text-xs text-stone/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">{formatDate(file.lastModified)}</span>
+                          <RowMenu
+                            onEdit={() => openFile(group.source, file.path)}
+                            onDelete={() => handleDelete(group.source, file.path)}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
                   /* Grid view */
@@ -694,9 +700,10 @@ export function Knowledge() {
                         key={file.path}
                         onClick={() => openFile(group.source, file.path)}
                         className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
+                        title={file.path}
                       >
                         <FileIcon filename={file.name} />
-                        <span className="text-xs text-parchment/70 truncate w-full">{file.name}</span>
+                        <span className="text-xs text-parchment/70 truncate w-full">{file.path.includes('/') ? file.path : file.name}</span>
                       </button>
                     ))}
                   </div>
