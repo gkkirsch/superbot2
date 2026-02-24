@@ -28,6 +28,16 @@ Thumbs.db
 .node-path
 .restart
 schedule-last-run.json
+todos.json
+config.json
+escalations/
+spaces/
+knowledge/
+IDENTITY.md
+USER.md
+MEMORY.md
+*.pid
+dashboard.log
 
 # Analysis artifacts
 analysis-history/
