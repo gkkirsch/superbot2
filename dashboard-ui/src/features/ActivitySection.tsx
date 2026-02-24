@@ -56,9 +56,9 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
             <div
               key={i}
               className={`flex-1 min-w-[3px] max-w-[10px] rounded-t-sm transition-colors ${
-                hasActivity ? 'bg-ember hover:bg-ember/80' : 'bg-stone/10'
+                hasActivity ? 'bg-ember hover:bg-ember/80' : ''
               }`}
-              style={{ height: hasActivity ? `${pct}%` : '2px' }}
+              style={{ height: hasActivity ? `${pct}%` : '0px' }}
               onMouseEnter={() => setHoveredIndex(i)}
             />
           )
