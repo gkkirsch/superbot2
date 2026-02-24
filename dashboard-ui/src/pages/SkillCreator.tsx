@@ -912,6 +912,33 @@ export function SkillCreator() {
             </div>
           )}
 
+          {/* Attached files indicator */}
+          {attachedFiles.length > 0 && (
+            <div className="mx-4 mb-2 flex flex-wrap gap-1.5">
+              {attachedFiles.map((f, i) => (
+                <div key={i} className="relative group inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface/50 border border-border-custom">
+                  {f.preview ? (
+                    <img src={f.preview} alt={f.file.name} className="h-5 w-5 object-cover rounded" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 text-stone/50" />
+                  )}
+                  <span className="text-[11px] text-parchment/70 truncate max-w-[120px]">{f.file.name}</span>
+                  <button
+                    onClick={() => {
+                      setAttachedFiles(prev => {
+                        if (prev[i].preview) URL.revokeObjectURL(prev[i].preview)
+                        return prev.filter((_, idx) => idx !== i)
+                      })
+                    }}
+                    className="p-0.5 rounded text-stone/40 hover:text-parchment hover:bg-surface/80 transition-colors"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Input area */}
           <form onSubmit={handleSubmit} className="px-4 pb-4 flex items-end gap-2 shrink-0">
             <input
