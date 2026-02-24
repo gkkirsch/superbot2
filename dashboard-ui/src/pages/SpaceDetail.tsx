@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, FolderOpen, ArrowRight, MessageCircleQuestion, Play, Square, Loader2, Rocket, ExternalLink } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import { ArrowLeft, FolderOpen, ArrowRight, MessageCircleQuestion, Play, Square, Loader2, Rocket, ExternalLink, Check, Clock } from 'lucide-react'
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
-import { useSpace, useSpaceEscalations, useServerStatus } from '@/hooks/useSpaces'
+import { useSpace, useSpaceEscalations, useServerStatus, useSessions } from '@/hooks/useSpaces'
 import { startServer, stopServer, deployServer } from '@/lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -26,44 +25,18 @@ function DetailSkeleton() {
   )
 }
 
-function ProjectCard({ slug, project, counts, createdAt }: {
-  slug: string
-  project: string
-  counts?: { pending: number; in_progress: number; completed: number; total: number }
-  createdAt?: string
-}) {
-  const navigate = useNavigate()
-
-  return (
-    <Card
-      className="cursor-pointer border-border-custom transition-all duration-200 hover:border-sand/40 hover:-translate-y-0.5"
-      onClick={() => navigate(`/spaces/${slug}/${project}`)}
-    >
-      <CardHeader className="pb-2">
-        <CardTitle className="font-heading text-base text-parchment flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-sand/60" />
-          {project}
-        </CardTitle>
-        {createdAt && (
-          <span className="text-xs text-stone/60">
-            Created {new Date(createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </span>
-        )}
-      </CardHeader>
-      <CardFooter className="flex items-center justify-between pt-0">
-        {counts ? (
-          <StatsBar
-            pending={counts.pending}
-            inProgress={counts.in_progress}
-            completed={counts.completed}
-          />
-        ) : (
-          <span className="text-xs text-stone/50">No tasks</span>
-        )}
-        <ArrowRight className="h-3.5 w-3.5 text-stone/40" />
-      </CardFooter>
-    </Card>
-  )
+function relativeTime(dateStr: string): string {
+  const now = Date.now()
+  const then = new Date(dateStr).getTime()
+  const diff = now - then
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return `${Math.floor(days / 30)}mo ago`
 }
 
 function SpaceActions({ slug }: { slug: string }) {
@@ -171,8 +144,10 @@ function SpaceActions({ slug }: { slug: string }) {
 
 export function SpaceDetail() {
   const { slug } = useParams<{ slug: string }>()
+  const navigate = useNavigate()
   const { data, isLoading, error } = useSpace(slug ?? '')
   const { data: escalations } = useSpaceEscalations(slug ?? '')
+  const { data: sessions } = useSessions(5, slug)
 
   if (isLoading) return <DetailSkeleton />
 
@@ -213,11 +188,11 @@ export function SpaceDetail() {
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-5xl px-6 py-10">
         <Link
-          to="/"
+          to="/spaces"
           className="inline-flex items-center gap-1.5 text-sm text-stone hover:text-sand transition-colors mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
-          Dashboard
+          Back to Spaces
         </Link>
 
         {/* Header */}
@@ -250,19 +225,73 @@ export function SpaceDetail() {
               <p className="text-sm text-stone/50">No projects yet</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {projects.map((project) => (
-                <ProjectCard
-                  key={project}
-                  slug={slug ?? ''}
-                  project={project}
-                  counts={space.projectTaskCounts?.[project]}
-                  createdAt={space.projectCreatedAt?.[project]}
-                />
-              ))}
+            <div className="divide-y divide-border-custom">
+              {[...projects]
+                .sort((a, b) => {
+                  const ca = space.projectTaskCounts?.[a]
+                  const cb = space.projectTaskCounts?.[b]
+                  const doneA = ca ? (ca.completed >= ca.total ? 1 : 0) : 0
+                  const doneB = cb ? (cb.completed >= cb.total ? 1 : 0) : 0
+                  if (doneA !== doneB) return doneA - doneB
+                  const activeA = ca ? ca.pending + ca.in_progress : 0
+                  const activeB = cb ? cb.pending + cb.in_progress : 0
+                  return activeB - activeA
+                })
+                .map((project) => {
+                  const counts = space.projectTaskCounts?.[project]
+                  const allDone = counts && counts.total > 0 && counts.completed >= counts.total
+                  return (
+                    <div
+                      key={project}
+                      className="flex items-center justify-between px-0 py-2 text-sm hover:text-sand cursor-pointer transition-colors"
+                      onClick={() => navigate(`/spaces/${slug}/${project}`)}
+                    >
+                      <span className="text-parchment">
+                        <ArrowRight className="inline h-3 w-3 mr-2 text-stone/40" />
+                        {project}
+                      </span>
+                      <span className="text-stone/60 text-xs tabular-nums">
+                        {counts ? (
+                          allDone ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-400">
+                              {counts.completed}/{counts.total} <Check className="h-3 w-3" />
+                            </span>
+                          ) : (
+                            <>{counts.completed}/{counts.total}</>
+                          )
+                        ) : (
+                          'pending'
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
             </div>
           )}
         </section>
+
+        {/* Recent Sessions */}
+        {sessions && sessions.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Recent Sessions</h2>
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-start gap-3 text-sm py-1">
+                  <span className="text-stone/50 text-xs whitespace-nowrap mt-0.5">
+                    <Clock className="inline h-3 w-3 mr-1" />
+                    {relativeTime(s.completedAt)}
+                  </span>
+                  <span className="text-parchment/80 line-clamp-1 flex-1">
+                    {s.summary.length > 120 ? s.summary.slice(0, 120) + '...' : s.summary}
+                  </span>
+                  {s.worker && (
+                    <span className="text-stone/40 text-xs whitespace-nowrap">{s.worker}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Escalations */}
         {pendingEscalations.length > 0 && (
