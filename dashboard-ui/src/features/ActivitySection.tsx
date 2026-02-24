@@ -64,6 +64,10 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
           )
         })}
       </div>
+      <div className="flex justify-between text-[10px] text-stone-500 mt-0.5">
+        <span>24h ago</span>
+        <span>now</span>
+      </div>
 
       {hoveredIndex !== null && hoveredBucket && createPortal(
         <div style={getTooltipStyle()}>
