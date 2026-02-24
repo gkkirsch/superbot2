@@ -2934,6 +2934,87 @@ app.get('/api/skill-creator/stream', (req, res) => {
   })
 })
 
+// Create a new blank draft (skill or plugin) without starting a chat session
+app.post('/api/skill-creator/new-draft', async (req, res) => {
+  try {
+    const { draftType } = req.body
+    if (!draftType || !['skill', 'plugin'].includes(draftType)) {
+      return res.status(400).json({ error: 'draftType must be "skill" or "plugin"' })
+    }
+
+    const draftName = `draft-${Date.now()}`
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
+    await mkdir(draftPath, { recursive: true })
+
+    if (draftType === 'plugin') {
+      // Full plugin scaffold
+      const pluginSlug = draftName
+      await mkdir(join(draftPath, '.claude-plugin'), { recursive: true })
+      await mkdir(join(draftPath, 'skills', pluginSlug), { recursive: true })
+
+      const pluginJson = {
+        name: pluginSlug,
+        version: '1.0.0',
+        description: '',
+        author: { name: 'superbot2' },
+        skills: [`./skills/${pluginSlug}`],
+      }
+      await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
+
+      const skillMd = `---
+name: ${pluginSlug}
+description: >
+  TODO: Describe when this skill should be triggered.
+version: 1.0.0
+user-invocable: true
+---
+
+# ${pluginSlug}
+
+TODO: Add skill instructions here.
+`
+      await writeFile(join(draftPath, 'skills', pluginSlug, 'SKILL.md'), skillMd)
+
+      const readmeMd = `# ${pluginSlug}
+
+A Claude Code plugin.
+
+## Installation
+
+\`\`\`bash
+claude plugin install ${pluginSlug}
+\`\`\`
+`
+      await writeFile(join(draftPath, 'README.md'), readmeMd)
+    } else {
+      // Skill-only: just SKILL.md at root
+      const skillMd = `---
+name: ${draftName}
+description: >
+  Describe when to use this skill.
+version: 1.0.0
+---
+
+# ${draftName}
+
+What this skill does and how to use it.
+`
+      await writeFile(join(draftPath, 'SKILL.md'), skillMd)
+    }
+
+    const draftMetadata = {
+      createdAt: new Date().toISOString(),
+      status: 'incomplete',
+      type: draftType,
+    }
+    await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(draftMetadata, null, 2))
+
+    res.json({ ok: true, name: draftName, type: draftType })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Chat endpoint
 app.post('/api/skill-creator/chat', async (req, res) => {
   try {
@@ -3014,6 +3095,7 @@ claude plugin install ${pluginSlug}
       sessionId,
       createdAt: new Date().toISOString(),
       status: 'in_progress',
+      type: 'plugin',
     }
     await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(draftMetadata, null, 2))
 
@@ -3022,7 +3104,7 @@ claude plugin install ${pluginSlug}
 
     // Notify frontend of draft creation
     if (session.sseResponse) {
-      session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath })}\n\n`)
+      session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath, draftType: 'plugin' })}\n\n`)
     }
 
     // Spawn new claude -p process (absolute path — aliases don't work with spawn)
@@ -3127,6 +3209,16 @@ claude plugin install ${pluginSlug}
   }
 })
 
+// Infer draft type from directory structure
+async function inferDraftType(draftPath) {
+  try {
+    await stat(join(draftPath, '.claude-plugin', 'plugin.json'))
+    return 'plugin'
+  } catch {
+    return 'skill'
+  }
+}
+
 // List all drafts
 app.get('/api/skill-creator/drafts', async (req, res) => {
   try {
@@ -3135,13 +3227,19 @@ app.get('/api/skill-creator/drafts', async (req, res) => {
     const drafts = []
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
-      const metaPath = join(SKILL_CREATOR_DRAFTS_DIR, entry.name, 'draft-metadata.json')
+      const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, entry.name)
+      const metaPath = join(draftPath, 'draft-metadata.json')
       try {
         const raw = await readFile(metaPath, 'utf-8')
         const meta = JSON.parse(raw)
+        // Ensure type field exists (infer for legacy drafts)
+        if (!meta.type) {
+          meta.type = await inferDraftType(draftPath)
+        }
         drafts.push({ name: entry.name, ...meta })
       } catch {
-        drafts.push({ name: entry.name, status: 'unknown' })
+        const type = await inferDraftType(draftPath)
+        drafts.push({ name: entry.name, status: 'unknown', type })
       }
     }
     res.json({ ok: true, drafts })
@@ -3304,111 +3402,128 @@ app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
       'TeammateIdle', 'TaskCompleted', 'PreCompact', 'SessionStart', 'SessionEnd', 'ConfigChange'
     ])
 
-    // --- Validate .claude-plugin/plugin.json ---
-    const pluginJsonPath = join(draftPath, '.claude-plugin', 'plugin.json')
-    let pluginJson = null
-    try {
-      const raw = await readFile(pluginJsonPath, 'utf-8')
-      pluginJson = JSON.parse(raw)
-    } catch (e) {
-      if (e.code === 'ENOENT') {
-        errors.push({ file: '.claude-plugin/plugin.json', field: null, message: 'File missing — required' })
-      } else {
-        errors.push({ file: '.claude-plugin/plugin.json', field: null, message: `Invalid JSON: ${e.message}` })
-      }
-    }
+    // Determine draft type
+    const draftType = await inferDraftType(draftPath)
 
-    if (pluginJson) {
-      if (!pluginJson.name) {
-        errors.push({ file: '.claude-plugin/plugin.json', field: 'name', message: 'Required field missing' })
-      } else if (pluginJson.name !== req.params.name) {
-        // Check if name matches draft dir — only warn since agent may rename
-        warnings.push({ file: '.claude-plugin/plugin.json', field: 'name', message: `Name "${pluginJson.name}" does not match draft directory "${req.params.name}"` })
+    // --- Helper: validate a single SKILL.md frontmatter ---
+    function validateSkillMdFrontmatter(raw, fmFile) {
+      const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+      if (!fmMatch) {
+        errors.push({ file: fmFile, field: null, message: 'No frontmatter found' })
+        return
       }
-      if (!pluginJson.version) {
-        errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: 'Required field missing' })
-      } else if (!SEMVER_RE.test(pluginJson.version)) {
-        errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: `Invalid semver: "${pluginJson.version}" (expected x.y.z)` })
-      }
-      if (!pluginJson.description && pluginJson.description !== '') {
-        errors.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Required field missing' })
-      } else if (typeof pluginJson.description === 'string' && pluginJson.description.trim() === '') {
-        warnings.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Description is empty' })
-      }
-    }
-
-    // --- Find SKILL.md files in skills/ ---
-    const skillsDir = join(draftPath, 'skills')
-    let skillDirs = []
-    try {
-      const entries = await readdir(skillsDir, { withFileTypes: true })
-      skillDirs = entries.filter(e => e.isDirectory()).map(e => e.name)
-    } catch {
-      // skills/ dir may not exist
-    }
-
-    let foundSkillMd = false
-    for (const skillDir of skillDirs) {
-      const skillMdPath = join(skillsDir, skillDir, 'SKILL.md')
+      let fm
       try {
-        const raw = await readFile(skillMdPath, 'utf-8')
-        foundSkillMd = true
-        const fmFile = `skills/${skillDir}/SKILL.md`
-
-        // Parse frontmatter
-        const fmMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-        if (!fmMatch) {
-          errors.push({ file: fmFile, field: null, message: 'No frontmatter found' })
-          continue
-        }
-
-        let fm
-        try {
-          fm = yaml.load(fmMatch[1])
-        } catch (e) {
-          errors.push({ file: fmFile, field: null, message: `Invalid YAML frontmatter: ${e.message}` })
-          continue
-        }
-
-        if (!fm || typeof fm !== 'object') {
-          errors.push({ file: fmFile, field: null, message: 'Frontmatter is empty' })
-          continue
-        }
-
-        if (!fm.name) {
-          errors.push({ file: fmFile, field: 'name', message: 'Required field missing' })
-        }
-        if (!fm.description) {
-          errors.push({ file: fmFile, field: 'description', message: 'Required field missing' })
-        } else if (typeof fm.description === 'string' && fm.description.trim().length < 20) {
-          warnings.push({ file: fmFile, field: 'description', message: 'Description is very short' })
-        }
-        if (!fm.version) {
-          warnings.push({ file: fmFile, field: 'version', message: 'Version not specified' })
-        }
-
-        // Validate credentials if present
-        const credentials = fm.metadata?.credentials || fm.credentials
-        if (credentials && Array.isArray(credentials)) {
-          for (let i = 0; i < credentials.length; i++) {
-            const cred = credentials[i]
-            if (!cred.key) {
-              errors.push({ file: fmFile, field: `credentials[${i}].key`, message: 'Credential missing required "key" field' })
-            }
-            if (!cred.label) {
-              errors.push({ file: fmFile, field: `credentials[${i}].label`, message: 'Credential missing required "label" field' })
-            }
+        fm = yaml.load(fmMatch[1])
+      } catch (e) {
+        errors.push({ file: fmFile, field: null, message: `Invalid YAML frontmatter: ${e.message}` })
+        return
+      }
+      if (!fm || typeof fm !== 'object') {
+        errors.push({ file: fmFile, field: null, message: 'Frontmatter is empty' })
+        return
+      }
+      if (!fm.name) {
+        errors.push({ file: fmFile, field: 'name', message: 'Required field missing' })
+      }
+      if (!fm.description) {
+        errors.push({ file: fmFile, field: 'description', message: 'Required field missing' })
+      } else if (typeof fm.description === 'string' && fm.description.trim().length < 20) {
+        warnings.push({ file: fmFile, field: 'description', message: 'Description is very short' })
+      }
+      if (!fm.version) {
+        warnings.push({ file: fmFile, field: 'version', message: 'Version not specified' })
+      }
+      // Validate credentials if present
+      const credentials = fm.metadata?.credentials || fm.credentials
+      if (credentials && Array.isArray(credentials)) {
+        for (let i = 0; i < credentials.length; i++) {
+          const cred = credentials[i]
+          if (!cred.key) {
+            errors.push({ file: fmFile, field: `credentials[${i}].key`, message: 'Credential missing required "key" field' })
+          }
+          if (!cred.label) {
+            errors.push({ file: fmFile, field: `credentials[${i}].label`, message: 'Credential missing required "label" field' })
           }
         }
-      } catch (e) {
-        if (e.code !== 'ENOENT') {
-          errors.push({ file: `skills/${skillDir}/SKILL.md`, field: null, message: `Read error: ${e.message}` })
-        }
       }
     }
 
-    if (!foundSkillMd) {
-      errors.push({ file: 'skills/', field: null, message: 'No SKILL.md found — at least one skill is required' })
+    if (draftType === 'skill') {
+      // --- Skill-type validation: just needs root SKILL.md with name + description ---
+      const rootSkillPath = join(draftPath, 'SKILL.md')
+      try {
+        const raw = await readFile(rootSkillPath, 'utf-8')
+        validateSkillMdFrontmatter(raw, 'SKILL.md')
+      } catch (e) {
+        if (e.code === 'ENOENT') {
+          errors.push({ file: 'SKILL.md', field: null, message: 'File missing — required for skill drafts' })
+        } else {
+          errors.push({ file: 'SKILL.md', field: null, message: `Read error: ${e.message}` })
+        }
+      }
+    } else {
+      // --- Plugin-type validation ---
+
+      // Validate .claude-plugin/plugin.json
+      const pluginJsonPath = join(draftPath, '.claude-plugin', 'plugin.json')
+      let pluginJson = null
+      try {
+        const raw = await readFile(pluginJsonPath, 'utf-8')
+        pluginJson = JSON.parse(raw)
+      } catch (e) {
+        if (e.code === 'ENOENT') {
+          errors.push({ file: '.claude-plugin/plugin.json', field: null, message: 'File missing — required' })
+        } else {
+          errors.push({ file: '.claude-plugin/plugin.json', field: null, message: `Invalid JSON: ${e.message}` })
+        }
+      }
+
+      if (pluginJson) {
+        if (!pluginJson.name) {
+          errors.push({ file: '.claude-plugin/plugin.json', field: 'name', message: 'Required field missing' })
+        } else if (pluginJson.name !== req.params.name) {
+          warnings.push({ file: '.claude-plugin/plugin.json', field: 'name', message: `Name "${pluginJson.name}" does not match draft directory "${req.params.name}"` })
+        }
+        if (!pluginJson.version) {
+          errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: 'Required field missing' })
+        } else if (!SEMVER_RE.test(pluginJson.version)) {
+          errors.push({ file: '.claude-plugin/plugin.json', field: 'version', message: `Invalid semver: "${pluginJson.version}" (expected x.y.z)` })
+        }
+        if (!pluginJson.description && pluginJson.description !== '') {
+          errors.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Required field missing' })
+        } else if (typeof pluginJson.description === 'string' && pluginJson.description.trim() === '') {
+          warnings.push({ file: '.claude-plugin/plugin.json', field: 'description', message: 'Description is empty' })
+        }
+      }
+
+      // Find SKILL.md files in skills/
+      const skillsDir = join(draftPath, 'skills')
+      let skillDirs = []
+      try {
+        const entries = await readdir(skillsDir, { withFileTypes: true })
+        skillDirs = entries.filter(e => e.isDirectory()).map(e => e.name)
+      } catch {
+        // skills/ dir may not exist
+      }
+
+      let foundSkillMd = false
+      for (const skillDir of skillDirs) {
+        const skillMdPath = join(skillsDir, skillDir, 'SKILL.md')
+        try {
+          const raw = await readFile(skillMdPath, 'utf-8')
+          foundSkillMd = true
+          validateSkillMdFrontmatter(raw, `skills/${skillDir}/SKILL.md`)
+        } catch (e) {
+          if (e.code !== 'ENOENT') {
+            errors.push({ file: `skills/${skillDir}/SKILL.md`, field: null, message: `Read error: ${e.message}` })
+          }
+        }
+      }
+
+      if (!foundSkillMd) {
+        errors.push({ file: 'skills/', field: null, message: 'No SKILL.md found — at least one skill is required' })
+      }
     }
 
     // --- Validate commands/*.md (if any) ---

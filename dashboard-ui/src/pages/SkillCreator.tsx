@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 
@@ -252,9 +252,10 @@ interface InstalledSkill {
 
 interface DraftSkill {
   name: string
-  sessionId: string
+  sessionId?: string
   createdAt: string
   status: string
+  type?: 'plugin' | 'skill'
 }
 
 interface ValidationIssue {
@@ -269,8 +270,8 @@ interface ValidationResult {
   warnings: ValidationIssue[]
 }
 
-function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft }: {
-  onNewSkill: () => void
+function MySkillsSidebar({ onNewDraft, refreshKey, selectedDraft, onSelectDraft }: {
+  onNewDraft: (type: 'plugin' | 'skill') => void
   refreshKey: number
   selectedDraft: string | null
   onSelectDraft: (name: string) => void
@@ -330,6 +331,7 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
                 <div className="space-y-0.5">
                   {drafts.map(draft => {
                     const isSelected = selectedDraft === draft.name
+                    const isPlugin = draft.type === 'plugin'
                     return (
                       <button
                         key={draft.name}
@@ -342,7 +344,13 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
                       >
                         <div className="flex items-center gap-1.5">
                           <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{draft.name}</p>
-                          <span className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">draft</span>
+                          <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded ${
+                            isPlugin
+                              ? 'bg-blue-500/20 text-blue-400'
+                              : 'bg-purple-500/20 text-purple-400'
+                          }`}>
+                            {isPlugin ? 'Plugin' : 'Skill'}
+                          </span>
                         </div>
                         <p className="text-xs text-stone/60 mt-0.5">{draft.status === 'complete' ? 'Ready to promote' : draft.status}</p>
                       </button>
@@ -371,14 +379,59 @@ function MySkillsSidebar({ onNewSkill, refreshKey, selectedDraft, onSelectDraft 
       </div>
 
       <div className="px-3 pb-3 pt-2">
-        <button
-          onClick={onNewSkill}
-          className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/30 transition-colors flex items-center justify-center gap-1.5 text-xs"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New Plugin
-        </button>
+        <NewDraftDropdown onNewDraft={onNewDraft} />
       </div>
+    </div>
+  )
+}
+
+function NewDraftDropdown({ onNewDraft }: { onNewDraft: (type: 'plugin' | 'skill') => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/30 transition-colors flex items-center justify-center gap-1.5 text-xs"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        New
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 right-0 mb-1 bg-ink border border-border-custom rounded-lg shadow-xl overflow-hidden z-10">
+          <button
+            onClick={() => { setOpen(false); onNewDraft('plugin') }}
+            className="w-full text-left px-3 py-2 text-xs text-parchment/80 hover:bg-surface/40 transition-colors flex items-center gap-2"
+          >
+            <Package className="h-3.5 w-3.5 text-blue-400" />
+            <div>
+              <span className="font-medium">New Plugin</span>
+              <p className="text-[10px] text-stone/50 mt-0.5">Full package with plugin.json + skills/</p>
+            </div>
+          </button>
+          <button
+            onClick={() => { setOpen(false); onNewDraft('skill') }}
+            className="w-full text-left px-3 py-2 text-xs text-parchment/80 hover:bg-surface/40 transition-colors flex items-center gap-2 border-t border-border-custom"
+          >
+            <FileText className="h-3.5 w-3.5 text-purple-400" />
+            <div>
+              <span className="font-medium">New Skill</span>
+              <p className="text-[10px] text-stone/50 mt-0.5">Standalone SKILL.md file</p>
+            </div>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -415,6 +468,9 @@ export function SkillCreator() {
   const [validation, setValidation] = useState<ValidationResult | null>(null)
   const [validating, setValidating] = useState(false)
   const [validationExpanded, setValidationExpanded] = useState(false)
+  const [selectedDraftType, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
+  const [pluginMeta, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
+  const [pluginMetaSaving, setPluginMetaSaving] = useState(false)
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -712,6 +768,27 @@ export function SkillCreator() {
     setSessionId(crypto.randomUUID())
   }, [sessionId])
 
+  // Create a new blank draft (skill or plugin) without starting a chat
+  const handleNewDraft = useCallback(async (draftType: 'plugin' | 'skill') => {
+    try {
+      const res = await fetch('/api/skill-creator/new-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftType }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setSkillsRefreshKey(k => k + 1)
+        setSelectedDraft(data.name)
+        setSelectedDraftType(draftType)
+      } else {
+        setError(data.error || 'Failed to create draft')
+      }
+    } catch {
+      setError('Failed to create draft')
+    }
+  }, [])
+
   // When chat creates a draft, auto-select it
   useEffect(() => {
     if (draftName && !selectedDraft) {
@@ -730,6 +807,8 @@ export function SkillCreator() {
     setFileEditing(false)
     setValidation(null)
     setValidationExpanded(false)
+    setSelectedDraftType(null)
+    setPluginMeta(null)
   }, [])
 
   // Fetch files for the selected draft
@@ -738,6 +817,8 @@ export function SkillCreator() {
     if (!activeDraft) {
       setSelectedDraftFiles([])
       setFrontmatter(null)
+      setSelectedDraftType(null)
+      setPluginMeta(null)
       return
     }
     let cancelled = false
@@ -747,19 +828,56 @@ export function SkillCreator() {
         const data = await res.json()
         if (!cancelled && data.ok) {
           setSelectedDraftFiles(data.files)
-          // Auto-fetch SKILL.md frontmatter if it exists
-          const hasSkillMd = data.files.some((f: { path: string }) => f.path === 'SKILL.md')
-          if (hasSkillMd) {
+
+          // Detect type from file structure
+          const hasPluginJson = data.files.some((f: { path: string }) => f.path === '.claude-plugin/plugin.json')
+          const hasRootSkillMd = data.files.some((f: { path: string }) => f.path === 'SKILL.md')
+          const detectedType = hasPluginJson ? 'plugin' : 'skill'
+          if (!cancelled) setSelectedDraftType(detectedType)
+
+          // For skill type: fetch root SKILL.md frontmatter
+          // For plugin type: fetch SKILL.md from skills/ subdirectory
+          if (hasRootSkillMd) {
             try {
               const skillRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/SKILL.md`)
               const skillData = await skillRes.json()
               if (!cancelled && skillData.ok) {
-                const fm = parseFrontmatter(skillData.content)
-                setFrontmatter(fm)
+                setFrontmatter(parseFrontmatter(skillData.content))
               }
             } catch {}
           } else {
-            if (!cancelled) setFrontmatter(null)
+            // Look for first SKILL.md in skills/ subdirectories
+            const skillFile = data.files.find((f: { path: string }) => f.path.startsWith('skills/') && f.path.endsWith('/SKILL.md'))
+            if (skillFile) {
+              try {
+                const skillRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/${skillFile.path}`)
+                const skillData = await skillRes.json()
+                if (!cancelled && skillData.ok) {
+                  setFrontmatter(parseFrontmatter(skillData.content))
+                }
+              } catch {}
+            } else {
+              if (!cancelled) setFrontmatter(null)
+            }
+          }
+
+          // For plugin type: fetch plugin.json metadata
+          if (hasPluginJson) {
+            try {
+              const pjRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/.claude-plugin/plugin.json`)
+              const pjData = await pjRes.json()
+              if (!cancelled && pjData.ok) {
+                const pj = JSON.parse(pjData.content)
+                setPluginMeta({
+                  name: pj.name || '',
+                  version: pj.version || '',
+                  description: pj.description || '',
+                  author: typeof pj.author === 'string' ? pj.author : pj.author?.name || '',
+                })
+              }
+            } catch {}
+          } else {
+            if (!cancelled) setPluginMeta(null)
           }
         }
       } catch {}
@@ -858,6 +976,38 @@ export function SkillCreator() {
     }
   }, [selectedDraft, runValidation])
 
+  // Save plugin.json metadata
+  const handlePluginMetaSave = useCallback(async () => {
+    if (!selectedDraft || !pluginMeta) return
+    setPluginMetaSaving(true)
+    try {
+      const readRes = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/.claude-plugin/plugin.json`)
+      const readData = await readRes.json()
+      if (readData.ok) {
+        const pj = JSON.parse(readData.content)
+        pj.version = pluginMeta.version
+        pj.description = pluginMeta.description
+        if (pluginMeta.author) {
+          pj.author = typeof pj.author === 'object' ? { ...pj.author, name: pluginMeta.author } : pluginMeta.author
+        }
+        const saveRes = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/.claude-plugin/plugin.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: JSON.stringify(pj, null, 2) }),
+        })
+        const saveData = await saveRes.json()
+        if (saveData.ok) {
+          runValidation(selectedDraft)
+        } else {
+          setError(saveData.error || 'Save failed')
+        }
+      }
+    } catch {
+      setError('Failed to save plugin.json')
+    }
+    setPluginMetaSaving(false)
+  }, [selectedDraft, pluginMeta, runValidation])
+
   // Re-validate after file save
   const handleFileSaveWithValidation = useCallback(async () => {
     if (!selectedDraft || !selectedFile) return
@@ -905,7 +1055,7 @@ export function SkillCreator() {
             onClick={handleNewSession}
             className="px-3 py-1.5 rounded-lg text-xs text-stone hover:text-parchment hover:bg-surface/40 border border-border-custom transition-colors"
           >
-            New Plugin
+            New Session
           </button>
         </div>
       </div>
@@ -913,7 +1063,7 @@ export function SkillCreator() {
       {/* 3-column layout */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
-        <MySkillsSidebar onNewSkill={handleNewSession} refreshKey={skillsRefreshKey} selectedDraft={selectedDraft} onSelectDraft={handleSelectDraft} />
+        <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedDraft={selectedDraft} onSelectDraft={handleSelectDraft} />
 
         {/* Center column — Chat */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
@@ -1047,6 +1197,56 @@ export function SkillCreator() {
               </div>
             ) : (
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Plugin.json metadata card (plugin type only) */}
+                {selectedDraftType === 'plugin' && pluginMeta && (
+                  <div className="mx-3 mb-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Package className="h-3.5 w-3.5 text-blue-400" />
+                      <span className="text-[10px] font-medium text-blue-400 uppercase tracking-wider">plugin.json</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[10px] text-stone/50 block mb-0.5">Name</label>
+                        <p className="text-xs text-parchment/60 font-mono bg-surface/20 rounded px-1.5 py-1">{pluginMeta.name}</p>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-stone/50 block mb-0.5">Version</label>
+                        <input
+                          type="text"
+                          value={pluginMeta.version}
+                          onChange={e => setPluginMeta(prev => prev ? { ...prev, version: e.target.value } : prev)}
+                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-stone/50 block mb-0.5">Description</label>
+                        <textarea
+                          value={pluginMeta.description}
+                          onChange={e => setPluginMeta(prev => prev ? { ...prev, description: e.target.value } : prev)}
+                          rows={2}
+                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40 resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-stone/50 block mb-0.5">Author <span className="text-stone/30">(optional)</span></label>
+                        <input
+                          type="text"
+                          value={pluginMeta.author}
+                          onChange={e => setPluginMeta(prev => prev ? { ...prev, author: e.target.value } : prev)}
+                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40"
+                        />
+                      </div>
+                      <button
+                        onClick={handlePluginMetaSave}
+                        disabled={pluginMetaSaving}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                      >
+                        <Save className="h-3 w-3" /> {pluginMetaSaving ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Frontmatter card */}
                 {frontmatter && (
                   <div className="mx-3 mb-2 p-2.5 rounded-lg bg-surface/30 border border-border-custom">
@@ -1089,7 +1289,7 @@ export function SkillCreator() {
                           {validation.valid ? (
                             <>
                               <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-                              <span className="text-xs font-medium text-emerald-400">Valid plugin</span>
+                              <span className="text-xs font-medium text-emerald-400">Valid {selectedDraftType || 'plugin'}</span>
                             </>
                           ) : (
                             <button
