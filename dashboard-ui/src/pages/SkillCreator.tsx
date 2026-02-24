@@ -381,7 +381,6 @@ export function SkillCreator() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [totalCost, setTotalCost] = useState(0)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
-  const [, setIsDragging] = useState(false)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
@@ -407,7 +406,7 @@ export function SkillCreator() {
   const draftFileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
-  const dragCounterRef = useRef(0)
+
   const initialScrollDoneRef = useRef(false)
   const pendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
 
@@ -524,37 +523,6 @@ export function SkillCreator() {
     }))
     setAttachedFiles(prev => [...prev, ...newFiles])
   }, [])
-
-  const removeFile = useCallback((index: number) => {
-    setAttachedFiles(prev => {
-      if (prev[index].preview) URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
-    })
-  }, [])
-
-  // Drag-and-drop
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current++
-    if (e.dataTransfer.types.includes('Files')) setIsDragging(true)
-  }, [])
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-  }, [])
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current--
-    if (dragCounterRef.current === 0) setIsDragging(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounterRef.current = 0
-    setIsDragging(false)
-    addFiles(Array.from(e.dataTransfer.files))
-  }, [addFiles])
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
