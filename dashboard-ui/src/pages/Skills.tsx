@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wand2 } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
 import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
@@ -1364,11 +1364,23 @@ export function Skills() {
             <Blocks className="h-5 w-5 text-sand" />
             <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
           </div>
+        </div>
+        {/* Build a Plugin callout */}
+        <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
+          <div className="flex items-start gap-3.5 min-w-0">
+            <div className="rounded-lg bg-sand/10 p-2 shrink-0">
+              <Wrench className="h-5 w-5 text-sand" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
+              <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
+            </div>
+          </div>
           <Link
             to="/skill-creator"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-surface/50 text-parchment/80 rounded-lg hover:bg-surface transition-colors border border-border-custom"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
           >
-            <Wand2 className="h-3.5 w-3.5" /> Create Plugin
+            Create Plugin <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
         <div className="flex gap-8">
