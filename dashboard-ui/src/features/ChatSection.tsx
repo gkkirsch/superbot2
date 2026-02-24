@@ -207,6 +207,68 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
 
 const MESSAGES_PER_PAGE = 50
 
+const ONBOARDING_STORAGE_KEY = 'superbot2-onboarded'
+
+const ONBOARDING_MESSAGES: InboxMessage[] = [
+  {
+    from: 'team-lead',
+    text: "Hey! I'm your team lead. I coordinate everything — finding work, assigning it to workers, and reporting back to you. Think of me as the AI manager for all your projects.",
+    timestamp: '2026-01-01T00:00:00Z',
+    read: true,
+    type: 'message',
+    metadata: { onboarding: true, first: true },
+  },
+  {
+    from: 'team-lead',
+    text: "When there's work to do, I spawn workers — specialized agents that handle specific projects. A worker reads the plan, executes tasks, commits code, and reports back when done. You'll see their updates here in chat.",
+    timestamp: '2026-01-01T00:00:01Z',
+    read: true,
+    type: 'message',
+    metadata: { onboarding: true },
+  },
+  {
+    from: 'team-lead',
+    text: 'Your projects live in spaces — each one is a domain like kidsvids, supercharge, or hostreply. Check /spaces to see what\'s active, what\'s pending, and start or stop dev servers.',
+    timestamp: '2026-01-01T00:00:02Z',
+    read: true,
+    type: 'message',
+    metadata: { onboarding: true },
+  },
+  {
+    from: 'team-lead',
+    text: "When a worker hits a decision it can't make on its own — a design choice, missing info, a judgment call — it creates an escalation. You'll see those on the main dashboard. I'll ping you here when something needs your attention.",
+    timestamp: '2026-01-01T00:00:03Z',
+    read: true,
+    type: 'message',
+    metadata: { onboarding: true },
+  },
+  {
+    from: 'team-lead',
+    text: 'To get started, just tell me what you want to work on. Or browse /spaces to see your current projects.',
+    timestamp: '2026-01-01T00:00:04Z',
+    read: true,
+    type: 'message',
+    metadata: { onboarding: true },
+  },
+]
+
+function useOnboarding() {
+  const [showOnboarding] = useState(
+    () => typeof window !== 'undefined' && !localStorage.getItem(ONBOARDING_STORAGE_KEY)
+  )
+
+  useEffect(() => {
+    if (showOnboarding) {
+      const timer = setTimeout(() => {
+        localStorage.setItem(ONBOARDING_STORAGE_KEY, 'true')
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [showOnboarding])
+
+  return showOnboarding
+}
+
 interface AttachedImage {
   file: File
   preview: string
@@ -241,8 +303,15 @@ export function ChatSection() {
   const dragCounterRef = useRef(0)
   const initialScrollDoneRef = useRef(false)
   const queryClient = useQueryClient()
+  const showOnboarding = useOnboarding()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
+
+  // Merge onboarding messages with real messages
+  const allMessages = useMemo(() => {
+    if (!showOnboarding || !messages) return messages
+    return [...ONBOARDING_MESSAGES, ...messages]
+  }, [showOnboarding, messages])
 
   const mutation = useMutation({
     mutationFn: ({ text, images }: { text: string; images?: { name: string; data: string }[] }) =>
@@ -353,9 +422,9 @@ export function ChatSection() {
   }, [addFiles])
 
   const classified = useMemo(() => {
-    if (!messages) return []
-    return messages.map(msg => ({ msg, type: classifyMessage(msg) }))
-  }, [messages])
+    if (!allMessages) return []
+    return allMessages.map(msg => ({ msg, type: classifyMessage(msg) }))
+  }, [allMessages])
 
   // Clear waiting state when a new orchestrator reply arrives
   useEffect(() => {
@@ -643,6 +712,8 @@ function UserBubble({ msg }: { msg: InboxMessage }) {
 function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
   const [expanded, setExpanded] = useState(false)
   const isLong = msg.text.length > 500
+  const isOnboarding = !!(msg.metadata as Record<string, unknown> | undefined)?.onboarding
+  const isFirstOnboarding = !!(msg.metadata as Record<string, unknown> | undefined)?.first
   const imagePaths = useMemo(
     () => hasImagePaths(msg.text) ? extractImagePaths(msg.text) : [],
     [msg.text]
@@ -663,8 +734,11 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
       <div className="max-w-[85%] overflow-hidden">
         <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">
           superbot{msg.to && msg.to !== 'dashboard-user' ? ` → ${msg.to}` : ''}
+          {isFirstOnboarding && (
+            <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] bg-sand/15 text-sand/70">Welcome</span>
+          )}
         </span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
+        <div className={`rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
           {isLong && !expanded ? (
             <>
               <div className="max-h-32 overflow-hidden">
