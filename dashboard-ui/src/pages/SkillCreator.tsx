@@ -1248,7 +1248,13 @@ export function SkillCreator() {
                       <div key={key} className="mt-1 flex items-baseline gap-1.5">
                         <span className="text-[10px] text-stone/50 font-mono shrink-0">{key}:</span>
                         <span className="text-[10px] text-parchment/70 font-mono truncate">
-                          {Array.isArray(val) ? val.join(', ') : String(val)}
+                          {Array.isArray(val)
+                            ? val.some(v => typeof v === 'object' && v !== null)
+                              ? <span className="text-stone/40">[...]</span>
+                              : val.join(', ')
+                            : typeof val === 'object' && val !== null
+                              ? <span className="text-stone/40">{'{...'+'}'}</span>
+                              : String(val)}
                         </span>
                       </div>
                     ))}
