@@ -123,6 +123,7 @@ export function ActivitySection() {
   const [intervalValue, setIntervalValue] = useState('')
 
   const heartbeatRunning = status?.heartbeatRunning ?? false
+  const imessageRunning = status?.imessageRunning ?? false
   const intervalMinutes = hbConfig?.intervalMinutes ?? 30
 
   const totalTools = (activity || []).reduce((sum, b) => sum + b.tools, 0)
@@ -183,6 +184,12 @@ export function ActivitySection() {
             : <ChevronDown className="h-3.5 w-3.5 text-stone/40" />
           }
         </div>
+      </div>
+
+      {/* iMessage status */}
+      <div className="flex items-center gap-2">
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${imessageRunning ? 'bg-emerald-400' : 'bg-stone/30'}`} />
+        <span className="text-xs text-stone">imessage</span>
       </div>
 
       {/* Active workers — always visible */}

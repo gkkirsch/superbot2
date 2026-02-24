@@ -838,7 +838,9 @@ app.get('/api/status', async (_req, res) => {
     let schedulerRunning = false
     try { execSync('launchctl list com.superbot2.heartbeat', { stdio: 'pipe' }); heartbeatRunning = true } catch {}
     try { execSync('launchctl list com.superbot2.scheduler', { stdio: 'pipe' }); schedulerRunning = true } catch {}
-    res.json({ heartbeatRunning, schedulerRunning })
+    let imessageRunning = false
+    try { execSync('pgrep -f imessage-watcher.sh', { stdio: 'pipe' }); imessageRunning = true } catch {}
+    res.json({ heartbeatRunning, schedulerRunning, imessageRunning })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

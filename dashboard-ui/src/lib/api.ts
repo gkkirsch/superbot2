@@ -152,6 +152,7 @@ export async function deployServer(slug: string): Promise<{ status: string; pid?
 export interface SystemStatus {
   heartbeatRunning: boolean
   schedulerRunning: boolean
+  imessageRunning: boolean
 }
 
 export async function fetchSystemStatus(): Promise<SystemStatus> {
