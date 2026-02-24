@@ -744,6 +744,7 @@ function MarketplaceManager() {
   const [newUrl, setNewUrl] = useState('')
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const queryClient = useQueryClient()
@@ -803,10 +804,14 @@ function MarketplaceManager() {
   async function handleRemove(name: string) {
     setRemoving(name)
     setError(null)
+    setInfo(null)
     try {
-      await removeMarketplace(name)
+      const result = await removeMarketplace(name)
       await queryClient.invalidateQueries({ queryKey: ['marketplaces'] })
       await queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      if (result.uninstalledCount > 0) {
+        setInfo(`${result.uninstalledCount} plugin${result.uninstalledCount !== 1 ? 's' : ''} uninstalled`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to remove marketplace')
     } finally {
@@ -874,6 +879,9 @@ function MarketplaceManager() {
 
       {error && (
         <p className="text-xs text-ember mb-2">{error}</p>
+      )}
+      {info && (
+        <p className="text-xs text-moss mb-2">{info}</p>
       )}
 
       <div className="flex gap-1.5">

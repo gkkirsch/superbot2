@@ -337,11 +337,12 @@ export async function fetchPluginFile(name: string, filePath: string): Promise<s
   return data.content
 }
 
-export async function removeMarketplace(name: string): Promise<void> {
+export async function removeMarketplace(name: string): Promise<{ uninstalledCount: number; uninstalledPlugins: string[]; message: string }> {
   const response = await fetch(`${API_BASE}/marketplaces/${encodeURIComponent(name)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
 }
 
 export async function refreshMarketplaces(): Promise<void> {

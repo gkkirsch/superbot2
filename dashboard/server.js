@@ -2358,8 +2358,67 @@ app.post('/api/marketplaces', async (req, res) => {
 app.delete('/api/marketplaces/:name', async (req, res) => {
   try {
     const { name } = req.params
+
+    // Auto-uninstall all plugins installed from this marketplace before removing it
+    const uninstalledPlugins = []
+    const installedJsonPaths = [
+      join(CLAUDE_DIR, 'plugins', 'installed_plugins.json'),
+      join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json'),
+    ]
+    for (const jsonPath of installedJsonPaths) {
+      try {
+        const raw = await readFile(jsonPath, 'utf-8')
+        const data = JSON.parse(raw)
+        const plugins = data.plugins || {}
+        const keysToRemove = Object.keys(plugins).filter(k => k.endsWith(`@${name}`))
+        if (keysToRemove.length > 0) {
+          for (const key of keysToRemove) {
+            const shortName = key.split('@')[0]
+            // Try CLI uninstall first (handles all cleanup)
+            try {
+              await runClaude(['plugin', 'uninstall', shortName])
+            } catch {
+              // CLI failed — remove entry directly
+              delete plugins[key]
+            }
+            if (!uninstalledPlugins.includes(shortName)) uninstalledPlugins.push(shortName)
+          }
+          // Re-read in case CLI modified the file, then ensure our keys are gone
+          try {
+            const freshRaw = await readFile(jsonPath, 'utf-8')
+            const freshData = JSON.parse(freshRaw)
+            let changed = false
+            for (const key of keysToRemove) {
+              if (freshData.plugins?.[key]) {
+                delete freshData.plugins[key]
+                changed = true
+              }
+            }
+            if (changed) await writeFile(jsonPath, JSON.stringify(freshData, null, 2))
+          } catch { /* ignore */ }
+        }
+      } catch { /* file doesn't exist or isn't valid JSON — skip */ }
+    }
+    // Clean up marketplace cache directory
+    const marketplaceCacheDir = join(PLUGINS_CACHE_DIR, name)
+    try { await rm(marketplaceCacheDir, { recursive: true, force: true }) } catch { /* ignore */ }
+
     await runClaude(['plugin', 'marketplace', 'remove', name])
-    res.json({ ok: true })
+
+    // Clear plugin caches so the UI reflects the changes
+    pluginMetaCache.clear()
+    pluginDetailCache.clear()
+    metaPreFetched = false
+
+    const count = uninstalledPlugins.length
+    res.json({
+      ok: true,
+      uninstalledCount: count,
+      uninstalledPlugins,
+      message: count > 0
+        ? `Marketplace removed. ${count} plugin${count !== 1 ? 's' : ''} uninstalled: ${uninstalledPlugins.join(', ')}`
+        : 'Marketplace removed',
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
