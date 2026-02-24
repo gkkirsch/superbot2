@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, ChevronUp, ClipboardList, StickyNote, Play } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, StickyNote, ClipboardList, Play } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
 import { sendMessageToOrchestrator } from '@/lib/api'
@@ -42,12 +42,12 @@ interface TodoItemRowProps {
 
 function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending, workSent }: TodoItemRowProps) {
   const [expanded, setExpanded] = useState(false)
-  const hasResearch = !!research
   const notes = todo.notes || []
+  const hasExpandable = notes.length > 0 || !!research
 
   return (
     <div>
-      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasResearch ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
+      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasExpandable ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
         <button
           onClick={(e) => { e.stopPropagation(); onToggle() }}
           className={todo.completed
@@ -62,20 +62,20 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
           )}
         </button>
         <button
-          onClick={() => hasResearch && setExpanded(!expanded)}
+          onClick={() => hasExpandable && setExpanded(!expanded)}
           className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
         >
           {todo.text}
         </button>
-        {hasResearch && (
+        {hasExpandable && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="shrink-0 text-sky-400/60 hover:text-sky-400 transition-colors p-0.5"
-            title="View research"
+            className="shrink-0 text-blue-400/50 hover:text-blue-400 transition-colors p-0.5"
+            title={expanded ? 'Collapse' : 'Expand notes'}
           >
             {expanded
               ? <ChevronUp className="h-3.5 w-3.5" />
-              : <ClipboardList className="h-3.5 w-3.5" />
+              : <ChevronDown className="h-3.5 w-3.5" />
             }
           </button>
         )}
@@ -98,39 +98,11 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
         </button>
       </div>
 
-      {expanded && research && (
-        <div className="ml-8 mr-2 mb-2 mt-1 rounded-lg border border-sky-400/20 bg-sky-400/[0.03] overflow-hidden animate-fade-up" style={{ animationDuration: '0.2s' }}>
-          <div className="px-3 py-2">
-            <div className="flex items-center gap-1.5 mb-2">
-              <ClipboardList className="h-3 w-3 text-sky-400/70" />
-              <span className="text-[10px] font-medium text-sky-400/70 uppercase tracking-wider">Research</span>
-              {research.space && (
-                <span className="text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5 ml-1">
-                  {research.spaceName || research.space}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-parchment/80 font-medium mb-1.5">{research.question}</p>
-            {research.context && (
-              <div className="max-h-64 overflow-y-auto">
-                <MarkdownContent content={research.context} className="text-stone/70" />
-              </div>
-            )}
-            {research.status === 'resolved' && research.resolution && (
-              <div className="mt-2 pt-2 border-t border-sky-400/10">
-                <span className="text-[10px] text-moss/70 font-medium">Resolution: </span>
-                <span className="text-xs text-stone/60">{research.resolution}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {notes.length > 0 && (
-        <div className="ml-8 mr-2 mb-1 space-y-1">
-          {notes.map((note, i) => (
-            <div key={i} className="rounded-md border border-blue-400/20 bg-blue-400/[0.06] px-3 py-1.5">
-              <div className="flex items-start gap-1.5">
+      {expanded && hasExpandable && (
+        <div className="ml-8 mr-2 mb-2 mt-1 rounded-lg border border-blue-400/20 bg-blue-400/[0.03] overflow-hidden animate-fade-up" style={{ animationDuration: '0.2s' }}>
+          <div className="px-3 py-2 space-y-2">
+            {notes.map((note, i) => (
+              <div key={i} className="flex items-start gap-1.5">
                 <StickyNote className="h-3 w-3 text-blue-400/50 mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-parchment/80 leading-relaxed">{note.content}</p>
@@ -140,8 +112,33 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
                   </p>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+            {research && (
+              <div className={notes.length > 0 ? 'pt-2 border-t border-blue-400/10' : ''}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <ClipboardList className="h-3 w-3 text-sky-400/70" />
+                  <span className="text-[10px] font-medium text-sky-400/70 uppercase tracking-wider">Research</span>
+                  {research.space && (
+                    <span className="text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5 ml-1">
+                      {research.spaceName || research.space}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-parchment/80 font-medium mb-1.5">{research.question}</p>
+                {research.context && (
+                  <div className="max-h-64 overflow-y-auto">
+                    <MarkdownContent content={research.context} className="text-stone/70" />
+                  </div>
+                )}
+                {research.status === 'resolved' && research.resolution && (
+                  <div className="mt-2 pt-2 border-t border-sky-400/10">
+                    <span className="text-[10px] text-moss/70 font-medium">Resolution: </span>
+                    <span className="text-xs text-stone/60">{research.resolution}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -156,15 +153,20 @@ export function TodoSection() {
   const queryClient = useQueryClient()
 
   const workOnMutation = useMutation({
-    mutationFn: (todoText: string) => sendMessageToOrchestrator(`Work on this: ${todoText}`),
+    mutationFn: (message: string) => sendMessageToOrchestrator(message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages'] })
     },
   })
 
-  const handleWorkOn = (todo: { id: string; text: string }) => {
+  const handleWorkOn = (todo: { id: string; text: string; notes?: TodoNote[] }) => {
+    const notes = todo.notes || []
+    let message = `Work on this: ${todo.text}`
+    if (notes.length > 0) {
+      message += `\n\nNote: ${notes.map(n => n.content).join('\n')}`
+    }
     setSentTodoId(todo.id)
-    workOnMutation.mutate(todo.text)
+    workOnMutation.mutate(message)
     setTimeout(() => setSentTodoId(null), 2000)
   }
 
