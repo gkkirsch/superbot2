@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Send, X, ChevronUp, Paperclip, FileText } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { useMessages } from '@/hooks/useSpaces'
 import { MarkdownContent } from '@/features/MarkdownContent'
@@ -195,9 +195,15 @@ function getSystemLabel(msg: InboxMessage): string {
   return msg.from
 }
 
+interface CompactionEvent {
+  timestamp: string
+  trigger: string
+}
+
 type RenderItem =
   | { kind: 'bubble'; msg: InboxMessage; type: MessageType }
   | { kind: 'activity'; msgs: Array<{ msg: InboxMessage; type: MessageType }> }
+  | { kind: 'compaction'; timestamp: string }
 
 function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
   if (type === 'user') return true
@@ -306,6 +312,12 @@ export function ChatSection() {
   const showOnboarding = useOnboarding()
   // Always fetch background messages so we have orchestrator-worker activity
   const { data: messages } = useMessages(true)
+
+  const { data: compactionData } = useQuery<{ events: CompactionEvent[] }>({
+    queryKey: ['compaction-events'],
+    queryFn: () => fetch('/api/compaction-events').then(r => r.json()),
+    refetchInterval: 30_000,
+  })
 
   // Merge onboarding messages with real messages
   const allMessages = useMemo(() => {
@@ -462,12 +474,63 @@ export function ChatSection() {
     return items
   }, [classified])
 
+  // Interleave compaction markers into render items by timestamp
+  const itemsWithCompaction = useMemo((): RenderItem[] => {
+    const events = compactionData?.events
+    if (!events || events.length === 0 || renderItems.length === 0) return renderItems
+
+    // Get timestamp range of visible messages
+    const msgTimestamps = classified.map(c => new Date(c.msg.timestamp).getTime())
+    const oldest = Math.min(...msgTimestamps)
+    const newest = Math.max(...msgTimestamps)
+
+    // Filter compaction events to those within message range
+    const relevant = events
+      .filter(e => {
+        const t = new Date(e.timestamp).getTime()
+        return t >= oldest && t <= newest
+      })
+      .map(e => ({ ...e, time: new Date(e.timestamp).getTime() }))
+
+    if (relevant.length === 0) return renderItems
+
+    // Build a flat list with timestamps for each render item
+    // Use the timestamp of the first message in each item
+    const getItemTimestamp = (item: RenderItem): number => {
+      if (item.kind === 'bubble') return new Date(item.msg.timestamp).getTime()
+      if (item.kind === 'activity') return new Date(item.msgs[0].msg.timestamp).getTime()
+      return new Date(item.timestamp).getTime()
+    }
+
+    const result: RenderItem[] = []
+    let eventIdx = 0
+    // Sort relevant events by time ascending
+    const sortedEvents = [...relevant].sort((a, b) => a.time - b.time)
+
+    for (const item of renderItems) {
+      const itemTime = getItemTimestamp(item)
+      // Insert any compaction markers that fall before this item
+      while (eventIdx < sortedEvents.length && sortedEvents[eventIdx].time <= itemTime) {
+        result.push({ kind: 'compaction', timestamp: sortedEvents[eventIdx].timestamp })
+        eventIdx++
+      }
+      result.push(item)
+    }
+    // Append any remaining compaction events after the last item
+    while (eventIdx < sortedEvents.length) {
+      result.push({ kind: 'compaction', timestamp: sortedEvents[eventIdx].timestamp })
+      eventIdx++
+    }
+
+    return result
+  }, [renderItems, compactionData, classified])
+
   // Paginate: show only the last N render items
-  const hasEarlierMessages = renderItems.length > visibleCount
+  const hasEarlierMessages = itemsWithCompaction.length > visibleCount
   const visibleItems = useMemo(() => {
-    if (renderItems.length <= visibleCount) return renderItems
-    return renderItems.slice(-visibleCount)
-  }, [renderItems, visibleCount])
+    if (itemsWithCompaction.length <= visibleCount) return itemsWithCompaction
+    return itemsWithCompaction.slice(-visibleCount)
+  }, [itemsWithCompaction, visibleCount])
 
   const loadEarlier = useCallback(() => {
     const container = chatContainerRef.current
@@ -542,6 +605,9 @@ export function ChatSection() {
               </button>
             )}
             {visibleItems.map((item, i) => {
+              if (item.kind === 'compaction') {
+                return <CompactionMarker key={`c-${i}`} />
+              }
               if (item.kind === 'bubble') {
                 if (item.type === 'user') {
                   return <UserBubble key={`b-${i}`} msg={item.msg} />
@@ -628,6 +694,16 @@ export function ChatSection() {
       </form>
       {sent && <span className="text-[10px] text-moss/70 mt-1 ml-1">Sent</span>}
       {mutation.isError && <span className="text-[10px] text-ember/70 mt-1 ml-1">Failed</span>}
+    </div>
+  )
+}
+
+function CompactionMarker() {
+  return (
+    <div className="flex items-center gap-2 py-1 my-1">
+      <div className="h-px flex-1 bg-border-custom" />
+      <span className="text-[10px] text-stone/40 whitespace-nowrap">context compacted</span>
+      <div className="h-px flex-1 bg-border-custom" />
     </div>
   )
 }

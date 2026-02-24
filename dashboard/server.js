@@ -2803,6 +2803,28 @@ app.get('/api/workers', async (_req, res) => {
   }
 })
 
+// --- Compaction events ---
+
+app.get('/api/compaction-events', async (_req, res) => {
+  try {
+    const eventsFile = join(SUPERBOT_DIR, 'compaction-events.jsonl')
+    let events = []
+    try {
+      const content = await readFile(eventsFile, 'utf-8')
+      events = content.trim().split('\n').filter(Boolean).map(line => {
+        try { return JSON.parse(line) } catch { return null }
+      }).filter(Boolean)
+    } catch {
+      // File doesn't exist yet — return empty
+    }
+    // Return last 50, most recent first
+    events = events.slice(-50).reverse()
+    res.json({ events })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Messages to orchestrator ---
 
 app.get('/api/messages', async (req, res) => {
