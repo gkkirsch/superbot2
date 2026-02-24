@@ -3137,13 +3137,14 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
 })
 
 // Read a specific file from a draft
-app.get('/api/skill-creator/drafts/:name/file/*', async (req, res) => {
+app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
   try {
     const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
     if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
       return res.status(400).json({ error: 'Invalid draft name' })
     }
-    const filePath = resolve(draftPath, req.params[0])
+    const relPath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
+    const filePath = resolve(draftPath, relPath)
     if (!filePath.startsWith(draftPath + '/')) {
       return res.status(400).json({ error: 'Invalid file path' })
     }

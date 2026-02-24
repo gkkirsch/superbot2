@@ -16,6 +16,40 @@ TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
 TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
 RESTART_FLAG="$DIR/.restart"
 LAUNCHER_PID=$$
+DASHBOARD_UI_PID=""
+
+# ─── Dashboard UI ───
+
+start_dashboard_ui() {
+  local ui_dir="$REPO_DIR/dashboard-ui"
+  if [[ ! -d "$ui_dir" ]]; then
+    echo "Dashboard UI not found at $ui_dir — skipping"
+    return
+  fi
+
+  # Check if already running on port 3274
+  if lsof -ti:3274 &>/dev/null; then
+    echo "Dashboard already running → http://localhost:3274"
+    return
+  fi
+
+  echo "Starting dashboard → http://localhost:3274"
+  (cd "$ui_dir" && npm run dev) >>/tmp/superbot2-dashboard-ui.log 2>&1 &
+  DASHBOARD_UI_PID=$!
+  echo "Dashboard started (PID $DASHBOARD_UI_PID)"
+}
+
+stop_dashboard_ui() {
+  if [[ -n "$DASHBOARD_UI_PID" ]]; then
+    # Kill npm and all its child processes (concurrently, vite, node)
+    pkill -P "$DASHBOARD_UI_PID" 2>/dev/null || true
+    kill "$DASHBOARD_UI_PID" 2>/dev/null || true
+    echo "Dashboard UI stopped."
+    DASHBOARD_UI_PID=""
+  fi
+}
+
+trap 'stop_dashboard_ui' EXIT
 
 # ─── Subcommands ───
 
@@ -168,6 +202,8 @@ if ! launchctl list com.superbot2.scheduler &>/dev/null; then
   echo "Installing scheduler..."
   bash "$REPO_DIR/scripts/install-scheduler.sh"
 fi
+
+start_dashboard_ui
 
 echo "Starting superbot2 orchestrator..."
 
