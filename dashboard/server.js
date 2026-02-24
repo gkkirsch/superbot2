@@ -1,7 +1,7 @@
 import express from 'express'
 import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import yaml from 'js-yaml'
@@ -4037,6 +4037,64 @@ app.get('/{*path}', (_req, res) => {
     `)
   }
 })
+
+// --- iMessage reply mirroring ---
+
+const IMESSAGE_SENT_FILE = join(SUPERBOT_DIR, 'imessage-last-sent-idx.txt')
+
+let imessageLastSentCount = 0
+
+// Initialize last sent count from file
+try {
+  const saved = existsSync(IMESSAGE_SENT_FILE)
+    ? parseInt(readFileSync(IMESSAGE_SENT_FILE, 'utf-8').trim(), 10)
+    : 0
+  imessageLastSentCount = isNaN(saved) ? 0 : saved
+} catch {
+  imessageLastSentCount = 0
+}
+
+async function mirrorRepliesToImessage() {
+  try {
+    // Read config fresh each time
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    if (!config?.imessage?.enabled || !config.imessage.appleId || config.imessage.appleId === 'YOUR_SUPERBOT2_APPLE_ID') {
+      return
+    }
+
+    const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
+    const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
+
+    if (orchestratorReplies.length <= imessageLastSentCount) {
+      return
+    }
+
+    const newReplies = orchestratorReplies.slice(imessageLastSentCount)
+    const scriptsDir = join(import.meta.dirname, '..', 'scripts')
+
+    for (const reply of newReplies) {
+      const text = reply.text || reply.content || ''
+      if (!text.trim()) continue
+
+      // Truncate very long messages for iMessage (keep under 2000 chars)
+      const truncated = text.length > 2000 ? text.slice(0, 1997) + '...' : text
+
+      spawn('bash', [join(scriptsDir, 'send-imessage.sh'), config.imessage.appleId, truncated], {
+        stdio: 'ignore',
+        detached: true
+      }).unref()
+    }
+
+    imessageLastSentCount = orchestratorReplies.length
+    await writeFile(IMESSAGE_SENT_FILE, String(imessageLastSentCount), 'utf-8')
+  } catch (err) {
+    // Silent fail — don't crash server for iMessage issues
+    console.error('iMessage mirror error:', err.message)
+  }
+}
+
+// Poll every 5 seconds for new orchestrator replies to mirror
+setInterval(mirrorRepliesToImessage, 5000)
 
 // --- Start ---
 
