@@ -1960,12 +1960,35 @@ app.get('/api/skills/:id', async (req, res) => {
     const content = await readFile(skillMd, 'utf-8')
     const fm = parseFrontmatter(content)
     const files = await safeReaddir(skillDir)
+    // Build recursive file tree
+    async function listFilesRecursive(dir, prefix = '') {
+      const results = []
+      const entries = await safeReaddir(dir)
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue
+        const relPath = prefix ? `${prefix}/${entry}` : entry
+        const fullPath = join(dir, entry)
+        try {
+          const s = await stat(fullPath)
+          if (s.isDirectory()) {
+            results.push({ path: relPath, type: 'directory' })
+            const children = await listFilesRecursive(fullPath, relPath)
+            results.push(...children)
+          } else {
+            results.push({ path: relPath, type: 'file' })
+          }
+        } catch { /* skip */ }
+      }
+      return results
+    }
+    const fileTree = await listFilesRecursive(skillDir)
     res.json({
       id,
       name: fm.name || id,
       description: fm.description || '',
       fullContent: content,
       files,
+      fileTree,
     })
   } catch (err) {
     res.status(404).json({ error: 'Skill not found' })
@@ -2445,12 +2468,35 @@ app.get('/api/superbot-skills/:id', async (req, res) => {
     }
     const fm = parseFrontmatter(content)
     const files = await safeReaddir(entryPath)
+    // Build recursive file tree
+    async function listFilesRecursive(dir, prefix = '') {
+      const results = []
+      const entries = await safeReaddir(dir)
+      for (const entry of entries) {
+        if (entry.startsWith('.')) continue
+        const relPath = prefix ? `${prefix}/${entry}` : entry
+        const fullPath = join(dir, entry)
+        try {
+          const s = await stat(fullPath)
+          if (s.isDirectory()) {
+            results.push({ path: relPath, type: 'directory' })
+            const children = await listFilesRecursive(fullPath, relPath)
+            results.push(...children)
+          } else {
+            results.push({ path: relPath, type: 'file' })
+          }
+        } catch { /* skip */ }
+      }
+      return results
+    }
+    const fileTree = await listFilesRecursive(entryPath)
     res.json({
       id,
       name: fm.name || id,
       description: fm.description || '',
       fullContent: content,
       files,
+      fileTree,
       enabled,
     })
   } catch (err) {

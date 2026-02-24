@@ -123,6 +123,7 @@ export interface ComponentCounts {
 export interface SkillDetail extends SkillInfo {
   fullContent: string
   files: string[]
+  fileTree?: { path: string; type: string }[]
 }
 
 export interface AgentDetail extends AgentInfo {
@@ -208,6 +209,7 @@ export interface SuperbotSkill {
 export interface SuperbotSkillDetail extends SuperbotSkill {
   fullContent: string
   files: string[]
+  fileTree?: { path: string; type: string }[]
 }
 
 export interface InboxMessage {
