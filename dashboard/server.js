@@ -4081,7 +4081,9 @@ async function mirrorRepliesToImessage() {
       // Truncate very long messages for iMessage (keep under 2000 chars)
       const truncated = text.length > 2000 ? text.slice(0, 1997) + '...' : text
 
-      spawn('bash', [join(scriptsDir, 'send-imessage.sh'), config.imessage.appleId, truncated], {
+      // Send to user's phone number (not appleId — that would loop back internally)
+      const recipient = config.imessage.phoneNumber || config.imessage.appleId
+      spawn('bash', [join(scriptsDir, 'send-imessage.sh'), recipient, truncated], {
         stdio: 'ignore',
         detached: true
       }).unref()
