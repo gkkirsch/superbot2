@@ -214,26 +214,45 @@ interface InstalledSkill {
   installPath: string
 }
 
+interface DraftSkill {
+  name: string
+  sessionId: string
+  createdAt: string
+  status: string
+}
+
 function MySkillsSidebar({ onNewSkill, refreshKey }: { onNewSkill: () => void; refreshKey: number }) {
   const [skills, setSkills] = useState<InstalledSkill[]>([])
+  const [drafts, setDrafts] = useState<DraftSkill[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    async function fetchSkills() {
+    async function fetchAll() {
       try {
-        const res = await fetch('/api/skill-creator/my-skills')
-        const data = await res.json()
-        if (!cancelled && data.ok) setSkills(data.skills)
+        const [skillsRes, draftsRes] = await Promise.all([
+          fetch('/api/skill-creator/my-skills'),
+          fetch('/api/skill-creator/drafts')
+        ])
+        const [skillsData, draftsData] = await Promise.all([
+          skillsRes.json(),
+          draftsRes.json()
+        ])
+        if (!cancelled) {
+          if (skillsData.ok) setSkills(skillsData.skills)
+          if (draftsData.ok) setDrafts(draftsData.drafts)
+        }
       } catch {}
       if (!cancelled) setLoading(false)
     }
-    fetchSkills()
+    fetchAll()
 
     // Poll every 30s
-    const interval = setInterval(fetchSkills, 30000)
+    const interval = setInterval(fetchAll, 30000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [refreshKey])
+
+  const hasContent = skills.length > 0 || drafts.length > 0
 
   return (
     <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 flex flex-col overflow-hidden">
@@ -246,19 +265,44 @@ function MySkillsSidebar({ onNewSkill, refreshKey }: { onNewSkill: () => void; r
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
           </div>
-        ) : skills.length === 0 ? (
+        ) : !hasContent ? (
           <div className="flex items-center justify-center py-8 text-center px-2">
             <p className="text-xs text-stone/40">No skills yet — create your first one!</p>
           </div>
         ) : (
-          <div className="space-y-0.5">
-            {skills.map(skill => (
-              <div key={skill.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
-                <p className="text-sm text-parchment truncate">{skill.name}</p>
-                <p className="text-xs text-stone/60 line-clamp-2 mt-0.5">{skill.description}</p>
+          <>
+            {drafts.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-medium text-stone/40 uppercase tracking-wider px-3 mb-1">Drafts</p>
+                <div className="space-y-0.5">
+                  {drafts.map(draft => (
+                    <div key={draft.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm text-parchment truncate">{draft.name}</p>
+                        <span className="shrink-0 text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400">draft</span>
+                      </div>
+                      <p className="text-xs text-stone/60 mt-0.5">{draft.status === 'complete' ? 'Ready to promote' : draft.status}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+            {skills.length > 0 && (
+              <div>
+                {drafts.length > 0 && (
+                  <p className="text-[10px] font-medium text-stone/40 uppercase tracking-wider px-3 mb-1">Installed</p>
+                )}
+                <div className="space-y-0.5">
+                  {skills.map(skill => (
+                    <div key={skill.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
+                      <p className="text-sm text-parchment truncate">{skill.name}</p>
+                      <p className="text-xs text-stone/60 line-clamp-2 mt-0.5">{skill.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
