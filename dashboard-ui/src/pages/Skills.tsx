@@ -5,9 +5,9 @@ import yaml from 'js-yaml'
 import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher } from '@/lib/api'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher } from '@/lib/api'
 import type { IMessageStatus } from '@/lib/api'
-import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration } from '@/lib/types'
+import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration, MissingBin } from '@/lib/types'
 import { IMessageSetupModal } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -235,6 +235,70 @@ function CredentialForm({ pluginName }: { pluginName: string }) {
   )
 }
 
+function MissingBinsWarning({ pluginName, missingBins }: { pluginName: string; missingBins: MissingBin[] }) {
+  const [installingId, setInstallingId] = useState<string | null>(null)
+  const [output, setOutput] = useState<{ exitCode: number; stdout: string; stderr: string } | null>(null)
+  const queryClient = useQueryClient()
+
+  if (missingBins.length === 0) return null
+
+  async function handleInstall(installId: string) {
+    setInstallingId(installId)
+    setOutput(null)
+    try {
+      const result = await installPluginBin(pluginName, installId)
+      setOutput(result)
+      if (result.exitCode === 0) {
+        queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      }
+    } catch {
+      setOutput({ exitCode: 1, stdout: '', stderr: 'Failed to run install command' })
+    } finally {
+      setInstallingId(null)
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {missingBins.map(mb => (
+        <div key={mb.bin} className="rounded-lg bg-amber-400/10 border border-amber-400/30 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-300">
+              This plugin requires <code className="font-mono bg-amber-400/15 px-1 py-0.5 rounded">{mb.bin}</code> to be installed.
+            </p>
+          </div>
+          {mb.installOptions.map(opt => (
+            <div key={opt.id} className="flex items-center gap-2 mt-2">
+              <code className="text-[11px] font-mono text-parchment/80 bg-ink/80 px-2 py-1 rounded flex-1 truncate">
+                brew install {opt.formula}
+              </code>
+              <button
+                onClick={() => handleInstall(opt.id)}
+                disabled={installingId !== null}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-amber-400/15 text-amber-300 hover:bg-amber-400/25 transition-colors disabled:opacity-50 shrink-0"
+              >
+                {installingId === opt.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {installingId === opt.id ? 'Installing...' : 'Run Install'}
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+      {output && (
+        <pre className="text-[11px] font-mono bg-ink border border-border-custom rounded-lg p-3 max-h-40 overflow-auto whitespace-pre-wrap">
+          <span className={output.exitCode === 0 ? 'text-moss' : 'text-ember'}>
+            {output.exitCode === 0 ? 'Success' : `Exit code: ${output.exitCode}`}
+          </span>
+          {'\n'}
+          {output.stdout && <span className="text-parchment/70">{output.stdout}</span>}
+          {output.stderr && <span className="text-ember/70">{output.stderr}</span>}
+        </pre>
+      )}
+    </div>
+  )
+}
+
 function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: () => void }) {
   const [detail, setDetail] = useState<PluginDetail | null>(null)
   const [loading, setLoading] = useState(true)
@@ -341,6 +405,10 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
               {plugin.installed && <CredentialForm pluginName={plugin.name} />}
 
+              {plugin.installed && detail?.missingBins && detail.missingBins.length > 0 && (
+                <MissingBinsWarning pluginName={plugin.name} missingBins={detail.missingBins} />
+              )}
+
               {c && (c.commands.length > 0 || c.agents.length > 0 || c.skills.length > 0 || c.hooks.length > 0) ? (
                 <div className="space-y-4">
                   <ComponentList icon={Terminal} label="Commands" items={c.commands} onFileClick={setViewingFile} />
@@ -406,7 +474,12 @@ function PluginCard({ plugin, onClick, showInstalledBadge }: { plugin: PluginInf
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-medium text-parchment leading-tight mb-1.5">{titleCase(plugin.name)}</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-medium text-parchment leading-tight mb-1.5">{titleCase(plugin.name)}</h3>
+          {plugin.installed && (plugin.hasUnconfiguredCredentials || plugin.hasMissingBins) && (
+            <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0 mb-1" title="Needs configuration" />
+          )}
+        </div>
         {showInstalledBadge && plugin.installed && (
           <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium text-moss bg-moss/15 border border-moss/25 rounded-full px-2 py-0.5">
             <Check className="h-2.5 w-2.5" />

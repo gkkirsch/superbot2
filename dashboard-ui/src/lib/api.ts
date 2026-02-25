@@ -369,6 +369,16 @@ export async function savePluginCredential(name: string, key: string, value: str
   return response.json()
 }
 
+export async function installPluginBin(name: string, installId: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/install-bin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installId }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
 export async function deletePluginCredential(name: string, key: string): Promise<{ ok: boolean }> {
   const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials/${encodeURIComponent(key)}`, {
     method: 'DELETE',

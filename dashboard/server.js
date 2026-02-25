@@ -1592,6 +1592,56 @@ async function keychainHas(pluginName, key) {
   return (await keychainGet(pluginName, key)) !== null
 }
 
+// Check if a CLI binary exists on the system
+function checkBinExists(bin) {
+  return new Promise((resolve) => {
+    execFile('which', [bin], (err) => {
+      resolve(!err)
+    })
+  })
+}
+
+// Read openclaw bin requirements from all SKILL.md files in a plugin
+async function getPluginOpenclawBins(installPath) {
+  const skillsDir = join(installPath, 'skills')
+  const entries = await safeReaddir(skillsDir)
+  const allRequired = []
+  const allInstallOptions = []
+  for (const entry of entries) {
+    const skillMd = join(skillsDir, entry, 'SKILL.md')
+    try {
+      const content = await readFile(skillMd, 'utf-8')
+      const fm = parseFrontmatter(content)
+      const openclaw = fm.metadata?.openclaw
+      if (!openclaw) continue
+      const bins = openclaw.requires?.bins
+      if (Array.isArray(bins)) {
+        for (const bin of bins) {
+          if (!allRequired.includes(bin)) allRequired.push(bin)
+        }
+      }
+      const install = openclaw.install
+      if (Array.isArray(install)) {
+        for (const opt of install) {
+          allInstallOptions.push(opt)
+        }
+      }
+    } catch { /* skip */ }
+  }
+  if (allRequired.length === 0) return { missingBins: [] }
+  const missingBins = []
+  for (const bin of allRequired) {
+    const exists = await checkBinExists(bin)
+    if (!exists) {
+      const installOpts = allInstallOptions
+        .filter(o => Array.isArray(o.bins) ? o.bins.includes(bin) : false)
+        .map(o => ({ id: o.id, kind: o.kind, formula: o.formula, label: o.label }))
+      missingBins.push({ bin, installOptions: installOpts })
+    }
+  }
+  return { missingBins }
+}
+
 // Read credential declarations from all SKILL.md files in a plugin, with plugin.json fallback
 async function getPluginCredentials(installPath) {
   // Check SKILL.md frontmatter first (primary source)
@@ -2469,10 +2519,60 @@ app.get('/api/plugins/:name/details', async (req, res) => {
       components,
       files,
       hasReadme: files.includes('README.md'),
+      missingBins: [],
     }
+
+    // For installed plugins, check for missing CLI bins
+    try {
+      const pluginDirs = await getInstalledPluginDirs()
+      const pd = pluginDirs.find(p => p.pluginName === name || p.pluginId === name)
+      if (pd) {
+        const { missingBins } = await getPluginOpenclawBins(pd.installPath)
+        detail.missingBins = missingBins
+      }
+    } catch { /* ignore */ }
 
     pluginDetailCache.set(name, { data: detail, fetchedAt: now })
     res.json(detail)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/plugins/:name/install-bin — run brew install for a missing CLI bin
+app.post('/api/plugins/:name/install-bin', async (req, res) => {
+  try {
+    const { name } = req.params
+    const { installId } = req.body
+    if (!installId) return res.status(400).json({ error: 'installId required' })
+
+    const pluginDirs = await getInstalledPluginDirs()
+    const pd = pluginDirs.find(p => p.pluginName === name || p.pluginId === name)
+    if (!pd) return res.status(404).json({ error: 'Plugin not found' })
+
+    const { missingBins } = await getPluginOpenclawBins(pd.installPath)
+    // Find the install option across all missing bins
+    let installOpt = null
+    for (const mb of missingBins) {
+      const opt = mb.installOptions.find(o => o.id === installId)
+      if (opt) { installOpt = opt; break }
+    }
+    if (!installOpt) return res.status(404).json({ error: `Install option "${installId}" not found` })
+
+    if (installOpt.kind !== 'brew') {
+      return res.json({ exitCode: 1, stdout: '', stderr: `Install kind "${installOpt.kind}" is not supported yet. Only "brew" is supported.` })
+    }
+
+    // Run brew install
+    const result = await new Promise((resolve) => {
+      execFile('brew', ['install', installOpt.formula], { timeout: 120_000 }, (err, stdout, stderr) => {
+        resolve({ exitCode: err ? (err.code || 1) : 0, stdout: stdout || '', stderr: stderr || '' })
+      })
+    })
+
+    // Invalidate the detail cache so the next fetch reflects the change
+    pluginDetailCache.delete(name)
+    res.json(result)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -2510,6 +2610,7 @@ app.get('/api/plugins', async (_req, res) => {
       let keywords = []
       let localDescription = ''
       let hasUnconfiguredCredentials = false
+      let hasMissingBins = false
       if (installPath) {
         try {
           const { counts } = await scanPluginComponents(installPath)
@@ -2529,6 +2630,11 @@ app.get('/api/plugins', async (_req, res) => {
             }
           }
         }
+        // Check for missing CLI bins
+        try {
+          const { missingBins } = await getPluginOpenclawBins(installPath)
+          if (missingBins.length > 0) hasMissingBins = true
+        } catch { /* ignore */ }
       }
       installed.push({
         ...p,
@@ -2539,6 +2645,7 @@ app.get('/api/plugins', async (_req, res) => {
         componentCounts,
         keywords,
         ...(hasUnconfiguredCredentials ? { hasUnconfiguredCredentials: true } : {}),
+        ...(hasMissingBins ? { hasMissingBins: true } : {}),
       })
     }
 
