@@ -54,6 +54,13 @@ export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, heade
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [fileLoading, setFileLoading] = useState(false)
 
+  // ESC to close
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   useEffect(() => {
     fetchDetail(skill.id)
       .then(d => {
@@ -87,7 +94,7 @@ export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, heade
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-surface border border-border-custom rounded-xl w-full max-w-4xl max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}

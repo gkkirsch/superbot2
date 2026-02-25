@@ -104,6 +104,12 @@ function HookDetailModal({ hook, onClose }: { hook: HookInfo; onClose: () => voi
   const [testResult, setTestResult] = useState<HookTestResult | null>(null)
   const [testError, setTestError] = useState<string | null>(null)
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const toggleMutation = useMutation({
     mutationFn: () => toggleHook(hook.event),
     onSuccess: () => {
@@ -125,7 +131,7 @@ function HookDetailModal({ hook, onClose }: { hook: HookInfo; onClose: () => voi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
@@ -229,6 +235,12 @@ function HookDetailModal({ hook, onClose }: { hook: HookInfo; onClose: () => voi
 function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () => void }) {
   const queryClient = useQueryClient()
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const toggleMutation = useMutation({
     mutationFn: () => toggleAgent(agent.id),
     onSuccess: () => {
@@ -238,7 +250,7 @@ function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
@@ -302,6 +314,12 @@ export function IMessageSetupModal({ onClose, onComplete }: { onClose: () => voi
   const [testing, setTesting] = useState(false)
   const [status, setStatus] = useState<IMessageStatus | null>(null)
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -331,7 +349,7 @@ export function IMessageSetupModal({ onClose, onComplete }: { onClose: () => voi
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-surface border border-border-custom rounded-xl w-full max-w-md max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}

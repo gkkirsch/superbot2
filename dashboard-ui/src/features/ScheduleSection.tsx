@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Check, X, Trash2, Clock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchedule } from '@/hooks/useSpaces'
@@ -51,6 +51,12 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
   const [deleting, setDeleting] = useState(false)
   const originalName = job.name
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const toggleDay = (day: string) => {
     const days = form.days || []
     setForm({ ...form, days: days.includes(day) ? days.filter(d => d !== day) : [...days, day] })
@@ -84,7 +90,7 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg flex flex-col"
         onClick={e => e.stopPropagation()}

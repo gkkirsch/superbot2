@@ -40,7 +40,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
     <>
       <div
         className={cn(
-          "fixed inset-0 z-50 bg-black/60 transition-opacity duration-200",
+          "fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-200",
           visible ? "opacity-100" : "opacity-0"
         )}
         onClick={() => onOpenChange(false)}
