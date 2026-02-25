@@ -1,0 +1,6 @@
+pre-commit:
+  commands:
+    dashboard-typecheck:
+      root: "dashboard-ui/"
+      glob: "*.{ts,tsx}"
+      run: npx tsc --noEmit
