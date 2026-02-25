@@ -240,12 +240,18 @@ export function useTodos() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['todos'] }) },
   })
 
+  const updateTextMutation = useMutation({
+    mutationFn: ({ id, text }: { id: string; text: string }) => updateTodo(id, { text }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['todos'] }) },
+  })
+
   return {
     todos: query.data || [],
     isLoading: query.isLoading,
     add: addMutation.mutate,
     toggle: toggleMutation.mutate,
     remove: removeMutation.mutate,
+    updateText: updateTextMutation.mutate,
   }
 }
 

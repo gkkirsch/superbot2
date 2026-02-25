@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, ChevronDown, ChevronUp, StickyNote, ClipboardList, Play, ListChecks } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
@@ -36,18 +36,44 @@ interface TodoItemRowProps {
   onToggle: () => void
   onRemove: () => void
   onWorkOn: () => void
+  onEdit: (newText: string) => void
   workPending?: boolean
   workSent?: boolean
 }
 
-function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending, workSent }: TodoItemRowProps) {
+function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, onEdit, workPending, workSent }: TodoItemRowProps) {
   const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(todo.text)
+  const editRef = useRef<HTMLInputElement>(null)
   const notes = todo.notes || []
   const hasExpandable = notes.length > 0 || !!research
 
+  useEffect(() => {
+    if (editing && editRef.current) {
+      editRef.current.focus()
+      editRef.current.select()
+    }
+  }, [editing])
+
+  function commitEdit() {
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== todo.text) {
+      onEdit(trimmed)
+    } else {
+      setEditValue(todo.text)
+    }
+    setEditing(false)
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); commitEdit() }
+    if (e.key === 'Escape') { setEditValue(todo.text); setEditing(false) }
+  }
+
   return (
     <div>
-      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasExpandable ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
+      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasExpandable && !editing ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
         <button
           onClick={(e) => { e.stopPropagation(); onToggle() }}
           className={todo.completed
@@ -61,12 +87,27 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
             </svg>
           )}
         </button>
-        <button
-          onClick={() => hasExpandable && setExpanded(!expanded)}
-          className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
-        >
-          {todo.text}
-        </button>
+        {editing ? (
+          <input
+            ref={editRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={handleEditKeyDown}
+            className="flex-1 bg-surface/50 border border-sand/30 rounded px-1.5 py-0.5 text-sm text-parchment focus:outline-none focus:border-sand/60"
+          />
+        ) : (
+          <button
+            onClick={(e) => {
+              if (!todo.completed) { e.stopPropagation(); setEditing(true) }
+              else if (hasExpandable) setExpanded(!expanded)
+            }}
+            onDoubleClick={() => !todo.completed && setEditing(true)}
+            className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
+          >
+            {todo.text}
+          </button>
+        )}
         {hasExpandable && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -148,7 +189,7 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
 }
 
 export function TodoSection({ showCompleted = false }: { showCompleted?: boolean }) {
-  const { todos, isLoading, add, toggle, remove } = useTodos()
+  const { todos, isLoading, add, toggle, remove, updateText } = useTodos()
   const { data: agentPlans } = useTodoResearch()
   const [input, setInput] = useState('')
   const [sentTodoId, setSentTodoId] = useState<string | null>(null)
@@ -220,6 +261,7 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
             onToggle={() => toggle(todo)}
             onRemove={() => remove(todo.id)}
             onWorkOn={() => handleWorkOn(todo)}
+            onEdit={(newText) => updateText({ id: todo.id, text: newText })}
             workPending={workOnMutation.isPending && sentTodoId === todo.id}
             workSent={!workOnMutation.isPending && sentTodoId === todo.id}
           />
@@ -236,6 +278,7 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
               onToggle={() => toggle(todo)}
               onRemove={() => remove(todo.id)}
               onWorkOn={() => {}}
+              onEdit={(newText) => updateText({ id: todo.id, text: newText })}
             />
           ))}
         </div>
