@@ -229,8 +229,8 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  leftColumn: ['escalations', 'recent-activity'],
+  leftColumn: ['escalations', 'spaces'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
-  hidden: ['spaces'],
+  hidden: ['recent-activity'],
 }

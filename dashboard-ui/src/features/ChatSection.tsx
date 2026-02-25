@@ -602,7 +602,7 @@ export function ChatSection() {
 
   return (
     <div
-      className="flex flex-col h-[calc(100vh-6rem)] min-w-0"
+      className="flex flex-col h-[calc(100vh-9rem)] min-w-0"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
