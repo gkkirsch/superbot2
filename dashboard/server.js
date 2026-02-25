@@ -840,7 +840,9 @@ app.get('/api/status', async (_req, res) => {
     try { execSync('launchctl list com.superbot2.scheduler', { stdio: 'pipe' }); schedulerRunning = true } catch {}
     let imessageRunning = false
     try { execSync('pgrep -f imessage-watcher.sh', { stdio: 'pipe' }); imessageRunning = true } catch {}
-    res.json({ heartbeatRunning, schedulerRunning, imessageRunning })
+    let telegramRunning = false
+    try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); telegramRunning = true } catch {}
+    res.json({ heartbeatRunning, schedulerRunning, imessageRunning, telegramRunning })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -997,6 +999,139 @@ app.post('/api/imessage/reset', async (_req, res) => {
     res.json({ reset: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Telegram integration ---
+
+app.get('/api/telegram/status', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const telegram = config?.telegram || {}
+
+    let watcherRunning = false
+    try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    res.json({
+      enabled: telegram.enabled ?? false,
+      botToken: telegram.botToken ? '***' + telegram.botToken.slice(-6) : '',
+      chatId: telegram.chatId || '',
+      watcherRunning,
+      configured: !!(telegram.botToken && telegram.botToken.length > 0),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/save', async (req, res) => {
+  try {
+    const { botToken } = req.body
+    if (!botToken || !botToken.trim()) {
+      return res.status(400).json({ error: 'botToken is required' })
+    }
+
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    const config = await readJsonFile(configPath) || {}
+    config.telegram = { ...config.telegram, enabled: true, botToken: botToken.trim() }
+    await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+
+    // Start watcher if not running
+    const { execSync } = await import('node:child_process')
+    let watcherRunning = false
+    try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    if (!watcherRunning) {
+      const logsDir = join(SUPERBOT_DIR, 'logs')
+      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
+      const watcherLog = join(logsDir, 'telegram-watcher.log')
+      const watcherScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watcher.mjs')
+      const child = spawn('node', [watcherScript], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
+      child.stdout.pipe(logStream, { end: false })
+      child.stderr.pipe(logStream, { end: false })
+      child.on('close', () => logStream.end())
+      child.unref()
+      watcherRunning = true
+    }
+
+    res.json({
+      enabled: true,
+      botToken: '***' + botToken.trim().slice(-6),
+      chatId: config.telegram.chatId || '',
+      watcherRunning,
+      configured: true,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/start', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    let watcherRunning = false
+    try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    if (!watcherRunning) {
+      const logsDir = join(SUPERBOT_DIR, 'logs')
+      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
+      const watcherLog = join(logsDir, 'telegram-watcher.log')
+      const watcherScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watcher.mjs')
+      const child = spawn('node', [watcherScript], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
+      child.stdout.pipe(logStream, { end: false })
+      child.stderr.pipe(logStream, { end: false })
+      child.on('close', () => logStream.end())
+      child.unref()
+    }
+
+    res.json({ watcherRunning: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/stop', async (_req, res) => {
+  try {
+    const { execSync } = await import('node:child_process')
+    try { execSync('pkill -f telegram-watcher', { stdio: 'pipe' }) } catch {}
+    res.json({ watcherRunning: false })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/test', async (_req, res) => {
+  try {
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const botToken = config?.telegram?.botToken
+    const chatId = config?.telegram?.chatId
+
+    if (!botToken) return res.status(400).json({ sent: false, error: 'No bot token configured' })
+    if (!chatId) return res.status(400).json({ sent: false, error: 'No chat ID yet — send a message to your bot first' })
+
+    const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: 'superbot2 test message' }),
+    })
+
+    const tgJson = await tgRes.json()
+    if (tgJson.ok) {
+      res.json({ sent: true })
+    } else {
+      res.json({ sent: false, error: tgJson.description || 'Unknown Telegram error' })
+    }
+  } catch (err) {
+    res.status(500).json({ sent: false, error: err.message })
   }
 })
 

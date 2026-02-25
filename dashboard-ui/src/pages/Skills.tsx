@@ -2,13 +2,13 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare, Send } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher } from '@/lib/api'
-import type { IMessageStatus } from '@/lib/api'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher, getTelegramStatus, startTelegramWatcher, stopTelegramWatcher } from '@/lib/api'
+import type { IMessageStatus, TelegramStatus } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration, MissingBin } from '@/lib/types'
-import { IMessageSetupModal } from '@/features/SuperbotSkillsSection'
+import { IMessageSetupModal, TelegramSetupModal } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -913,6 +913,109 @@ function IMessageCard() {
   )
 }
 
+// --- Telegram Integration Card ---
+
+function TelegramCard() {
+  const [status, setStatus] = useState<TelegramStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [showSetup, setShowSetup] = useState(false)
+
+  async function fetchStatus() {
+    try {
+      const s = await getTelegramStatus()
+      setStatus(s)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchStatus() }, [])
+
+  async function handleStart() {
+    setActionLoading('start')
+    try {
+      await startTelegramWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleStop() {
+    setActionLoading('stop')
+    try {
+      await stopTelegramWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  const isConfigured = status?.configured
+  const isOnline = status?.watcherRunning
+
+  return (
+    <div className="rounded-xl border border-border-custom bg-surface/50 p-5 flex items-start gap-4 hover:border-sand/20 transition-colors">
+      <div className={`rounded-lg p-2.5 shrink-0 ${isOnline ? 'bg-moss/10' : 'bg-surface'}`}>
+        <Send className={`h-5 w-5 ${isOnline ? 'text-moss' : 'text-stone/60'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-sm font-medium text-parchment">Telegram</h3>
+          {!loading && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+              isOnline
+                ? 'text-moss bg-moss/15'
+                : isConfigured
+                  ? 'text-stone bg-stone/10'
+                  : 'text-stone/50 bg-stone/5'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-moss' : 'bg-stone/40'}`} />
+              {!isConfigured ? 'Not set up' : isOnline ? 'Online' : 'Offline'}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-stone leading-relaxed mb-3">
+          {isConfigured
+            ? 'Chat, manage escalations, and check status via Telegram.'
+            : 'Connect a Telegram bot for chat and escalation management.'}
+        </p>
+        {loading ? (
+          <div className="h-7 w-16 rounded-md bg-surface animate-pulse" />
+        ) : !isConfigured ? (
+          <button
+            onClick={() => setShowSetup(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors"
+          >
+            Configure <ArrowRight className="h-3 w-3" />
+          </button>
+        ) : isOnline ? (
+          <button
+            onClick={handleStop}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-ink border border-border-custom text-stone hover:text-parchment hover:border-stone/30 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop Watcher'}
+          </button>
+        ) : (
+          <button
+            onClick={handleStart}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start Watcher'}
+          </button>
+        )}
+      </div>
+      {showSetup && (
+        <TelegramSetupModal
+          onClose={() => { setShowSetup(false); fetchStatus() }}
+          onComplete={(s) => { setStatus(s); setShowSetup(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
 // --- Marketplace Modal ---
 
 function MarketplaceModal({ onClose }: { onClose: () => void }) {
@@ -986,8 +1089,9 @@ function IntegrationsRow() {
         <Cable className="h-4 w-4 text-sand" />
         <h2 className="font-heading text-lg text-parchment">Integrations</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <IMessageCard />
+        <TelegramCard />
         <MarketplaceCard />
       </div>
     </div>
