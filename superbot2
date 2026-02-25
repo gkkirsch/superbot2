@@ -76,6 +76,64 @@ case "${1:-}" in
     exec bash "$REPO_DIR/scripts/imessage-setup.sh" "${1:-setup}"
     ;;
 
+  sync-app)
+    # Sync dev repo to ~/.superbot2-app/ so the user can test the installed experience
+    APP_DIR="${SUPERBOT2_APP_DIR:-$HOME/.${SUPERBOT2_NAME}-app}"
+    echo ""
+    echo "Syncing dev repo → $APP_DIR"
+    echo ""
+
+    mkdir -p "$APP_DIR"
+
+    rsync -av --delete \
+      --exclude '.git' \
+      --exclude 'node_modules' \
+      --exclude '.env' \
+      --exclude '.env.*' \
+      "$REPO_DIR/" "$APP_DIR/"
+
+    echo ""
+    echo "Installing dependencies..."
+    if [[ -f "$APP_DIR/dashboard/package.json" ]]; then
+      (cd "$APP_DIR/dashboard" && npm install --silent) && echo "  dashboard/ deps installed" \
+        || echo "  WARNING: dashboard/ npm install failed"
+    fi
+    if [[ -f "$APP_DIR/dashboard-ui/package.json" ]]; then
+      (cd "$APP_DIR/dashboard-ui" && npm install --silent) && echo "  dashboard-ui/ deps installed" \
+        || echo "  WARNING: dashboard-ui/ npm install failed"
+    fi
+
+    echo ""
+    echo "Building dashboard UI..."
+    if (cd "$APP_DIR/dashboard-ui" && npm run build); then
+      echo "  Build succeeded"
+    else
+      echo "  WARNING: Build failed — using pre-built dist/ from dev repo"
+    fi
+
+    echo ""
+    echo "Running setup from app dir..."
+    SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$DIR" bash "$APP_DIR/scripts/setup.sh"
+
+    echo ""
+    echo "  ╔═══════════════════════════════════════════╗"
+    echo "  ║          sync-app complete!               ║"
+    echo "  ╚═══════════════════════════════════════════╝"
+    echo ""
+    echo "  App dir:  $APP_DIR"
+    echo "  Data dir: $DIR"
+    echo ""
+    echo "  To test as an end user:"
+    echo "    1. Restart your terminal (alias now points to $APP_DIR)"
+    echo "    2. Run: $SUPERBOT2_NAME"
+    echo ""
+    echo "  To go back to dev mode:"
+    echo "    Run: bash $REPO_DIR/scripts/setup.sh"
+    echo "    Then restart your terminal."
+    echo ""
+    exit 0
+    ;;
+
   help|--help|-h)
     echo "Usage: superbot2 [command]"
     echo ""
@@ -83,6 +141,7 @@ case "${1:-}" in
     echo "  (none)            Start the superbot2 orchestrator"
     echo "  update            Pull latest code and redeploy (preserves user data)"
     echo "  setup             Re-run initial setup"
+    echo "  sync-app          Sync dev repo to ~/.superbot2-app/ for end-user testing"
     echo "  imessage-setup    Set up the iMessage bridge (also: status, test, reset)"
     echo "  help              Show this help"
     echo ""

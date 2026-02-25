@@ -328,14 +328,17 @@ if [[ -n "$SHELL_PROFILE" ]]; then
     echo "  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS already set in $SHELL_PROFILE"
   fi
 
-  # Superbot2 alias
-  if ! grep -q "alias $SUPERBOT2_NAME=" "$SHELL_PROFILE" 2>/dev/null; then
+  # Superbot2 alias — always update to point to the current REPO_DIR
+  NEW_ALIAS="alias $SUPERBOT2_NAME=\"SUPERBOT2_NAME=$SUPERBOT2_NAME SUPERBOT2_HOME=$DIR $REPO_DIR/superbot2\""
+  if grep -q "alias $SUPERBOT2_NAME=" "$SHELL_PROFILE" 2>/dev/null; then
+    # Replace existing alias line
+    sed -i '' "s|alias $SUPERBOT2_NAME=.*|$NEW_ALIAS|" "$SHELL_PROFILE"
+    echo "  Updated $SUPERBOT2_NAME alias in $SHELL_PROFILE → $REPO_DIR/superbot2"
+  else
     echo "" >> "$SHELL_PROFILE"
     echo "# $SUPERBOT2_NAME" >> "$SHELL_PROFILE"
-    echo "alias $SUPERBOT2_NAME=\"SUPERBOT2_NAME=$SUPERBOT2_NAME SUPERBOT2_HOME=$DIR $REPO_DIR/superbot2\"" >> "$SHELL_PROFILE"
+    echo "$NEW_ALIAS" >> "$SHELL_PROFILE"
     echo "  Added $SUPERBOT2_NAME alias to $SHELL_PROFILE"
-  else
-    echo "  $SUPERBOT2_NAME alias already exists in $SHELL_PROFILE"
   fi
 else
   echo "  Warning: Could not detect shell profile. Manually add:"
