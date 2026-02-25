@@ -111,9 +111,25 @@ case "${1:-}" in
       echo "  WARNING: Build failed — using pre-built dist/ from dev repo"
     fi
 
+    # Update alias to point to app dir (only — do NOT run setup.sh, it would
+    # back up and overwrite the live ~/.superbot2 runtime data)
     echo ""
-    echo "Running setup from app dir..."
-    SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$DIR" bash "$APP_DIR/scripts/setup.sh"
+    echo "Updating shell alias..."
+    SHELL_PROFILE=""
+    if [[ "$SHELL" == *zsh* ]]; then SHELL_PROFILE="$HOME/.zshrc"
+    elif [[ "$SHELL" == *bash* ]]; then SHELL_PROFILE="$HOME/.bashrc"; fi
+    if [[ -n "$SHELL_PROFILE" ]]; then
+      NEW_ALIAS="alias $SUPERBOT2_NAME=\"SUPERBOT2_NAME=$SUPERBOT2_NAME SUPERBOT2_HOME=$DIR $APP_DIR/superbot2\""
+      if grep -q "alias $SUPERBOT2_NAME=" "$SHELL_PROFILE" 2>/dev/null; then
+        sed -i '' "s|alias $SUPERBOT2_NAME=.*|$NEW_ALIAS|" "$SHELL_PROFILE"
+        echo "  Updated alias → $APP_DIR/superbot2"
+      else
+        echo "" >> "$SHELL_PROFILE"
+        echo "# $SUPERBOT2_NAME" >> "$SHELL_PROFILE"
+        echo "$NEW_ALIAS" >> "$SHELL_PROFILE"
+        echo "  Added alias → $APP_DIR/superbot2"
+      fi
+    fi
 
     echo ""
     echo "  ╔═══════════════════════════════════════════╗"
