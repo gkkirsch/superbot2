@@ -1,12 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
-import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
-import { SkillDetailModal } from '@/components/SkillDetailModal'
+import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
+import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration } from '@/lib/types'
 import { IMessageIntegration } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -15,59 +14,7 @@ function titleCase(name: string) {
   return name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-// Map granular tags → broad categories for filtering
-const TAG_TO_CATEGORY: Record<string, string> = {
-  design: 'Design', ui: 'Design', ux: 'Design', css: 'Design', html: 'Design',
-  frontend: 'Design', styles: 'Design', tailwind: 'Design', fonts: 'Design',
-  colors: 'Design', 'color-palette': 'Design', typography: 'Design', theming: 'Design',
-  aesthetic: 'Design', aesthetics: 'Design', shadcn: 'Design', components: 'Design',
-  charts: 'Design', 'landing-page': 'Design', 'web-design': 'Design', ecommerce: 'Design',
-  ai: 'AI', ml: 'AI', 'prompt-engineering': 'AI', rag: 'AI', chunking: 'AI',
-  langchain: 'AI', agent: 'AI', agents: 'AI', anthropic: 'AI',
-  debugging: 'Development', 'code-review': 'Development', tdd: 'Development',
-  testing: 'Development', refactoring: 'Development', typescript: 'Development',
-  react: 'Development', express: 'Development', prisma: 'Development',
-  fullstack: 'Development', monorepo: 'Development', sdk: 'Development', scaffold: 'Development',
-  images: 'Media', doodle: 'Media', illustrations: 'Media', 'line-art': 'Media', 'image-generation': 'Media',
-  automation: 'Workflow', workflow: 'Workflow', workflows: 'Workflow',
-  hooks: 'Workflow', mcp: 'Workflow', collaboration: 'Workflow', skills: 'Workflow',
-  documentation: 'Docs', context: 'Docs', memory: 'Docs', persistence: 'Docs',
-  security: 'Security', accessibility: 'Security', 'best-practices': 'Security',
-}
 
-// Infer category from plugin name and description when keywords are empty
-const CATEGORY_PATTERNS: [RegExp, string][] = [
-  [/twitter|tweet|x[\s/-]research|x[\s/-]api|social.*(media|content)|engagement|posting/i, 'Social Media'],
-  [/google.*(workspace|suite|docs|sheets|drive|gmail)|google-workspace/i, 'Google Suite'],
-  [/seo|search engine|ranking|backlink|sitemap/i, 'Marketing'],
-  [/email.*(sequence|campaign|drip|marketing|best.practices)|bounce.rate|deliverability/i, 'Marketing'],
-  [/pricing|monetiz|conversion|a\/b.test|ab.test|cro|popup|overlay|modal/i, 'Marketing'],
-  [/video|veo|avatar|talking.head|animation/i, 'Video'],
-  [/scraping|scrape|crawl|extract.*data/i, 'Scraping'],
-  [/browser.*auto|puppeteer|playwright|selenium|headless/i, 'Developer Tools'],
-  [/pdf|document/i, 'Developer Tools'],
-  [/skill.creator|scaffold|boilerplate|template/i, 'Developer Tools'],
-  [/debug|test|lint|format|refactor|code.review/i, 'Developer Tools'],
-]
-
-function getPluginCategories(keywords: string[], name?: string, description?: string): string[] {
-  const cats = new Set<string>()
-  // Check keywords first
-  for (const k of keywords) {
-    const cat = TAG_TO_CATEGORY[k]
-    if (cat) cats.add(cat)
-  }
-  // If no keyword matches, infer from name + description
-  if (cats.size === 0 && (name || description)) {
-    const text = `${name || ''} ${description || ''}`
-    for (const [pattern, category] of CATEGORY_PATTERNS) {
-      if (pattern.test(text)) {
-        cats.add(category)
-      }
-    }
-  }
-  return Array.from(cats)
-}
 
 // --- Plugin Detail Modal (shared) ---
 
@@ -168,195 +115,6 @@ function FileViewer({ pluginName, filePath, onBack }: { pluginName: string; file
         ) : (
           <pre className="text-xs text-parchment font-mono whitespace-pre-wrap">{content}</pre>
         )}
-      </div>
-    </div>
-  )
-}
-
-// --- Skill Detail Modal (uses shared component) ---
-
-function SkillsPageSkillDetailModal({ skill, onClose }: { skill: SkillInfo; onClose: () => void }) {
-  const [removing, setRemoving] = useState(false)
-  const queryClient = useQueryClient()
-
-  async function handleUninstall() {
-    setRemoving(true)
-    try {
-      await deleteSkill(skill.id)
-      await queryClient.invalidateQueries({ queryKey: ['skills'] })
-      onClose()
-    } finally {
-      setRemoving(false)
-    }
-  }
-
-  const fetchDetailCb = useCallback((id: string) => fetchSkillDetail(id), [])
-  const fetchFileCb = useCallback((id: string, filePath: string) => fetchSkillFile(id, filePath), [])
-
-  return (
-    <SkillDetailModal
-      skill={skill}
-      onClose={onClose}
-      fetchDetail={fetchDetailCb}
-      fetchFile={fetchFileCb}
-      headerActions={
-        <button
-          onClick={handleUninstall}
-          disabled={removing}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-ember/15 text-ember hover:bg-ember/25 transition-colors disabled:opacity-50"
-        >
-          {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-          {removing ? 'Removing...' : 'Uninstall'}
-        </button>
-      }
-      belowHeader={skill.pluginName ? <CredentialForm pluginName={skill.pluginName} /> : undefined}
-    />
-  )
-}
-
-// --- Agent Detail Modal ---
-
-function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () => void }) {
-  const [detail, setDetail] = useState<AgentDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [removing, setRemoving] = useState(false)
-  const queryClient = useQueryClient()
-
-  useEffect(() => {
-    fetchAgentDetail(agent.id)
-      .then(setDetail)
-      .catch(() => setDetail(null))
-      .finally(() => setLoading(false))
-  }, [agent.id])
-
-  async function handleRemove() {
-    setRemoving(true)
-    try {
-      await deleteAgent(agent.id)
-      await queryClient.invalidateQueries({ queryKey: ['agents'] })
-      onClose()
-    } finally {
-      setRemoving(false)
-    }
-  }
-
-  const parsed = detail?.fullContent ? parseFrontmatter(detail.fullContent) : null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
-      <div
-        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
-          <div className="min-w-0">
-            <h2 className="font-heading text-xl text-parchment">{agent.name}</h2>
-            {agent.description && <p className="text-sm text-stone mt-1">{agent.description}</p>}
-            <div className="flex items-center gap-3 mt-2">
-              <span className="text-xs text-stone/60">model: {agent.model}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 ml-4">
-            <button
-              onClick={handleRemove}
-              disabled={removing}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-ember/15 text-ember hover:bg-ember/25 transition-colors disabled:opacity-50"
-            >
-              {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              {removing ? 'Removing...' : 'Remove'}
-            </button>
-            <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-stone" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {parsed?.frontmatter && <FrontmatterBlock data={parsed.frontmatter} />}
-              {parsed?.body ? (
-                <div className="docs-content">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.body}</ReactMarkdown>
-                </div>
-              ) : detail?.fullContent ? (
-                <pre className="text-xs text-parchment font-mono whitespace-pre-wrap rounded-lg bg-ink/50 border border-border-custom p-4">{detail.fullContent}</pre>
-              ) : (
-                <p className="text-sm text-stone">No content available.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// --- Hook Detail Modal ---
-
-function HookDetailModal({ hook, onClose }: { hook: HookInfo; onClose: () => void }) {
-  const [removing, setRemoving] = useState(false)
-  const queryClient = useQueryClient()
-
-  async function handleRemove() {
-    setRemoving(true)
-    try {
-      await deleteHook(hook.event)
-      await queryClient.invalidateQueries({ queryKey: ['hooks'] })
-      onClose()
-    } finally {
-      setRemoving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60" />
-      <div
-        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
-          <div className="min-w-0">
-            <h2 className="font-heading text-xl text-parchment">{hook.event}</h2>
-            <p className="text-sm text-stone mt-1">Hook event</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 ml-4">
-            <button
-              onClick={handleRemove}
-              disabled={removing}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-ember/15 text-ember hover:bg-ember/25 transition-colors disabled:opacity-50"
-            >
-              {removing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              {removing ? 'Removing...' : 'Remove'}
-            </button>
-            <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto p-6">
-          <div className="space-y-4">
-            <div className="rounded-lg bg-ink border border-border-custom p-4">
-              <div className="grid gap-2">
-                <div className="flex gap-3">
-                  <span className="text-xs font-mono text-sand shrink-0 min-w-[120px]">event</span>
-                  <span className="text-xs text-parchment">{hook.event}</span>
-                </div>
-                <div className="flex gap-3">
-                  <span className="text-xs font-mono text-sand shrink-0 min-w-[120px]">command</span>
-                  <span className="text-xs text-parchment font-mono">{hook.command}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
@@ -634,7 +392,7 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
 // --- Plugin Card (detailed card for browse list) ---
 
-function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
+function PluginCard({ plugin, onClick, showInstalledBadge }: { plugin: PluginInfo; onClick: () => void; showInstalledBadge?: boolean }) {
   return (
     <button
       onClick={onClick}
@@ -644,7 +402,15 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
           : 'border-border-custom bg-surface/50 hover:border-sand/30 hover:bg-surface'
       }`}
     >
-      <h3 className="text-sm font-medium text-parchment leading-tight mb-1.5">{titleCase(plugin.name)}</h3>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-medium text-parchment leading-tight mb-1.5">{titleCase(plugin.name)}</h3>
+        {showInstalledBadge && plugin.installed && (
+          <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium text-moss bg-moss/15 border border-moss/25 rounded-full px-2 py-0.5">
+            <Check className="h-2.5 w-2.5" />
+            Installed
+          </span>
+        )}
+      </div>
       {plugin.description && (
         <p className="text-xs text-stone line-clamp-1">{plugin.description}</p>
       )}
@@ -827,338 +593,29 @@ function MarketplaceManager() {
   )
 }
 
-// --- Installed tab content ---
-
-function InstalledSidebar() {
-  const { data: skills, isLoading: skillsLoading } = useSkills()
-  const { data: agents, isLoading: agentsLoading } = useAgents()
-  const { data: hooks, isLoading: hooksLoading } = useHooks()
-  const { data: plugins } = usePlugins()
-
-  const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null)
-  const [selectedAgent, setSelectedAgent] = useState<AgentInfo | null>(null)
-  const [selectedHook, setSelectedHook] = useState<HookInfo | null>(null)
-  const [selectedPlugin, setSelectedPlugin] = useState<PluginInfo | null>(null)
-  const [expandedPluginSkills, setExpandedPluginSkills] = useState<Set<string>>(new Set())
-  const [expandedPluginAgents, setExpandedPluginAgents] = useState<Set<string>>(new Set())
-
-  const installedPlugins = plugins?.filter(p => p.installed) ?? []
-
-  // Split skills into user vs plugin-grouped
-  const userSkills = useMemo(() => skills?.filter(s => s.source !== 'plugin') ?? [], [skills])
-  const pluginSkillGroups = useMemo(() => {
-    const groups = new Map<string, SkillInfo[]>()
-    for (const s of (skills ?? [])) {
-      if (s.source === 'plugin' && s.pluginName) {
-        const existing = groups.get(s.pluginName) || []
-        existing.push(s)
-        groups.set(s.pluginName, existing)
-      }
-    }
-    return groups
-  }, [skills])
-
-  // Split agents into user vs plugin-grouped
-  const userAgents = useMemo(() => agents?.filter(a => a.source !== 'plugin') ?? [], [agents])
-  const pluginAgentGroups = useMemo(() => {
-    const groups = new Map<string, AgentInfo[]>()
-    for (const a of (agents ?? [])) {
-      if (a.source === 'plugin' && a.pluginName) {
-        const existing = groups.get(a.pluginName) || []
-        existing.push(a)
-        groups.set(a.pluginName, existing)
-      }
-    }
-    return groups
-  }, [agents])
-
-  return (
-    <div className="space-y-6">
-      {/* Integrations */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <Cable className="h-3.5 w-3.5 text-sand" />
-          <span className="text-xs font-medium text-sand uppercase tracking-wider">Integrations</span>
-        </div>
-        <IMessageIntegration />
-      </div>
-
-      {/* Marketplace management */}
-      <MarketplaceManager />
-
-      {/* Installed plugins */}
-      {installedPlugins.length > 0 && (
-        <div>
-          <div className="flex items-center gap-1.5 mb-3">
-            <Puzzle className="h-3.5 w-3.5 text-moss" />
-            <span className="text-xs font-medium text-moss uppercase tracking-wider">Installed Plugins</span>
-            <span className="text-xs text-stone">({installedPlugins.length})</span>
-          </div>
-          <div className="space-y-1.5">
-            {installedPlugins.map(p => (
-              <button
-                key={p.pluginId}
-                onClick={() => setSelectedPlugin(p)}
-                className="w-full text-left rounded-md border-l-2 border-l-moss border border-moss/20 bg-moss/5 px-3 py-2 flex items-center justify-between gap-2 hover:bg-moss/10 transition-colors cursor-pointer"
-              >
-                <span className="text-xs font-medium text-parchment truncate">{titleCase(p.name || p.pluginId)}</span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {p.hasUnconfiguredCredentials && (
-                    <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />
-                  )}
-                  <span className="text-[10px] text-moss/70">Installed</span>
-                  <ChevronRight className="h-3 w-3 text-stone/40" />
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Skills */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <Sparkles className="h-3.5 w-3.5 text-moss" />
-          <span className="text-xs font-medium text-moss uppercase tracking-wider">Skills</span>
-          {skills && <span className="text-xs text-stone">({skills.length})</span>}
-        </div>
-        {skillsLoading ? (
-          <div className="space-y-1.5">
-            {[1, 2, 3].map(i => <div key={i} className="h-10 rounded-md bg-surface/50 animate-pulse" />)}
-          </div>
-        ) : skills?.length === 0 ? (
-          <p className="text-xs text-stone">No skills installed.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {/* User-created skills (not from plugins) */}
-            {userSkills.map(s => (
-              <button
-                key={s.id}
-                onClick={() => setSelectedSkill(s)}
-                className="w-full text-left rounded-md border-l-2 border-l-moss border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <p className="text-xs font-medium text-parchment truncate">{s.name}</p>
-                    {s.source === 'superbot2' && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400/70 border border-amber-500/15 shrink-0">sb2</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ChevronRight className="h-3 w-3 text-stone/40" />
-                  </div>
-                </div>
-              </button>
-            ))}
-            {/* Plugin-provided skills, grouped by plugin */}
-            {Array.from(pluginSkillGroups.entries()).map(([pluginName, pluginSkills]) => {
-              const isExpanded = expandedPluginSkills.has(pluginName)
-              const groupNeedsConfig = pluginSkills.some(s => s.needsConfig)
-              return (
-                <div key={pluginName}>
-                  <button
-                    onClick={() => setExpandedPluginSkills(prev => {
-                      const next = new Set(prev)
-                      if (next.has(pluginName)) next.delete(pluginName)
-                      else next.add(pluginName)
-                      return next
-                    })}
-                    className="w-full text-left rounded-md border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
-                        <span className="text-xs font-medium text-parchment truncate">{titleCase(pluginName)}</span>
-                        <span className="text-[10px] text-stone/50">({pluginSkills.length})</span>
-                        {groupNeedsConfig && <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
-                      </div>
-                      {isExpanded
-                        ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
-                        : <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                      }
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="ml-3 mt-1 space-y-1 border-l border-moss/15 pl-2">
-                      {pluginSkills.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => setSelectedSkill(s)}
-                          className="w-full text-left rounded-md bg-moss/5 px-3 py-1.5 hover:bg-moss/10 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-parchment truncate">{s.name}</p>
-                            <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Agents */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <Bot className="h-3.5 w-3.5 text-moss" />
-          <span className="text-xs font-medium text-moss uppercase tracking-wider">Agents</span>
-          {agents && <span className="text-xs text-stone">({agents.length})</span>}
-        </div>
-        {agentsLoading ? (
-          <div className="h-10 rounded-md bg-surface/50 animate-pulse" />
-        ) : agents?.length === 0 ? (
-          <p className="text-xs text-stone">No agents configured.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {/* User-created agents */}
-            {userAgents.map(a => (
-              <button
-                key={a.id}
-                onClick={() => setSelectedAgent(a)}
-                className="w-full text-left rounded-md border-l-2 border-l-moss border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-parchment truncate">{a.name}</span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] text-moss/70">Installed</span>
-                    <ChevronRight className="h-3 w-3 text-stone/40" />
-                  </div>
-                </div>
-              </button>
-            ))}
-            {/* Plugin-provided agents, grouped by plugin */}
-            {Array.from(pluginAgentGroups.entries()).map(([pluginName, pluginAgents]) => {
-              const isExpanded = expandedPluginAgents.has(pluginName)
-              return (
-                <div key={pluginName}>
-                  <button
-                    onClick={() => setExpandedPluginAgents(prev => {
-                      const next = new Set(prev)
-                      if (next.has(pluginName)) next.delete(pluginName)
-                      else next.add(pluginName)
-                      return next
-                    })}
-                    className="w-full text-left rounded-md border border-moss/20 bg-moss/5 px-3 py-2 hover:bg-moss/10 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
-                        <span className="text-xs font-medium text-parchment truncate">{titleCase(pluginName)}</span>
-                        <span className="text-[10px] text-stone/50">({pluginAgents.length})</span>
-                      </div>
-                      {isExpanded
-                        ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
-                        : <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                      }
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <div className="ml-3 mt-1 space-y-1 border-l border-moss/15 pl-2">
-                      {pluginAgents.map(a => (
-                        <button
-                          key={a.id}
-                          onClick={() => setSelectedAgent(a)}
-                          className="w-full text-left rounded-md bg-moss/5 px-3 py-1.5 hover:bg-moss/10 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs text-parchment truncate">{a.name}</span>
-                            <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Hooks */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <Webhook className="h-3.5 w-3.5 text-moss" />
-          <span className="text-xs font-medium text-moss uppercase tracking-wider">Hooks</span>
-          {hooks && <span className="text-xs text-stone">({hooks.length})</span>}
-        </div>
-        {hooksLoading ? (
-          <div className="h-10 rounded-md bg-surface/50 animate-pulse" />
-        ) : hooks?.length === 0 ? (
-          <p className="text-xs text-stone">No hooks configured.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {hooks?.map((h, i) => (
-              <button
-                key={`${h.event}-${i}`}
-                onClick={() => setSelectedHook(h)}
-                className="w-full text-left rounded-md border-l-2 border-l-moss border border-moss/20 bg-moss/5 px-3 py-2 flex items-center justify-between gap-2 hover:bg-moss/10 transition-colors cursor-pointer"
-              >
-                <p className="text-xs font-medium text-parchment truncate">{h.event}</p>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[10px] text-moss/70">Installed</span>
-                  <ChevronRight className="h-3 w-3 text-stone/40" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {selectedSkill && <SkillsPageSkillDetailModal skill={selectedSkill} onClose={() => setSelectedSkill(null)} />}
-      {selectedAgent && <AgentDetailModal agent={selectedAgent} onClose={() => setSelectedAgent(null)} />}
-      {selectedHook && <HookDetailModal hook={selectedHook} onClose={() => setSelectedHook(null)} />}
-      {selectedPlugin && <PluginDetailModal plugin={selectedPlugin} onClose={() => setSelectedPlugin(null)} />}
-    </div>
-  )
-}
-
 // --- Right column: Browse plugins ---
 
 function BrowsePlugins() {
   const { data: plugins, isLoading } = usePlugins()
   const [search, setSearch] = useState('')
   const [selectedPlugin, setSelectedPlugin] = useState<PluginInfo | null>(null)
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [activeMarketplace, setActiveMarketplace] = useState<string | null>(null)
 
-  const available = plugins?.filter(p => !p.installed) ?? []
-  const installed = plugins?.filter(p => p.installed) ?? []
+  const allPlugins = plugins ?? []
 
   // Collect all unique marketplace names
   const allMarketplaces = useMemo(() => {
     const set = new Set<string>()
-    for (const p of available) {
+    for (const p of allPlugins) {
       if (p.marketplaceName) set.add(p.marketplaceName)
     }
     return Array.from(set).sort()
-  }, [available])
-
-  // Derive broad categories from tags
-  const allCategories = useMemo(() => {
-    const catSet = new Set<string>()
-    for (const p of available) {
-      for (const cat of getPluginCategories(p.keywords || [], p.name, p.description)) {
-        catSet.add(cat)
-      }
-    }
-    return Array.from(catSet).sort()
-  }, [available])
+  }, [allPlugins])
 
   const filtered = useMemo(() => {
-    let result = available
+    let result = allPlugins
     if (activeMarketplace) {
       result = result.filter(p => p.marketplaceName === activeMarketplace)
-    }
-    if (activeCategory) {
-      result = result.filter(p => {
-        const cats = getPluginCategories(p.keywords || [], p.name, p.description)
-        return cats.includes(activeCategory)
-      })
     }
     const q = search.toLowerCase()
     if (q) {
@@ -1168,8 +625,15 @@ function BrowsePlugins() {
         (p.keywords || []).some(k => k.toLowerCase().includes(q))
       )
     }
-    return result
-  }, [available, search, activeCategory, activeMarketplace])
+    // Sort: installed first, then alphabetical
+    return result.sort((a, b) => {
+      if (a.installed && !b.installed) return -1
+      if (!a.installed && b.installed) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [allPlugins, search, activeMarketplace])
+
+  const installedCount = allPlugins.filter(p => p.installed).length
 
   return (
     <div>
@@ -1177,10 +641,10 @@ function BrowsePlugins() {
         <div className="flex items-center gap-2">
           <Puzzle className="h-4 w-4 text-sand" />
           <h2 className="font-heading text-lg text-parchment">Browse Plugins</h2>
-          <span className="text-xs text-stone bg-surface px-2 py-0.5 rounded-full">{available.length}</span>
+          <span className="text-xs text-stone bg-surface px-2 py-0.5 rounded-full">{allPlugins.length}</span>
         </div>
-        {installed.length > 0 && (
-          <span className="text-xs text-moss">{installed.length} installed</span>
+        {installedCount > 0 && (
+          <span className="text-xs text-moss">{installedCount} installed</span>
         )}
       </div>
 
@@ -1206,7 +670,7 @@ function BrowsePlugins() {
 
       {/* Marketplace filter */}
       {allMarketplaces.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 mb-4">
           <button
             onClick={() => setActiveMarketplace(null)}
             className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
@@ -1234,35 +698,6 @@ function BrowsePlugins() {
         </div>
       )}
 
-      {/* Category filter */}
-      {allCategories.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          <button
-            onClick={() => setActiveCategory(null)}
-            className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
-              !activeCategory
-                ? 'bg-sand/15 text-sand border border-sand/30'
-                : 'bg-ink/60 text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-            }`}
-          >
-            All
-          </button>
-          {allCategories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
-              className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
-                activeCategory === cat
-                  ? 'bg-sand/15 text-sand border border-sand/30'
-                  : 'bg-ink/60 text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Results */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1275,7 +710,7 @@ function BrowsePlugins() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filtered.map(p => (
-            <PluginCard key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} />
+            <PluginCard key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} showInstalledBadge />
           ))}
         </div>
       )}
@@ -1287,11 +722,64 @@ function BrowsePlugins() {
   )
 }
 
+// --- Integrations Row ---
+
+function IntegrationsRow() {
+  const { data: marketplaces, isLoading: marketplacesLoading } = useMarketplaces()
+  const [showMarketplaceManager, setShowMarketplaceManager] = useState(false)
+
+  const configuredCount = marketplaces?.length ?? 0
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-3">
+        <Cable className="h-4 w-4 text-sand" />
+        <h2 className="font-heading text-lg text-parchment">Integrations</h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {/* iMessage card */}
+        <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
+          <IMessageIntegration />
+        </div>
+
+        {/* Marketplaces card */}
+        <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
+          {showMarketplaceManager ? (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-parchment">Manage Marketplaces</span>
+                <button onClick={() => setShowMarketplaceManager(false)} className="p-1 text-stone hover:text-parchment transition-colors">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <MarketplaceManager />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-parchment truncate">Marketplaces</p>
+                <p className="text-[10px] text-stone/50 truncate flex items-center gap-1">
+                  <Store className="h-3 w-3 text-stone/40 shrink-0" />
+                  {marketplacesLoading ? 'Loading...' : `${configuredCount} configured`}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMarketplaceManager(true)}
+                className="px-2 py-0.5 text-[10px] rounded bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors shrink-0"
+              >
+                Manage
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Page ---
 
 export function Skills() {
-  const [activeTab, setActiveTab] = useState<'browse' | 'installed'>('browse')
-
   return (
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-7xl px-6 py-10">
@@ -1302,57 +790,30 @@ export function Skills() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6">
-          <button
-            onClick={() => setActiveTab('browse')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'browse'
-                ? 'bg-sand/15 text-sand border border-sand/30'
-                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-            }`}
+        {/* Integrations row */}
+        <IntegrationsRow />
+
+        {/* Build a Plugin callout */}
+        <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
+          <div className="flex items-start gap-3.5 min-w-0">
+            <div className="rounded-lg bg-sand/10 p-2 shrink-0">
+              <Wrench className="h-5 w-5 text-sand" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
+              <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
+            </div>
+          </div>
+          <Link
+            to="/skill-creator"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
           >
-            <Puzzle className="h-3.5 w-3.5" />
-            Browse
-          </button>
-          <button
-            onClick={() => setActiveTab('installed')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'installed'
-                ? 'bg-sand/15 text-sand border border-sand/30'
-                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-            }`}
-          >
-            <Blocks className="h-3.5 w-3.5" />
-            Installed
-          </button>
+            Create Plugin <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
 
-        {/* Tab content */}
-        {activeTab === 'browse' && (
-          <>
-            {/* Build a Plugin callout */}
-            <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div className="rounded-lg bg-sand/10 p-2 shrink-0">
-                  <Wrench className="h-5 w-5 text-sand" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
-                  <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
-                </div>
-              </div>
-              <Link
-                to="/skill-creator"
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
-              >
-                Create Plugin <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <BrowsePlugins />
-          </>
-        )}
-        {activeTab === 'installed' && <InstalledSidebar />}
+        {/* Plugin browse grid */}
+        <BrowsePlugins />
       </div>
     </div>
   )
