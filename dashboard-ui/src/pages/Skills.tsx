@@ -827,7 +827,7 @@ function MarketplaceManager() {
   )
 }
 
-// --- Left sidebar: Installed ---
+// --- Installed tab content ---
 
 function InstalledSidebar() {
   const { data: skills, isLoading: skillsLoading } = useSkills()
@@ -873,13 +873,7 @@ function InstalledSidebar() {
   }, [agents])
 
   return (
-    <div className="rounded-xl border border-border-custom bg-surface/40 p-4 space-y-6">
-      {/* Panel header */}
-      <div className="flex items-center gap-2 pb-3 border-b border-border-custom">
-        <Blocks className="h-4 w-4 text-moss" />
-        <h2 className="text-sm font-heading font-medium text-parchment">Your Setup</h2>
-      </div>
-
+    <div className="space-y-6">
       {/* Integrations */}
       <div>
         <div className="flex items-center gap-1.5 mb-3">
@@ -1296,43 +1290,69 @@ function BrowsePlugins() {
 // --- Page ---
 
 export function Skills() {
+  const [activeTab, setActiveTab] = useState<'browse' | 'installed'>('browse')
+
   return (
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Blocks className="h-5 w-5 text-sand" />
             <h1 className="font-heading text-2xl text-parchment">Plugins</h1>
           </div>
         </div>
-        {/* Build a Plugin callout */}
-        <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
-          <div className="flex items-start gap-3.5 min-w-0">
-            <div className="rounded-lg bg-sand/10 p-2 shrink-0">
-              <Wrench className="h-5 w-5 text-sand" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
-              <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
-            </div>
-          </div>
-          <Link
-            to="/skill-creator"
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6">
+          <button
+            onClick={() => setActiveTab('browse')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'browse'
+                ? 'bg-sand/15 text-sand border border-sand/30'
+                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
+            }`}
           >
-            Create Plugin <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+            <Puzzle className="h-3.5 w-3.5" />
+            Browse
+          </button>
+          <button
+            onClick={() => setActiveTab('installed')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              activeTab === 'installed'
+                ? 'bg-sand/15 text-sand border border-sand/30'
+                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
+            }`}
+          >
+            <Blocks className="h-3.5 w-3.5" />
+            Installed
+          </button>
         </div>
-        <div className="flex gap-8">
-          {/* Left sidebar — 1/3 */}
-          <div className="w-72 shrink-0 hidden md:block">
-            <InstalledSidebar />
-          </div>
-          {/* Right column — 2/3 */}
-          <div className="flex-1 min-w-0">
+
+        {/* Tab content */}
+        {activeTab === 'browse' && (
+          <>
+            {/* Build a Plugin callout */}
+            <div className="mb-8 rounded-xl border border-sand/15 bg-gradient-to-r from-sand/[0.06] to-transparent p-5 flex items-center justify-between gap-6">
+              <div className="flex items-start gap-3.5 min-w-0">
+                <div className="rounded-lg bg-sand/10 p-2 shrink-0">
+                  <Wrench className="h-5 w-5 text-sand" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-parchment mb-1">Build a Plugin</h3>
+                  <p className="text-xs text-stone leading-relaxed">Create custom skills, commands, and agents for Claude Code. Publish to the marketplace.</p>
+                </div>
+              </div>
+              <Link
+                to="/skill-creator"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-sand/15 text-sand hover:bg-sand/25 transition-colors shrink-0"
+              >
+                Create Plugin <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
             <BrowsePlugins />
-          </div>
-        </div>
+          </>
+        )}
+        {activeTab === 'installed' && <InstalledSidebar />}
       </div>
     </div>
   )
