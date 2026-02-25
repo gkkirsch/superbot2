@@ -1,5 +1,5 @@
 import express from 'express'
-import { readdir, readFile, writeFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
+import { readdir, readFile, writeFile, appendFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -3253,6 +3253,23 @@ const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-promp
 const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
 const CLAUDE_BIN = `${process.env.HOME}/.local/bin/claude`
 
+// Chat history persistence — append-only JSONL per draft
+async function appendDraftChatMessage(draftPath, message) {
+  if (!draftPath) return
+  const historyPath = join(draftPath, 'chat-history.jsonl')
+  await appendFile(historyPath, JSON.stringify(message) + '\n')
+}
+
+async function readDraftChatHistory(draftPath) {
+  const historyPath = join(draftPath, 'chat-history.jsonl')
+  try {
+    const raw = await readFile(historyPath, 'utf-8')
+    return raw.trim().split('\n').filter(Boolean).map(line => JSON.parse(line))
+  } catch {
+    return []
+  }
+}
+
 // SSE stream endpoint
 app.get('/api/skill-creator/stream', (req, res) => {
   const sessionId = req.query.sessionId
@@ -3391,6 +3408,10 @@ app.post('/api/skill-creator/chat', async (req, res) => {
         type: 'user',
         message: { role: 'user', content: message.trim() }
       }) + '\n')
+      // Persist user message to draft chat history
+      if (session.draftPath) {
+        appendDraftChatMessage(session.draftPath, { role: 'user', content: message.trim(), timestamp: Date.now() })
+      }
       return res.json({ ok: true, action: 'message_sent' })
     }
 
@@ -3561,6 +3582,16 @@ claude plugin install ${pluginSlug}
             input: b.input
           }))
           sseRes.write(`data: ${JSON.stringify({ type: 'assistant', text: textBlocks, tools: toolBlocks })}\n\n`)
+          // Persist assistant message to draft chat history
+          const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
+          if (sess?.draftPath && textBlocks.trim()) {
+            appendDraftChatMessage(sess.draftPath, {
+              role: 'assistant',
+              content: textBlocks,
+              tools: toolBlocks.length > 0 ? toolBlocks : undefined,
+              timestamp: Date.now()
+            })
+          }
         } else if (event.type === 'result') {
           sseRes.write(`data: ${JSON.stringify({ type: 'result', subtype: event.subtype, cost: event.total_cost_usd, duration: event.duration_ms })}\n\n`)
         }
@@ -3607,6 +3638,9 @@ claude plugin install ${pluginSlug}
       message: { role: 'user', content: message.trim() }
     }) + '\n')
 
+    // Persist user message to draft chat history
+    appendDraftChatMessage(draftPath, { role: 'user', content: message.trim(), timestamp: Date.now() })
+
     res.json({ ok: true, action: 'process_spawned' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -3647,6 +3681,20 @@ app.get('/api/skill-creator/drafts', async (req, res) => {
       }
     }
     res.json({ ok: true, drafts })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get chat history for a draft
+app.get('/api/skill-creator/drafts/:name/chat-history', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    const messages = await readDraftChatHistory(draftPath)
+    res.json({ ok: true, messages })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

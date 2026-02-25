@@ -460,6 +460,10 @@ export function SkillCreator() {
 
   const initialScrollDoneRef = useRef(false)
   const pendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
+  const draftMessagesRef = useRef<Map<string, Message[]>>(new Map())
+  const sessionIdRef = useRef(sessionId)
+  const selectedDraftRef = useRef(selectedDraft)
+  const messagesRef = useRef(messages)
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -469,6 +473,11 @@ export function SkillCreator() {
       container.scrollTop = container.scrollHeight
     })
   }, [])
+
+  // Keep refs in sync with state (avoids stale closures in callbacks)
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
+  useEffect(() => { selectedDraftRef.current = selectedDraft }, [selectedDraft])
+  useEffect(() => { messagesRef.current = messages }, [messages])
 
   // Auto-scroll on new messages and streaming
   useEffect(() => {
@@ -776,9 +785,17 @@ export function SkillCreator() {
     }
   }, [draftName, selectedDraft])
 
-  // Select a draft from sidebar
-  const handleSelectDraft = useCallback((name: string) => {
-    setSelectedDraft(prev => prev === name ? null : name)
+  // Select a draft from sidebar — saves current messages, resets session, loads new draft's history
+  const handleSelectDraft = useCallback(async (name: string) => {
+    const currentDraft = selectedDraftRef.current
+    const isDeselecting = currentDraft === name
+
+    // Save current messages for the current draft
+    if (currentDraft && messagesRef.current.length > 0) {
+      draftMessagesRef.current.set(currentDraft, [...messagesRef.current])
+    }
+
+    // Reset file/panel state
     setSelectedFile(null)
     setFileContent(null)
     setFrontmatter(null)
@@ -789,6 +806,50 @@ export function SkillCreator() {
     setValidationExpanded(false)
     setSelectedDraftType(null)
     setPluginMeta(null)
+
+    if (isDeselecting) {
+      setSelectedDraft(null)
+      return
+    }
+
+    setSelectedDraft(name)
+
+    // Reset chat state
+    setStreamingText('')
+    setIsProcessing(false)
+    setError(null)
+    pendingToolsRef.current = []
+    initialScrollDoneRef.current = false
+
+    // Kill existing session process
+    try {
+      await fetch(`/api/skill-creator/session/${sessionIdRef.current}`, { method: 'DELETE' })
+    } catch { /* ignore */ }
+    eventSourceRef.current?.close()
+
+    // Load messages from in-memory cache or fetch from backend
+    const cached = draftMessagesRef.current.get(name)
+    if (cached && cached.length > 0) {
+      setMessages(cached)
+    } else {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${name}/chat-history`)
+        const data = await res.json()
+        if (data.ok && data.messages.length > 0) {
+          setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
+            id: crypto.randomUUID(),
+            ...m,
+          })))
+        } else {
+          setMessages([])
+        }
+      } catch {
+        setMessages([])
+      }
+    }
+
+    // New SSE session for this draft
+    setSessionId(crypto.randomUUID())
   }, [])
 
   // Fetch files for the selected draft
