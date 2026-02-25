@@ -688,7 +688,7 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
 
       {/* Description */}
       {plugin.description && (
-        <p className="text-xs text-stone line-clamp-2 mb-2.5">{plugin.description}</p>
+        <p className="text-xs text-stone line-clamp-1 mb-2.5">{plugin.description}</p>
       )}
 
       {/* Component counts */}
