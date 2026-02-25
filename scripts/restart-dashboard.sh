@@ -1,5 +1,5 @@
 #!/bin/bash
-# Restart the dashboard server using the PID file
+# Restart the dashboard (API server + vite dev server with HMR)
 set -euo pipefail
 
 SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
@@ -10,14 +10,14 @@ if [[ ! -f "$REPO_DIR/dashboard/server.js" ]]; then
   REPO_DIR="$HOME/dev/superbot2"
 fi
 PID_FILE="$SUPERBOT2_HOME/dashboard.pid"
-PORT=3274
 
-# Kill old server if running
+# Kill old process tree if running
 if [[ -f "$PID_FILE" ]]; then
   OLD_PID=$(cat "$PID_FILE")
   if kill -0 "$OLD_PID" 2>/dev/null; then
-    kill "$OLD_PID" 2>/dev/null
-    # Wait briefly for clean shutdown
+    # Kill child processes (concurrently spawns vite + node)
+    pkill -P "$OLD_PID" 2>/dev/null || true
+    kill "$OLD_PID" 2>/dev/null || true
     for i in {1..10}; do
       kill -0 "$OLD_PID" 2>/dev/null || break
       sleep 0.1
@@ -26,11 +26,13 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
-# Also kill anything on the port as a fallback
-lsof -ti:$PORT | xargs kill 2>/dev/null || true
+# Also kill anything on both ports as a fallback
+for port in 3274 5173; do
+  lsof -ti:$port | xargs kill 2>/dev/null || true
+done
 
-# Start new server (nohup so it survives terminal close)
-SUPERBOT2_HOME="$SUPERBOT2_HOME" PORT=$PORT nohup node "$REPO_DIR/dashboard/server.js" > "$SUPERBOT2_HOME/dashboard.log" 2>&1 &
+# Start dashboard (API on 3274 + vite HMR on 5173)
+SUPERBOT2_HOME="$SUPERBOT2_HOME" nohup npm --prefix "$REPO_DIR/dashboard-ui" run dev > "$SUPERBOT2_HOME/dashboard.log" 2>&1 &
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
-echo "Dashboard server restarted (PID $NEW_PID)"
+echo "Dashboard restarted (PID $NEW_PID) → http://localhost:5173"

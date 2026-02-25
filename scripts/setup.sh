@@ -301,7 +301,7 @@ fi
 # --- Start dashboard server ---
 echo "Starting dashboard server..."
 bash "$REPO_DIR/scripts/restart-dashboard.sh"
-echo "  Dashboard running at http://localhost:3274"
+echo "  Dashboard running at http://localhost:5173"
 
 # --- Scheduler ---
 echo "Installing scheduler..."

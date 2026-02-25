@@ -140,20 +140,22 @@ SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$SUPERBOT2_HOME" bash "$INSTALL
 echo ""
 echo "Starting dashboard..."
 
-# Kill any existing dashboard on port 3274
+# Kill any existing processes on dashboard ports
 lsof -ti:3274 2>/dev/null | xargs kill 2>/dev/null || true
+lsof -ti:5173 2>/dev/null | xargs kill 2>/dev/null || true
 
-SUPERBOT2_HOME="$SUPERBOT2_HOME" node "$INSTALL_DIR/dashboard/server.js" &
+# Start both API server (3274) + vite dev server with HMR (5173)
+SUPERBOT2_HOME="$SUPERBOT2_HOME" npm --prefix "$INSTALL_DIR/dashboard-ui" run dev &
 DASHBOARD_PID=$!
 
-# Give server a moment to start
-sleep 2
+# Give servers a moment to start
+sleep 3
 
 # Open in browser (macOS)
 if command -v open &>/dev/null; then
-  open "http://localhost:3274"
+  open "http://localhost:5173"
 elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:3274"
+  xdg-open "http://localhost:5173"
 fi
 
 # --- Done ---
@@ -163,7 +165,7 @@ echo "  ╔═══════════════════════
 echo "  ║        $SUPERBOT2_NAME installed!           ║"
 echo "  ╚═══════════════════════════════════════╝"
 echo ""
-echo "  Dashboard:  http://localhost:3274  (running now)"
+echo "  Dashboard:  http://localhost:5173  (running now)"
 echo "  Data:       $SUPERBOT2_HOME"
 echo "  Code:       $INSTALL_DIR"
 echo ""

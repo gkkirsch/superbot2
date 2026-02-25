@@ -4282,47 +4282,53 @@ app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   res.json({ ok: true })
 })
 
-// --- Static files (production) ---
+// --- Static files (production only — skipped when vite dev server handles frontend) ---
 
-const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
-const INDEX_HTML = resolve(DIST_DIR, 'index.html')
+const DEV_MODE = process.argv.includes('--no-static')
 
-if (existsSync(DIST_DIR)) {
-  app.use(express.static(DIST_DIR))
-}
+if (!DEV_MODE) {
+  const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+  const INDEX_HTML = resolve(DIST_DIR, 'index.html')
 
-// SPA fallback — always registered so non-API routes return a useful response
-app.get('/{*path}', (_req, res) => {
-  if (existsSync(INDEX_HTML)) {
-    res.sendFile(INDEX_HTML, (err) => {
-      if (err) {
-        console.error('Failed to serve index.html:', err.message)
-        res.status(503).send(`
-          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
-            <h1>Dashboard Error</h1>
-            <p>Failed to serve the dashboard UI: ${err.message}</p>
-            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
-          </body></html>
-        `)
-      }
-    })
-  } else {
-    res.status(503).send(`
-      <html>
-        <head><title>Dashboard Not Built</title></head>
-        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
-          <h1>Dashboard UI Not Built</h1>
-          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
-          <p>Run this command to build it:</p>
-          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
-          <p>Then refresh this page.</p>
-          <hr>
-          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
-        </body>
-      </html>
-    `)
+  if (existsSync(DIST_DIR)) {
+    app.use(express.static(DIST_DIR))
   }
-})
+
+  // SPA fallback — only in production mode
+  app.get('/{*path}', (_req, res) => {
+    if (existsSync(INDEX_HTML)) {
+      res.sendFile(INDEX_HTML, (err) => {
+        if (err) {
+          console.error('Failed to serve index.html:', err.message)
+          res.status(503).send(`
+            <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+              <h1>Dashboard Error</h1>
+              <p>Failed to serve the dashboard UI: ${err.message}</p>
+              <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+            </body></html>
+          `)
+        }
+      })
+    } else {
+      res.status(503).send(`
+        <html>
+          <head><title>Dashboard Not Built</title></head>
+          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard UI Not Built</h1>
+            <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+            <p>Run this command to build it:</p>
+            <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+            <p>Then refresh this page.</p>
+            <hr>
+            <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+          </body>
+        </html>
+      `)
+    }
+  })
+} else {
+  console.log('Dev mode: static file serving disabled (vite dev server handles frontend)')
+}
 
 // --- iMessage reply mirroring ---
 

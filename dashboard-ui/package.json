@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n api,ui -c blue,green \"npm run dev:server\" \"npm run dev:ui\"",
-    "dev:ui": "vite build --watch",
-    "dev:server": "node --watch ../dashboard/server.js",
+    "dev": "concurrently -n api,ui -c blue,green \"npm run dev:api\" \"npm run dev:ui\"",
+    "dev:ui": "vite",
+    "dev:api": "node --watch ../dashboard/server.js --no-static",
     "build": "tsc -b && vite build",
+    "start": "node ../dashboard/server.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
