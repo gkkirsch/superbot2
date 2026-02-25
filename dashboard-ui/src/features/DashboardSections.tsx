@@ -57,10 +57,22 @@ function ScheduleDashboardSection() {
 }
 
 function TodoDashboardSection() {
+  const [showCompleted, setShowCompleted] = useState(false)
   return (
     <section data-section="todos">
-      <SectionHeader title="Todos" icon={ListChecks} />
-      <TodoSection />
+      <SectionHeader
+        title="Todos"
+        icon={ListChecks}
+        action={
+          <button
+            onClick={() => setShowCompleted(v => !v)}
+            className="text-xs text-stone/50 hover:text-sand/70 transition-colors"
+          >
+            {showCompleted ? 'Hide completed' : 'Show completed'}
+          </button>
+        }
+      />
+      <TodoSection showCompleted={showCompleted} />
     </section>
   )
 }

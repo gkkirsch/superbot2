@@ -147,7 +147,7 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
   )
 }
 
-export function TodoSection() {
+export function TodoSection({ showCompleted = false }: { showCompleted?: boolean }) {
   const { todos, isLoading, add, toggle, remove } = useTodos()
   const { data: agentPlans } = useTodoResearch()
   const [input, setInput] = useState('')
@@ -223,7 +223,7 @@ export function TodoSection() {
         ))}
       </div>
 
-      {completed.length > 0 && (
+      {showCompleted && completed.length > 0 && (
         <div className="space-y-0.5 pt-1 border-t border-stone/10">
           {completed.map(todo => (
             <TodoItemRow
