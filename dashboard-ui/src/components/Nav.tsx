@@ -19,8 +19,8 @@ export function Nav() {
   return (
     <nav className="border-b border-border-custom bg-ink sticky top-0 z-50">
       <div className="mx-auto max-w-7xl px-6 flex items-center h-14 gap-8">
-        <NavLink to="/" className="font-heading text-lg text-parchment hover:text-sand transition-colors shrink-0">
-          superbot
+        <NavLink to="/" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity">
+          <img src="/logo.png" alt="Superbot" className="h-7 w-7 rounded" />
         </NavLink>
 
         {/* Desktop nav */}
