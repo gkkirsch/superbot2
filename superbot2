@@ -94,6 +94,10 @@ case "${1:-}" in
     exec bash "$REPO_DIR/scripts/imessage-setup.sh" "${1:-setup}"
     ;;
 
+  server)
+    exec bash "$REPO_DIR/scripts/restart-dashboard.sh"
+    ;;
+
   sync-app)
     # Sync dev repo to ~/.superbot2-app/ so the user can test the installed experience
     APP_DIR="${SUPERBOT2_APP_DIR:-$HOME/.${SUPERBOT2_NAME}-app}"
@@ -181,6 +185,7 @@ case "${1:-}" in
     echo ""
     echo "Commands:"
     echo "  (none)            Start the superbot2 orchestrator"
+    echo "  server            Restart the dashboard server"
     echo "  update            Pull latest code and redeploy (preserves user data)"
     echo "  setup             Re-run initial setup"
     echo "  sync-app          Sync dev repo to ~/.superbot2-app/ for end-user testing"
