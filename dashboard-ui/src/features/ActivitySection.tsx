@@ -125,8 +125,6 @@ export function ActivitySection() {
   const heartbeatRunning = status?.heartbeatRunning ?? false
   const intervalMinutes = hbConfig?.intervalMinutes ?? 30
 
-  const totalTools = (activity || []).reduce((sum, b) => sum + b.tools, 0)
-  const peakSessions = Math.max(...(activity || []).map(b => b.sessions), 0)
 
   const handleSaveInterval = async () => {
     const val = parseInt(intervalValue, 10)
@@ -190,12 +188,6 @@ export function ActivitySection() {
           {/* Activity graph */}
           <ActivityGraph activity={activity || []} />
 
-          {/* Stats line */}
-          <div className="flex items-center gap-4 text-[10px] text-stone/60">
-            <span>{totalTools.toLocaleString()} tool calls</span>
-            <span>peak {peakSessions} sessions</span>
-            <span>last 24h</span>
-          </div>
 
           {/* Active workers — horizontal wrapping chips */}
           {workers && workers.length > 0 && (
