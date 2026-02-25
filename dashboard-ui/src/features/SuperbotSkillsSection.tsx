@@ -337,7 +337,7 @@ function IMessageSetupModal({ onClose, onComplete }: { onClose: () => void; onCo
       >
         <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
           <div className="min-w-0 flex-1">
-            <h2 className="font-heading text-xl text-parchment">Set Up iMessage Bridge</h2>
+            <h2 className="font-heading text-xl text-parchment">Set Up iMessage</h2>
             <p className="text-sm text-stone mt-1">Step {step} of 4</p>
           </div>
           <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
@@ -537,7 +537,7 @@ export function IMessageIntegration() {
     <>
       <div className="flex items-center justify-between gap-2 rounded-md border border-border-custom bg-surface/50 px-3 py-2">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-parchment truncate">iMessage Bridge</p>
+          <p className="text-xs font-medium text-parchment truncate">iMessage</p>
           <p className="text-[10px] text-stone/50 truncate flex items-center gap-1">
             <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${isOnline ? 'bg-moss' : 'bg-stone/40'}`} />
             {!isConfigured ? 'Not configured' : isOnline ? 'Online' : 'Offline'}
