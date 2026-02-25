@@ -70,7 +70,7 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, workPending
         {hasExpandable && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="shrink-0 text-blue-400/50 hover:text-blue-400 transition-colors p-0.5"
+            className="shrink-0 text-sand/40 hover:text-sand/70 transition-colors p-0.5"
             title={expanded ? 'Collapse' : 'Expand notes'}
           >
             {expanded
