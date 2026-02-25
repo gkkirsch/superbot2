@@ -1721,6 +1721,18 @@ app.get('/api/self-improvement/status', async (_req, res) => {
   res.json({ running: selfImprovementRunning })
 })
 
+// ─── Orchestrator Restart ───
+
+app.post('/api/orchestrator/restart', async (_req, res) => {
+  try {
+    const restartFlag = join(SUPERBOT_DIR, '.restart')
+    await fs.writeFile(restartFlag, '')
+    res.json({ success: true, message: 'Restart flag set — orchestrator will restart momentarily' })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 app.get('/api/self-improvement/history', async (_req, res) => {
   try {
     const files = (await safeReaddir(ANALYSIS_HISTORY_DIR)).filter(f => f.endsWith('.json'))
