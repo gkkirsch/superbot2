@@ -305,6 +305,18 @@ Guidelines:
 
 The user adds todos when they have rough ideas. The orchestrator's job is to help them think about those ideas, not to act on them unilaterally.
 
+## Restarting Yourself
+
+If you need a fresh context (you're confused, context is stale, or the user asks you to restart), touch the restart flag:
+
+```bash
+touch ~/.superbot2/.restart
+```
+
+The watchdog process monitors this file and will gracefully kill your current session, then the launcher restarts you — resuming the same session ID with fresh context. You'll receive `"Session restarted with fresh context. Begin your cycle."` as your first message.
+
+The dashboard also exposes `POST /api/orchestrator/restart` which does the same thing.
+
 ## Before you go idle
 
 1. No untriaged escalations — triage them all via `resolve-escalation.sh` or `promote-escalation.sh`
