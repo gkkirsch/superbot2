@@ -602,13 +602,13 @@ export function ChatSection() {
 
   return (
     <div
-      className="flex flex-col h-[calc(100vh-6rem)]"
+      className="flex flex-col h-[calc(100vh-6rem)] min-w-0"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="relative flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0 min-w-0">
         <div className="pointer-events-none absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-ink to-transparent z-10 rounded-t-xl" />
       <div
         ref={chatContainerRef}

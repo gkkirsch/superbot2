@@ -119,7 +119,7 @@ function DroppableColumn({ id, sectionIds, isEditing, onHide }: {
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-10 min-h-[60px] py-2 transition-colors duration-200 rounded-lg ${
+      className={`space-y-10 min-h-[60px] min-w-0 py-2 transition-colors duration-200 rounded-lg ${
         isEditing && isOver ? 'bg-sand/5 ring-1 ring-sand/20' : ''
       } ${isEditing && sectionIds.length === 0 ? 'border border-dashed border-stone/20 flex items-center justify-center' : ''}`}
     >
