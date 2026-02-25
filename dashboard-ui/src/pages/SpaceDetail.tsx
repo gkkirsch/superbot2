@@ -247,7 +247,7 @@ export function SpaceDetail() {
               </h2>
             </div>
             <div className="space-y-3">
-              {(escalations ?? []).map((e) => (
+              {pendingEscalations.map((e) => (
                 <EscalationCard key={e.id} escalation={e} showSpace={false} />
               ))}
             </div>
