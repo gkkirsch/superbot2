@@ -551,11 +551,16 @@ export function ChatSection() {
     if (isLoadingEarlierRef.current) return
     const container = chatContainerRef.current
     if (!container) return
-    // Always scroll to bottom on initial load
+    // Always scroll to bottom on initial load / page return
     if (!initialScrollDoneRef.current && classified.length > 0) {
       initialScrollDoneRef.current = true
-      container.scrollTop = container.scrollHeight
-      return
+      // Use rAF to ensure flex layout is fully resolved before scrolling
+      const rafId = requestAnimationFrame(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight
+        }
+      })
+      return () => cancelAnimationFrame(rafId)
     }
     // Only auto-scroll if user is near the bottom (within 150px)
     const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
