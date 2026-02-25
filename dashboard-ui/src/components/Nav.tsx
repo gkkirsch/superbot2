@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
-import { topNavItems } from '@/lib/navigation'
+import { topNavItems, docsNavItem } from '@/lib/navigation'
 import { usePlugins } from '@/hooks/useSpaces'
 
 export function Nav() {
@@ -49,6 +49,21 @@ export function Nav() {
 
         <div className="flex-1" />
 
+        {/* Docs link — far right */}
+        <NavLink
+          to={docsNavItem.to}
+          className={({ isActive }) =>
+            `hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+              isActive
+                ? 'bg-sand/15 text-sand font-medium'
+                : 'text-stone hover:text-parchment hover:bg-surface'
+            }`
+          }
+        >
+          <docsNavItem.icon className="h-4 w-4" />
+          {docsNavItem.label}
+        </NavLink>
+
         {/* Mobile hamburger */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -61,7 +76,7 @@ export function Nav() {
       {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="md:hidden border-t border-border-custom bg-ink px-6 py-4 space-y-1">
-          {topNavItems.map(({ to, label, icon: Icon, end }) => (
+          {[...topNavItems, docsNavItem].map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
