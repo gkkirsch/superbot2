@@ -115,8 +115,8 @@ if [[ -n "${SUPERBOT2_LOCAL:-}" ]]; then
   echo "Using local repo at $INSTALL_DIR (SUPERBOT2_LOCAL mode, skipping clone)"
 elif [[ -d "$INSTALL_DIR/.git" ]]; then
   echo "Updating existing installation at $INSTALL_DIR..."
-  backup_if_exists "$INSTALL_DIR"
-  git -C "$INSTALL_DIR" pull --ff-only
+  git -C "$INSTALL_DIR" fetch origin
+  git -C "$INSTALL_DIR" reset --hard origin/main
 else
   if [[ -d "$INSTALL_DIR" ]]; then
     echo "Directory $INSTALL_DIR exists but is not a git repo."
