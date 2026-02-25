@@ -433,7 +433,9 @@ export function SkillCreator() {
   const [, setDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [isPromoting, setIsPromoting] = useState(false)
   const [promoteStatus, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [selectedDraft, setSelectedDraft] = useState<string | null>(null)
+  const [selectedDraft, setSelectedDraft] = useState<string | null>(() => {
+    try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
+  })
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
@@ -478,6 +480,38 @@ export function SkillCreator() {
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
   useEffect(() => { selectedDraftRef.current = selectedDraft }, [selectedDraft])
   useEffect(() => { messagesRef.current = messages }, [messages])
+
+  // Persist selectedDraft to localStorage
+  useEffect(() => {
+    try {
+      if (selectedDraft) {
+        localStorage.setItem('skill-creator-selected-draft', selectedDraft)
+      } else {
+        localStorage.removeItem('skill-creator-selected-draft')
+      }
+    } catch { /* ignore */ }
+  }, [selectedDraft])
+
+  // Restore chat history on mount when a persisted draft exists
+  useEffect(() => {
+    if (!selectedDraft) return
+    let cancelled = false
+    async function restore() {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/chat-history`)
+        const data = await res.json()
+        if (!cancelled && data.ok && data.messages.length > 0) {
+          setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
+            id: crypto.randomUUID(),
+            ...m,
+          })))
+        }
+      } catch { /* draft may have been deleted */ }
+    }
+    restore()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run only on mount
 
   // Auto-scroll on new messages and streaming
   useEffect(() => {

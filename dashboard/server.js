@@ -3720,7 +3720,7 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
       }
       for (const entry of entries) {
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
-        if (entry.name === 'draft-metadata.json') continue
+        if (entry.name === 'draft-metadata.json' || entry.name === 'chat-history.jsonl') continue
         if (entry.isDirectory()) {
           results.push({ path: relPath, type: 'directory' })
           const children = await listFiles(join(dir, entry.name), relPath)
