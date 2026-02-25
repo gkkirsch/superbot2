@@ -895,10 +895,12 @@ app.post('/api/imessage/save', async (req, res) => {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       })
-      // Pipe output to log file
+      // Pipe output to log file — use { end: false } so the first stream to close
+      // doesn't auto-close logStream before the other stream finishes writing
       const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
-      child.stdout.pipe(logStream)
-      child.stderr.pipe(logStream)
+      child.stdout.pipe(logStream, { end: false })
+      child.stderr.pipe(logStream, { end: false })
+      child.on('close', () => logStream.end())
       child.unref()
       watcherRunning = true
     }
@@ -935,8 +937,9 @@ app.post('/api/imessage/start', async (_req, res) => {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
-      child.stdout.pipe(logStream)
-      child.stderr.pipe(logStream)
+      child.stdout.pipe(logStream, { end: false })
+      child.stderr.pipe(logStream, { end: false })
+      child.on('close', () => logStream.end())
       child.unref()
     }
 
