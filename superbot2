@@ -16,6 +16,8 @@ TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
 TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
 RESTART_FLAG="$DIR/.restart"
 LAUNCHER_PID=$$
+LAUNCHER_PID_FILE="$DIR/.launcher.pid"
+echo "$LAUNCHER_PID" > "$LAUNCHER_PID_FILE"
 DASHBOARD_UI_PID=""
 
 # ─── Dashboard UI ───
@@ -49,7 +51,7 @@ stop_dashboard_ui() {
   fi
 }
 
-trap 'stop_dashboard_ui' EXIT
+trap 'stop_dashboard_ui; rm -f "$LAUNCHER_PID_FILE"' EXIT
 
 # ─── Subcommands ───
 
@@ -222,7 +224,14 @@ while true; do
     while true; do
       sleep 1
       if [[ -f "$RESTART_FLAG" ]]; then
-        pkill -INT -P $LAUNCHER_PID 2>/dev/null
+        # Use SIGTERM (not SIGINT) — claude handles SIGTERM as clean exit
+        pkill -TERM -P "$LAUNCHER_PID" 2>/dev/null || true
+        # Also kill the launcher bash script's process group
+        kill -TERM "$LAUNCHER_PID" 2>/dev/null || true
+        # Wait 3 seconds then SIGKILL if still alive
+        sleep 3
+        pkill -KILL -P "$LAUNCHER_PID" 2>/dev/null || true
+        kill -KILL "$LAUNCHER_PID" 2>/dev/null || true
         exit 0
       fi
     done

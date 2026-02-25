@@ -1727,7 +1727,20 @@ app.post('/api/orchestrator/restart', async (_req, res) => {
   try {
     const restartFlag = join(SUPERBOT_DIR, '.restart')
     await fs.writeFile(restartFlag, '')
-    res.json({ success: true, message: 'Restart flag set — orchestrator will restart momentarily' })
+
+    // Also directly kill the launcher process via saved PID file
+    const launcherPidFile = join(SUPERBOT_DIR, '.launcher.pid')
+    try {
+      const pid = parseInt((await fs.readFile(launcherPidFile, 'utf8')).trim(), 10)
+      if (pid && !isNaN(pid)) {
+        // Send SIGTERM to the process group (kills claude child too)
+        process.kill(pid, 'SIGTERM')
+      }
+    } catch (_pidErr) {
+      // PID file doesn't exist or process already gone — flag file is enough
+    }
+
+    res.json({ success: true, message: 'Restart signal sent — orchestrator will restart momentarily' })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }
