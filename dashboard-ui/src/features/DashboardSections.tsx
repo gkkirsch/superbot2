@@ -18,7 +18,7 @@ import type { DashboardConfig } from '@/lib/types'
 
 function EscalationsDashboardSection() {
   return (
-    <section data-section="escalations">
+    <section className="group" data-section="escalations">
       <SectionHeader title="Escalations" icon={MessageCircleQuestion} />
       <EscalationsSection />
     </section>
@@ -27,7 +27,7 @@ function EscalationsDashboardSection() {
 
 function PulseDashboardSection() {
   return (
-    <section data-section="pulse">
+    <section className="group" data-section="pulse">
       <SectionHeader title="Pulse" icon={Activity} />
       <ActivitySection />
     </section>
@@ -38,7 +38,7 @@ function ScheduleDashboardSection() {
   const [addingJob, setAddingJob] = useState(false)
 
   return (
-    <section data-section="schedule">
+    <section className="group" data-section="schedule">
       <SectionHeader
         title="Schedule"
         icon={Clock}
@@ -59,14 +59,14 @@ function ScheduleDashboardSection() {
 function TodoDashboardSection() {
   const [showCompleted, setShowCompleted] = useState(false)
   return (
-    <section data-section="todos">
+    <section className="group" data-section="todos">
       <SectionHeader
         title="Todos"
         icon={ListChecks}
         action={
           <button
             onClick={() => setShowCompleted(v => !v)}
-            className="text-xs text-stone/50 hover:text-sand/70 transition-colors"
+            className="text-xs text-stone hover:text-sand transition-colors inline-flex items-center gap-1"
           >
             {showCompleted ? 'Hide completed' : 'Show completed'}
           </button>
@@ -79,7 +79,7 @@ function TodoDashboardSection() {
 
 function KnowledgeDashboardSection() {
   return (
-    <section data-section="knowledge">
+    <section className="group" data-section="knowledge">
       <SectionHeader title="Knowledge" icon={BookOpen} linkTo="/knowledge" />
       <KnowledgeSection />
     </section>
@@ -88,7 +88,7 @@ function KnowledgeDashboardSection() {
 
 function SpacesDashboardSection() {
   return (
-    <section data-section="spaces">
+    <section className="group" data-section="spaces">
       <SectionHeader title="Spaces" icon={FolderKanban} linkTo="/spaces" />
       <SpacesSection />
     </section>
@@ -97,7 +97,7 @@ function SpacesDashboardSection() {
 
 function ExtensionsDashboardSection() {
   return (
-    <section data-section="extensions">
+    <section className="group" data-section="extensions">
       <SectionHeader title="Plugins" icon={({ className }) => (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />

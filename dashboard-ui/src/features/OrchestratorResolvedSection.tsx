@@ -155,7 +155,7 @@ export function OrchestratorResolvedSection() {
   const visible = showAll ? orchestratorResolved : orchestratorResolved.slice(0, 5)
 
   return (
-    <section className="mt-8" data-section="orchestrator-resolved">
+    <section className="mt-8 group" data-section="orchestrator-resolved">
       <SectionHeader title="Orchestrator Decisions" icon={Bot} />
       {isLoading ? (
         <div className="space-y-2">

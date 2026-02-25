@@ -14,7 +14,7 @@ export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action }: 
         <Icon className="h-5 w-5 text-sand" />
         <h2 className="font-heading text-xl text-parchment">{title}</h2>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
         {action}
         {linkTo && (
           <Link to={linkTo} className="text-xs text-stone hover:text-sand transition-colors flex items-center gap-1">

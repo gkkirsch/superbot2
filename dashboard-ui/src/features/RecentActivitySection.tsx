@@ -99,8 +99,20 @@ export function RecentActivitySection() {
   const visible = showAll ? (sessions ?? []) : (sessions ?? []).slice(0, 5)
 
   return (
-    <section className="mt-8" data-section="recent-activity">
-      <SectionHeader title="Recent Activity" icon={FolderOpen} />
+    <section className="mt-8 group" data-section="recent-activity">
+      <SectionHeader
+        title="Recent Activity"
+        icon={FolderOpen}
+        action={sessions && sessions.length > 5 ? (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-xs text-stone hover:text-sand transition-colors inline-flex items-center gap-1"
+          >
+            {showAll ? 'Show fewer' : `Show all ${sessions.length}`}
+            {showAll ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        ) : undefined}
+      />
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -121,15 +133,6 @@ export function RecentActivitySection() {
               onDismiss={(id) => dismissMutation.mutate(id)}
             />
           ))}
-          {sessions.length > 5 && (
-            <button
-              onClick={() => setShowAll(!showAll)}
-              className="text-xs text-stone hover:text-sand transition-colors flex items-center gap-1 mx-auto"
-            >
-              {showAll ? 'Show fewer' : `Show all ${sessions.length}`}
-              {showAll ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-            </button>
-          )}
         </div>
       )}
     </section>
