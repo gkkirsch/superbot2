@@ -53,13 +53,14 @@ function PulseDashboardSection() {
         title="Pulse"
         icon={Activity}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full shrink-0 ${heartbeatRunning ? 'bg-ember' : 'bg-stone/30'}`} />
+            <span className="text-xs text-stone/60">heartbeat every</span>
             <select
               value={intervalMinutes}
               onChange={handleIntervalChange}
               onClick={e => e.stopPropagation()}
-              className="bg-ink text-xs text-stone/60 focus:outline-none cursor-pointer hover:text-stone transition-colors border-0 appearance-none pr-1"
+              className="bg-ink text-xs text-stone/60 focus:outline-none cursor-pointer hover:text-stone transition-colors border-0 appearance-none"
             >
               {HEARTBEAT_INTERVALS.map(({ value, label }) => (
                 <option key={value} value={value}>{label}</option>
