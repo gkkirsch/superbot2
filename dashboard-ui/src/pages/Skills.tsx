@@ -873,7 +873,13 @@ function InstalledSidebar() {
   }, [agents])
 
   return (
-    <div className="space-y-6">
+    <div className="rounded-xl border border-border-custom bg-surface/40 p-4 space-y-6">
+      {/* Panel header */}
+      <div className="flex items-center gap-2 pb-3 border-b border-border-custom">
+        <Blocks className="h-4 w-4 text-moss" />
+        <h2 className="text-sm font-heading font-medium text-parchment">Your Setup</h2>
+      </div>
+
       {/* Integrations */}
       <div>
         <div className="flex items-center gap-1.5 mb-3">
