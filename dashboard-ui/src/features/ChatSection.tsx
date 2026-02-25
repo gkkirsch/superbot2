@@ -571,16 +571,12 @@ export function ChatSection() {
 
   return (
     <div
-      className="flex flex-col h-[calc(100vh-8rem)]"
+      className="flex flex-col h-[calc(100vh-6rem)]"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="mb-3">
-        <h2 className="font-heading text-xl text-parchment">Chat</h2>
-      </div>
-
       <div
         ref={chatContainerRef}
         className={`flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0 transition-colors ${
