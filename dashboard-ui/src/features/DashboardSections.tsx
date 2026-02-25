@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
-import { useHeartbeatConfig } from '@/hooks/useSpaces'
+import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
+import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
@@ -25,15 +27,46 @@ function EscalationsDashboardSection() {
   )
 }
 
+const HEARTBEAT_INTERVALS = [
+  { value: 30, label: '30m' },
+  { value: 60, label: '1hr' },
+  { value: 120, label: '2hr' },
+  { value: 1440, label: '24hr' },
+]
+
 function PulseDashboardSection() {
   const { data: hbConfig } = useHeartbeatConfig()
+  const { data: status } = useSystemStatus()
+  const queryClient = useQueryClient()
   const intervalMinutes = hbConfig?.intervalMinutes ?? 30
+  const heartbeatRunning = status?.heartbeatRunning ?? false
+
+  const handleIntervalChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = Number(e.target.value)
+    await updateHeartbeatInterval(val)
+    queryClient.invalidateQueries({ queryKey: ['heartbeat-config'] })
+  }
+
   return (
     <section className="group" data-section="pulse">
       <SectionHeader
         title="Pulse"
         icon={Activity}
-        action={<span className="text-xs text-stone/60">heartbeat every {intervalMinutes}m</span>}
+        action={
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full shrink-0 ${heartbeatRunning ? 'bg-ember' : 'bg-stone/30'}`} />
+            <select
+              value={intervalMinutes}
+              onChange={handleIntervalChange}
+              onClick={e => e.stopPropagation()}
+              className="bg-ink text-xs text-stone/60 focus:outline-none cursor-pointer hover:text-stone transition-colors border-0 appearance-none pr-1"
+            >
+              {HEARTBEAT_INTERVALS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+        }
       />
       <ActivitySection />
     </section>

@@ -1,10 +1,7 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { useSystemStatus, useHeartbeatConfig, useActivity, useActiveWorkers } from '@/hooks/useSpaces'
-import { updateHeartbeatInterval } from '@/lib/api'
+import { useActivity, useActiveWorkers } from '@/hooks/useSpaces'
 import type { ActivityBucket } from '@/lib/types'
 
 function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
@@ -113,98 +110,29 @@ function ActivityGraph({ activity }: { activity: ActivityBucket[] }) {
 }
 
 export function ActivitySection() {
-  const { data: status } = useSystemStatus()
-  const { data: hbConfig } = useHeartbeatConfig()
   const { data: activity } = useActivity()
   const { data: workers } = useActiveWorkers()
-  const queryClient = useQueryClient()
-  const [expanded, setExpanded] = useState(true)
-  const [editingInterval, setEditingInterval] = useState(false)
-  const [intervalValue, setIntervalValue] = useState('')
-
-  const heartbeatRunning = status?.heartbeatRunning ?? false
-  const intervalMinutes = hbConfig?.intervalMinutes ?? 30
-
-
-  const handleSaveInterval = async () => {
-    const val = parseInt(intervalValue, 10)
-    if (val > 0) {
-      await updateHeartbeatInterval(val)
-      queryClient.invalidateQueries({ queryKey: ['heartbeat-config'] })
-    }
-    setEditingInterval(false)
-  }
 
   return (
     <div className="space-y-3">
-      {/* Heartbeat status */}
-      <div
-        onClick={() => !editingInterval && setExpanded(!expanded)}
-        className="flex items-center justify-between cursor-pointer"
-        role="button"
-      >
-        <div className="flex items-center gap-2">
-          <div className="relative flex items-center">
-            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${heartbeatRunning ? 'bg-ember' : 'bg-stone/30'}`} />
-          </div>
-          <span className="text-xs text-stone">heartbeat</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {editingInterval ? (
-            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-              <input
-                type="number"
-                min="1"
-                value={intervalValue}
-                onChange={e => setIntervalValue(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSaveInterval()}
-                className="w-14 bg-ink border border-border-custom rounded px-1.5 py-0.5 text-xs text-parchment text-center focus:outline-none focus:border-sand/50"
-                autoFocus
-              />
-              <span className="text-xs text-stone">min</span>
-              <button onClick={handleSaveInterval} className="text-xs text-sand hover:text-sand/80"><Check className="h-3 w-3" /></button>
-              <button onClick={() => setEditingInterval(false)} className="text-xs text-stone hover:text-parchment"><X className="h-3 w-3" /></button>
-            </div>
-          ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); setIntervalValue(String(intervalMinutes)); setEditingInterval(true) }}
-              className="text-xs text-stone hover:text-sand transition-colors"
+      <ActivityGraph activity={activity || []} />
+
+      {workers && workers.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {workers.map((w) => (
+            <Link
+              key={w.agentId || w.name}
+              to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
+              className="inline-flex items-center gap-1 rounded-full bg-stone/10 px-2 py-0.5 text-[10px] text-stone/70 hover:text-sand hover:bg-stone/20 transition-colors"
             >
-              every {intervalMinutes}m
-            </button>
-          )}
-          {expanded
-            ? <ChevronUp className="h-3.5 w-3.5 text-stone/40" />
-            : <ChevronDown className="h-3.5 w-3.5 text-stone/40" />
-          }
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="max-w-[120px] truncate">{w.name}</span>
+            </Link>
+          ))}
         </div>
-      </div>
-
-      {expanded && (
-        <>
-          {/* Activity graph */}
-          <ActivityGraph activity={activity || []} />
-
-
-          {/* Active workers — horizontal wrapping chips */}
-          {workers && workers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {workers.map((w) => (
-                <Link
-                  key={w.agentId || w.name}
-                  to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-stone/10 px-2 py-0.5 text-[10px] text-stone/70 hover:text-sand hover:bg-stone/20 transition-colors"
-                >
-                  <span className="relative flex h-1.5 w-1.5 shrink-0">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  </span>
-                  <span className="max-w-[120px] truncate">{w.name}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </>
       )}
     </div>
   )
