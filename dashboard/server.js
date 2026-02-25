@@ -1435,6 +1435,18 @@ app.delete('/api/schedule/:name', async (req, res) => {
 app.post('/api/schedule', async (req, res) => {
   try {
     const job = req.body
+
+    // Validate required fields
+    if (!job.name || typeof job.name !== 'string') {
+      return res.status(400).json({ error: 'name is required' })
+    }
+    if (!job.time || typeof job.time !== 'string' || !/^\d{1,2}:\d{2}$/.test(job.time)) {
+      return res.status(400).json({ error: 'time is required in HH:MM format' })
+    }
+    if (!job.task || typeof job.task !== 'string') {
+      return res.status(400).json({ error: 'task is required' })
+    }
+
     const configPath = join(SUPERBOT_DIR, 'config.json')
     const config = await readJsonFile(configPath) || {}
     if (!config.schedule) config.schedule = []

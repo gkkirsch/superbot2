@@ -18,8 +18,10 @@ function toTitleCase(kebab: string): string {
 }
 
 function to12Hour(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24 || '--:--'
   const [hStr, mStr] = time24.split(':')
   let h = parseInt(hStr, 10)
+  if (isNaN(h)) return time24
   const suffix = h >= 12 ? 'PM' : 'AM'
   if (h === 0) h = 12
   else if (h > 12) h -= 12
@@ -27,8 +29,10 @@ function to12Hour(time24: string): string {
 }
 
 function relativeTime(dateStr: string): string {
+  if (!dateStr) return ''
   const now = new Date()
   const then = new Date(dateStr)
+  if (isNaN(then.getTime())) return ''
   const diffMs = now.getTime() - then.getTime()
   if (diffMs < 0) return 'just now'
   const diffMins = Math.floor(diffMs / 60000)
