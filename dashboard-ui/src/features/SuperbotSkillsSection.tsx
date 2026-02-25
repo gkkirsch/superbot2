@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Send } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
-import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage } from '@/lib/api'
-import type { HookTestResult, IMessageStatus } from '@/lib/api'
+import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, getTelegramStatus, saveTelegramConfig, startTelegramWatcher, stopTelegramWatcher, testTelegram } from '@/lib/api'
+import type { HookTestResult, IMessageStatus, TelegramStatus } from '@/lib/api'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import type { SuperbotSkill, SkillInfo, HookInfo, AgentInfo } from '@/lib/types'
 
@@ -582,6 +582,267 @@ export function IMessageIntegration() {
   )
 }
 
+// --- Telegram Setup Modal ---
+
+export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => void; onComplete: (status: TelegramStatus) => void }) {
+  const [step, setStep] = useState(1)
+  const [botToken, setBotToken] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [testResult, setTestResult] = useState<{ sent: boolean; error?: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [status, setStatus] = useState<TelegramStatus | null>(null)
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      const result = await saveTelegramConfig(botToken)
+      setStatus(result)
+      setStep(3)
+      onComplete(result)
+    } catch {
+      // stay on current step
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await testTelegram()
+      setTestResult(result)
+    } catch (err) {
+      setTestResult({ sent: false, error: (err as Error).message })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-md max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-xl text-parchment">Set Up Telegram Bot</h2>
+            <p className="text-sm text-stone mt-1">Step {step} of 3</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {step === 1 && (
+            <>
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
+                <p className="text-sm text-parchment font-medium">Create a Telegram Bot</p>
+                <ol className="text-xs text-stone space-y-2 list-decimal list-inside">
+                  <li>Open <span className="text-parchment">Telegram</span> and search for <span className="text-sand">@BotFather</span></li>
+                  <li>Send <span className="text-sand font-mono">/newbot</span> and follow the prompts</li>
+                  <li>Choose a name (e.g. <span className="text-parchment">superbot2</span>) and a username (e.g. <span className="text-parchment">my_superbot2_bot</span>)</li>
+                  <li>BotFather will give you an <span className="text-sand">API token</span> &mdash; copy it for the next step</li>
+                </ol>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                >
+                  Next <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div>
+                <label className="block text-xs text-sand mb-1.5">Bot Token</label>
+                <input
+                  type="password"
+                  value={botToken}
+                  onChange={e => setBotToken(e.target.value)}
+                  placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                  className="w-full rounded-lg bg-ink border border-border-custom px-3 py-2 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40 font-mono"
+                />
+              </div>
+              <p className="text-xs text-stone/60">Paste the API token you received from @BotFather.</p>
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !botToken.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-moss/20 text-moss hover:bg-moss/30 transition-colors disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Save & Enable <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
+              <div className="flex items-center gap-2 text-moss">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Telegram bot is active</span>
+              </div>
+
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-2">
+                {status?.chatId ? (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-moss" />
+                    <span className="text-xs text-parchment">Chat ID: {status.chatId}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-3.5 w-3.5 text-sand" />
+                      <span className="text-xs text-parchment">Waiting for first message</span>
+                    </div>
+                    <p className="text-xs text-stone/60">
+                      Open Telegram and send any message to your bot. The chat ID will be auto-detected.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={handleTest}
+                disabled={testing || !status?.chatId}
+                className="w-full text-xs text-parchment bg-ink border border-border-custom hover:border-sand/30 rounded-lg px-4 py-2.5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {testing ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending test...</>
+                ) : (
+                  <>Send Test Message</>
+                )}
+              </button>
+
+              {testResult && (
+                <div className={`rounded-lg px-4 py-3 text-xs ${testResult.sent ? 'bg-moss/10 border border-moss/20 text-moss' : 'bg-ember/10 border border-ember/20 text-ember'}`}>
+                  {testResult.sent ? 'Test message sent successfully!' : `Failed: ${testResult.error}`}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// --- Telegram Integration Card ---
+
+export function TelegramIntegration() {
+  const [status, setStatus] = useState<TelegramStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showSetup, setShowSetup] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  async function fetchStatus() {
+    try {
+      const s = await getTelegramStatus()
+      setStatus(s)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchStatus() }, [])
+
+  async function handleStart() {
+    setActionLoading('start')
+    try {
+      await startTelegramWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleStop() {
+    setActionLoading('stop')
+    try {
+      await stopTelegramWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  if (loading) {
+    return <div className="h-8 rounded-md bg-surface/50 animate-pulse" />
+  }
+
+  const isConfigured = status?.configured
+  const isOnline = status?.watcherRunning
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2 rounded-md border border-border-custom bg-surface/50 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-parchment truncate">Telegram</p>
+          <p className="text-[10px] text-stone/50 truncate flex items-center gap-1">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${isOnline ? 'bg-moss' : 'bg-stone/40'}`} />
+            {!isConfigured ? 'Not configured' : isOnline ? 'Online' : 'Offline'}
+          </p>
+        </div>
+        {!isConfigured ? (
+          <button
+            onClick={() => setShowSetup(true)}
+            className="p-1 text-stone hover:text-sand transition-colors shrink-0"
+            title="Set up Telegram"
+          >
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        ) : isOnline ? (
+          <button
+            onClick={handleStop}
+            disabled={actionLoading !== null}
+            className="px-2 py-0.5 text-[10px] rounded bg-ink border border-border-custom text-stone hover:text-parchment transition-colors disabled:opacity-50 shrink-0"
+          >
+            {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop'}
+          </button>
+        ) : (
+          <button
+            onClick={handleStart}
+            disabled={actionLoading !== null}
+            className="px-2 py-0.5 text-[10px] rounded bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50 shrink-0"
+          >
+            {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start'}
+          </button>
+        )}
+      </div>
+
+      {showSetup && (
+        <TelegramSetupModal
+          onClose={() => { setShowSetup(false); fetchStatus() }}
+          onComplete={(s) => setStatus(s)}
+        />
+      )}
+    </>
+  )
+}
+
 // --- Unified Plugins Section ---
 
 type ExtensionTab = 'skills' | 'hooks' | 'agents' | 'integrations'
@@ -771,7 +1032,10 @@ export function DashboardExtensionsSection() {
 
       {/* Integrations tab content */}
       {currentTab === 'integrations' && (
-        <IMessageIntegration />
+        <div className="space-y-2">
+          <IMessageIntegration />
+          <TelegramIntegration />
+        </div>
       )}
 
       {/* Modals */}

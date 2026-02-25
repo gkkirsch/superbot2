@@ -712,6 +712,46 @@ export async function resetIMessage(): Promise<void> {
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
+// --- Telegram integration ---
+
+export interface TelegramStatus {
+  enabled: boolean
+  botToken: string
+  chatId: string
+  watcherRunning: boolean
+  configured: boolean
+}
+
+export async function getTelegramStatus(): Promise<TelegramStatus> {
+  return fetchJson<TelegramStatus>('/telegram/status')
+}
+
+export async function saveTelegramConfig(botToken: string): Promise<TelegramStatus> {
+  const response = await fetch(`${API_BASE}/telegram/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ botToken }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function startTelegramWatcher(): Promise<void> {
+  const response = await fetch(`${API_BASE}/telegram/start`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function stopTelegramWatcher(): Promise<void> {
+  const response = await fetch(`${API_BASE}/telegram/stop`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function testTelegram(): Promise<{ sent: boolean; error?: string }> {
+  const response = await fetch(`${API_BASE}/telegram/test`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
 export async function saveUser(content: string): Promise<void> {
   const response = await fetch(`${API_BASE}/user`, {
     method: 'PUT',
