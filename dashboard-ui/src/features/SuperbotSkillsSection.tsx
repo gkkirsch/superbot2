@@ -699,7 +699,7 @@ export function DashboardExtensionsSection() {
                     <Puzzle className="h-3 w-3 text-moss/60 shrink-0" />
                     {titleCase(plugin.name)}
                     {pluginSkills.length > 0 && <span className="text-[10px] text-stone/50">{pluginSkills.length}</span>}
-                    {plugin.hasUnconfiguredCredentials && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
+                    {(plugin.hasUnconfiguredCredentials || plugin.hasMissingBins) && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" title="Needs configuration" />}
                     {isExpanded
                       ? <ChevronDown className="h-3 w-3 text-stone/40 shrink-0" />
                       : <ChevronRight className="h-3 w-3 text-stone/40 shrink-0" />

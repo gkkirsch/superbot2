@@ -147,6 +147,18 @@ export interface AgentDetail extends AgentInfo {
   fullContent: string
 }
 
+export interface InstallOption {
+  id: string
+  kind: string
+  formula: string
+  label: string
+}
+
+export interface MissingBin {
+  bin: string
+  installOptions: InstallOption[]
+}
+
 export interface PluginInfo {
   pluginId: string
   name: string
@@ -158,6 +170,7 @@ export interface PluginInfo {
   componentCounts?: ComponentCounts | null
   keywords?: string[]
   hasUnconfiguredCredentials?: boolean
+  hasMissingBins?: boolean
 }
 
 export interface CredentialDeclaration {
@@ -200,6 +213,7 @@ export interface PluginDetail {
   }
   files: string[]
   hasReadme: boolean
+  missingBins?: MissingBin[]
 }
 
 // --- Session summaries ---

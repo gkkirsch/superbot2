@@ -9,7 +9,7 @@ export function Nav() {
   const location = useLocation()
   const { data: plugins } = usePlugins()
 
-  const hasUnconfiguredPlugins = plugins?.some(p => p.installed && p.hasUnconfiguredCredentials) ?? false
+  const hasPluginWarnings = plugins?.some(p => p.installed && (p.hasUnconfiguredCredentials || p.hasMissingBins)) ?? false
 
   const isActive = (to: string, end?: boolean) => {
     if (end) return location.pathname === to
@@ -40,7 +40,7 @@ export function Nav() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {to === '/skills' && hasUnconfiguredPlugins && (
+              {to === '/skills' && hasPluginWarnings && (
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-amber-400" />
               )}
             </NavLink>
@@ -92,7 +92,7 @@ export function Nav() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {to === '/skills' && hasUnconfiguredPlugins && (
+              {to === '/skills' && hasPluginWarnings && (
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
               )}
             </NavLink>
