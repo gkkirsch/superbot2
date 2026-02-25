@@ -713,7 +713,7 @@ function BrowsePlugins() {
 
       {/* Results */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="h-28 rounded-lg bg-surface/50 animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
@@ -721,7 +721,7 @@ function BrowsePlugins() {
           {search ? `No plugins matching "${search}"` : 'No plugins available.'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map(p => (
             <PluginCard key={p.pluginId} plugin={p} onClick={() => setSelectedPlugin(p)} showInstalledBadge />
           ))}
