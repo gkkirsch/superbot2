@@ -487,10 +487,16 @@ export async function fetchAllTasks(params?: {
 
 // --- Messages to orchestrator ---
 
-export async function fetchMessages(background = false): Promise<InboxMessage[]> {
-  const url = background ? '/messages?background=true' : '/messages'
-  const data = await fetchJson<{ messages: InboxMessage[] }>(url)
-  return data.messages
+export async function fetchMessages(
+  background = false,
+  limit = 50,
+  before?: string,
+): Promise<{ messages: InboxMessage[]; hasMore: boolean }> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (background) params.set('background', 'true')
+  if (before) params.set('before', before)
+  const data = await fetchJson<{ messages: InboxMessage[]; hasMore: boolean }>(`/messages?${params}`)
+  return { messages: data.messages ?? [], hasMore: data.hasMore ?? false }
 }
 
 export async function sendMessageToOrchestrator(text: string, images?: { name: string; data: string }[]): Promise<{ ok: boolean }> {

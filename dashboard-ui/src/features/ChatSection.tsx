@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { Send, X, ChevronUp, Paperclip, FileText } from 'lucide-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { sendMessageToOrchestrator } from '@/lib/api'
-import { useMessages } from '@/hooks/useSpaces'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { sendMessageToOrchestrator, fetchMessages } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import type { InboxMessage } from '@/lib/types'
 
@@ -211,7 +210,11 @@ function isPrimaryMessage(msg: InboxMessage, type: MessageType): boolean {
   return false
 }
 
-const MESSAGES_PER_PAGE = 50
+const PAGE_SIZE = 50
+
+function msgKey(m: InboxMessage) {
+  return `${m.timestamp}:${m.from}:${m.text.slice(0, 40)}`
+}
 
 const ONBOARDING_STORAGE_KEY = 'superbot2-onboarded'
 
@@ -300,7 +303,8 @@ export function ChatSection() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
-  const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE)
+  const [messages, setMessages] = useState<InboxMessage[]>([])
+  const [hasMore, setHasMore] = useState(false)
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
@@ -308,10 +312,34 @@ export function ChatSection() {
   const isLoadingEarlierRef = useRef(false)
   const dragCounterRef = useRef(0)
   const initialScrollDoneRef = useRef(false)
-  const queryClient = useQueryClient()
+  const pollRef = useRef<(() => Promise<void>) | null>(null)
   const showOnboarding = useOnboarding()
-  // Always fetch background messages so we have orchestrator-worker activity
-  const { data: messages } = useMessages(true)
+
+  // Initial load
+  useEffect(() => {
+    fetchMessages(true, PAGE_SIZE).then(({ messages: msgs, hasMore: hm }) => {
+      setMessages(msgs)
+      setHasMore(hm)
+    })
+  }, [])
+
+  // Poll for new messages every 15s — only fetch last PAGE_SIZE and merge in new ones
+  useEffect(() => {
+    const poll = async () => {
+      const { messages: fresh } = await fetchMessages(true, PAGE_SIZE)
+      setMessages(prev => {
+        const existingKeys = new Set(prev.map(msgKey))
+        const newOnes = fresh.filter(m => !existingKeys.has(msgKey(m)))
+        if (newOnes.length === 0) return prev
+        return [...prev, ...newOnes].sort(
+          (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        )
+      })
+    }
+    pollRef.current = poll
+    const id = setInterval(poll, 15_000)
+    return () => clearInterval(id)
+  }, [])
 
   const { data: compactionData } = useQuery<{ events: CompactionEvent[] }>({
     queryKey: ['compaction-events'],
@@ -340,7 +368,8 @@ export function ChatSection() {
       setSent(true)
       setWaitingForReply(true)
       setTimeout(() => setSent(false), 2000)
-      queryClient.invalidateQueries({ queryKey: ['messages'] })
+      // Immediately poll for the reply instead of waiting for the interval
+      setTimeout(() => pollRef.current?.(), 1000)
     },
   })
 
@@ -525,26 +554,28 @@ export function ChatSection() {
     return result
   }, [renderItems, compactionData, classified])
 
-  // Paginate: show only the last N render items
-  const hasEarlierMessages = itemsWithCompaction.length > visibleCount
-  const visibleItems = useMemo(() => {
-    if (itemsWithCompaction.length <= visibleCount) return itemsWithCompaction
-    return itemsWithCompaction.slice(-visibleCount)
-  }, [itemsWithCompaction, visibleCount])
+  // All loaded messages are visible; hasMore controls the "load earlier" button
+  const hasEarlierMessages = hasMore
+  const visibleItems = itemsWithCompaction
 
-  const loadEarlier = useCallback(() => {
+  const loadEarlier = useCallback(async () => {
+    if (!hasMore || messages.length === 0) return
+    const oldest = messages[0].timestamp
     const container = chatContainerRef.current
     const prevHeight = container?.scrollHeight ?? 0
     isLoadingEarlierRef.current = true
-    setVisibleCount(prev => prev + MESSAGES_PER_PAGE)
-    // Restore scroll position after DOM updates so content doesn't jump
+    const { messages: older, hasMore: hm } = await fetchMessages(true, PAGE_SIZE, oldest)
+    setMessages(prev => {
+      const existingKeys = new Set(prev.map(msgKey))
+      const toAdd = older.filter(m => !existingKeys.has(msgKey(m)))
+      return [...toAdd, ...prev]
+    })
+    setHasMore(hm)
     requestAnimationFrame(() => {
-      if (container) {
-        container.scrollTop = container.scrollHeight - prevHeight
-      }
+      if (container) container.scrollTop = container.scrollHeight - prevHeight
       isLoadingEarlierRef.current = false
     })
-  }, [])
+  }, [hasMore, messages])
 
   // Auto-scroll to bottom for new messages, but not when loading earlier
   useEffect(() => {

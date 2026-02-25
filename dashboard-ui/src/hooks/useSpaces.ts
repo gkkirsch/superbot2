@@ -184,8 +184,8 @@ export function useSessions(limit = 20, space?: string) {
 
 // --- Messages ---
 
-export function useMessages(background = false) {
-  return useQuery({ queryKey: ['messages', background], queryFn: () => fetchMessages(background), staleTime: 10_000, refetchInterval: 15_000 })
+export function useMessages(background = false, limit = 50) {
+  return useQuery({ queryKey: ['messages', background, limit], queryFn: () => fetchMessages(background, limit), staleTime: 10_000, refetchInterval: 15_000 })
 }
 
 // --- Superbot skills ---

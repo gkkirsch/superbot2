@@ -3019,9 +3019,22 @@ app.get('/api/compaction-events', async (_req, res) => {
 
 // --- Messages to orchestrator ---
 
+function paginateMessages(sorted, limit, before) {
+  let filtered = sorted
+  if (before) {
+    const beforeTime = new Date(before).getTime()
+    filtered = sorted.filter(m => new Date(m.timestamp).getTime() < beforeTime)
+  }
+  const hasMore = filtered.length > limit
+  const messages = filtered.slice(-limit)
+  return { messages, hasMore }
+}
+
 app.get('/api/messages', async (req, res) => {
   try {
     const includeBackground = req.query.background === 'true'
+    const limit = Math.min(parseInt(req.query.limit) || 50, 500)
+    const before = req.query.before // ISO timestamp cursor for load-earlier
 
     const teamLeadInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'team-lead.json')) || []
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
@@ -3053,7 +3066,8 @@ app.get('/api/messages', async (req, res) => {
 
       const messages = [...userMessages, ...orchestratorReplies, ...workerReports]
       messages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      return res.json({ messages })
+      const sliced = paginateMessages(messages, limit, before)
+      return res.json(sliced)
     }
 
     // Background: everything from team-lead inbox + orchestrator outbound to all workers
@@ -3073,7 +3087,7 @@ app.get('/api/messages', async (req, res) => {
     const allMessages = [...userMessages, ...orchestratorReplies, ...bgFromInbox, ...outbound]
     allMessages.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
-    res.json({ messages: allMessages })
+    res.json(paginateMessages(allMessages, limit, before))
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
