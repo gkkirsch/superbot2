@@ -4,35 +4,9 @@ import { useEscalations } from '@/hooks/useSpaces'
 import { EscalationCard } from '@/features/EscalationCard'
 import { OrchestratorResolvedCard } from '@/features/OrchestratorResolvedSection'
 
-type Filter = 'needs_review' | 'orchestrator'
+export type Filter = 'needs_review' | 'orchestrator'
 
-function FilterPill({ active, onClick, label, count }: {
-  active: boolean
-  onClick: () => void
-  label: string
-  count: number
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full transition-colors ${
-        active
-          ? 'bg-sand/15 text-sand'
-          : 'text-stone/50 hover:text-stone border border-stone/20'
-      }`}
-    >
-      {label}
-      {count > 0 && (
-        <span className={`text-[10px] px-1.5 rounded-full ${active ? 'bg-sand/20' : 'bg-stone/20 text-stone/60'}`}>
-          {count}
-        </span>
-      )}
-    </button>
-  )
-}
-
-export function CombinedEscalationsSection() {
-  const [filters, setFilters] = useState<Set<Filter>>(new Set(['needs_review', 'orchestrator']))
+export function CombinedEscalationsSection({ filters }: { filters: Set<Filter> }) {
   const [showAllNR, setShowAllNR] = useState(false)
   const [showAllOR, setShowAllOR] = useState(false)
 
@@ -40,37 +14,12 @@ export function CombinedEscalationsSection() {
   const { data: resolved = [], isLoading: loadingRes } = useEscalations('resolved')
   const orchestratorResolved = resolved.filter(e => e.resolvedBy === 'orchestrator' && !e.dismissedAt)
 
-  const toggle = (f: Filter) => {
-    setFilters(prev => {
-      const next = new Set(prev)
-      if (next.has(f) && next.size > 1) next.delete(f)
-      else next.add(f)
-      return next
-    })
-  }
-
   const showNR = filters.has('needs_review')
   const showOR = filters.has('orchestrator')
   const isLoading = loadingNH || loadingRes
 
   return (
     <div className="space-y-3">
-      {/* Filter pills */}
-      <div className="flex items-center gap-1.5">
-        <FilterPill
-          active={showNR}
-          onClick={() => toggle('needs_review')}
-          label="Needs Review"
-          count={needsHuman.length}
-        />
-        <FilterPill
-          active={showOR}
-          onClick={() => toggle('orchestrator')}
-          label="Auto-resolved"
-          count={orchestratorResolved.length}
-        />
-      </div>
-
       {isLoading ? (
         <div className="space-y-2">
           {[1, 2].map(i => <div key={i} className="h-12 rounded-lg bg-sand/5 animate-pulse" />)}

@@ -5,6 +5,7 @@ import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
+import type { Filter } from '@/features/CombinedEscalationsSection'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection } from '@/features/ScheduleSection'
@@ -19,10 +20,41 @@ import type { DashboardConfig } from '@/lib/types'
 // Each wraps a section with its SectionHeader to be self-contained
 
 function EscalationsDashboardSection() {
+  const [filters, setFilters] = useState<Set<Filter>>(new Set(['needs_review', 'orchestrator']))
+
+  const toggle = (f: Filter) => {
+    setFilters(prev => {
+      const next = new Set(prev)
+      if (next.has(f) && next.size > 1) next.delete(f)
+      else next.add(f)
+      return next
+    })
+  }
+
   return (
     <section className="group" data-section="escalations">
-      <SectionHeader title="Escalations" icon={MessageCircleQuestion} />
-      <CombinedEscalationsSection />
+      <SectionHeader
+        title="Escalations"
+        icon={MessageCircleQuestion}
+        action={
+          <div className="flex items-center gap-1">
+            {(['needs_review', 'orchestrator'] as const).map(f => (
+              <button
+                key={f}
+                onClick={e => { e.stopPropagation(); toggle(f) }}
+                className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                  filters.has(f)
+                    ? 'bg-sand/15 text-sand'
+                    : 'text-stone/40 hover:text-stone border border-stone/20'
+                }`}
+              >
+                {f === 'needs_review' ? 'Review' : 'Auto'}
+              </button>
+            ))}
+          </div>
+        }
+      />
+      <CombinedEscalationsSection filters={filters} />
     </section>
   )
 }
