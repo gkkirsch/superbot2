@@ -962,7 +962,7 @@ function InstalledSidebar() {
       <div>
         <div className="flex items-center gap-1.5 mb-3">
           <Cable className="h-3.5 w-3.5 text-moss" />
-          <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Integrations</span>
+          <span className="text-xs font-medium text-sand uppercase tracking-wider">Integrations</span>
         </div>
         <IMessageIntegration />
       </div>

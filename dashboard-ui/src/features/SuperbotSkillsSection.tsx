@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, MessageCircle, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
-import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, resetIMessage } from '@/lib/api'
+import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage } from '@/lib/api'
 import type { HookTestResult, IMessageStatus } from '@/lib/api'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import type { SuperbotSkill, SkillInfo, HookInfo, AgentInfo } from '@/lib/types'
@@ -496,7 +496,6 @@ export function IMessageIntegration() {
   const [loading, setLoading] = useState(true)
   const [showSetup, setShowSetup] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<{ sent: boolean; error?: string } | null>(null)
 
   async function fetchStatus() {
     try {
@@ -527,128 +526,47 @@ export function IMessageIntegration() {
     } finally { setActionLoading(null) }
   }
 
-  async function handleTest() {
-    setActionLoading('test')
-    setTestResult(null)
-    try {
-      const result = await testIMessage()
-      setTestResult(result)
-    } catch (err) {
-      setTestResult({ sent: false, error: (err as Error).message })
-    } finally { setActionLoading(null) }
-  }
-
-  async function handleReset() {
-    setActionLoading('reset')
-    try {
-      await resetIMessage()
-      await fetchStatus()
-      setTestResult(null)
-    } finally { setActionLoading(null) }
-  }
-
   if (loading) {
-    return (
-      <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
-        <div className="h-5 w-48 rounded bg-ink animate-pulse" />
-      </div>
-    )
+    return <div className="h-8 rounded-md bg-surface/50 animate-pulse" />
   }
 
-  // Not configured
-  if (!status?.configured) {
-    return (
-      <>
-        <button
-          onClick={() => setShowSetup(true)}
-          className="w-full rounded-lg border border-border-custom bg-surface/50 p-4 flex items-center justify-between hover:bg-ink/50 transition-colors text-left"
-        >
-          <div className="flex items-center gap-3">
-            <MessageCircle className="h-4 w-4 text-sand" />
-            <div>
-              <span className="text-sm text-parchment font-medium">iMessage Bridge</span>
-              <p className="text-xs text-stone mt-0.5">Connect superbot2 to your iPhone</p>
-            </div>
-          </div>
-          <span className="flex items-center gap-1 text-xs text-sand">
-            Set Up <ArrowRight className="h-3 w-3" />
-          </span>
-        </button>
-        {showSetup && (
-          <IMessageSetupModal
-            onClose={() => { setShowSetup(false); fetchStatus() }}
-            onComplete={(s) => setStatus(s)}
-          />
-        )}
-      </>
-    )
-  }
-
-  // Configured
-  const isOnline = status.watcherRunning
+  const isConfigured = status?.configured
+  const isOnline = status?.watcherRunning
 
   return (
     <>
-      <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MessageCircle className="h-4 w-4 text-sand" />
-            <div>
-              <span className="text-sm text-parchment font-medium">iMessage Bridge</span>
-              <p className="text-xs text-stone mt-0.5">{status.appleId}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {isOnline ? (
-              <>
-                <button
-                  onClick={handleTest}
-                  disabled={actionLoading !== null}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-ink border border-border-custom text-parchment hover:border-sand/30 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === 'test' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Test'}
-                </button>
-                <button
-                  onClick={handleStop}
-                  disabled={actionLoading !== null}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-ink border border-border-custom text-parchment hover:border-sand/30 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop'}
-                </button>
-                <button
-                  onClick={handleReset}
-                  disabled={actionLoading !== null}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-ember/10 border border-ember/20 text-ember hover:bg-ember/20 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === 'reset' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reset'}
-                </button>
-                <span className="flex items-center gap-1.5 text-[11px] text-moss ml-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-moss" />
-                  online
-                </span>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={handleStart}
-                  disabled={actionLoading !== null}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start'}
-                </button>
-                <span className="flex items-center gap-1.5 text-[11px] text-stone ml-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-stone/40" />
-                  offline
-                </span>
-              </>
-            )}
-          </div>
+      <div className="flex items-center justify-between gap-2 rounded-md border border-border-custom bg-surface/50 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-parchment truncate">iMessage Bridge</p>
+          <p className="text-[10px] text-stone/50 truncate flex items-center gap-1">
+            <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${isOnline ? 'bg-moss' : 'bg-stone/40'}`} />
+            {!isConfigured ? 'Not configured' : isOnline ? 'Online' : 'Offline'}
+          </p>
         </div>
-
-        {testResult && (
-          <div className={`mt-3 rounded-lg px-3 py-2 text-xs ${testResult.sent ? 'bg-moss/10 border border-moss/20 text-moss' : 'bg-ember/10 border border-ember/20 text-ember'}`}>
-            {testResult.sent ? 'Test message sent!' : `Failed: ${testResult.error}`}
-          </div>
+        {!isConfigured ? (
+          <button
+            onClick={() => setShowSetup(true)}
+            className="p-1 text-stone hover:text-sand transition-colors shrink-0"
+            title="Set up iMessage"
+          >
+            <ArrowRight className="h-3 w-3" />
+          </button>
+        ) : isOnline ? (
+          <button
+            onClick={handleStop}
+            disabled={actionLoading !== null}
+            className="px-2 py-0.5 text-[10px] rounded bg-ink border border-border-custom text-stone hover:text-parchment transition-colors disabled:opacity-50 shrink-0"
+          >
+            {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop'}
+          </button>
+        ) : (
+          <button
+            onClick={handleStart}
+            disabled={actionLoading !== null}
+            className="px-2 py-0.5 text-[10px] rounded bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50 shrink-0"
+          >
+            {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start'}
+          </button>
         )}
       </div>
 
