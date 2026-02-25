@@ -366,8 +366,7 @@ export function Dashboard() {
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <h1 className="font-heading text-4xl text-parchment">superbot</h1>
+        <div className="mb-8 flex items-center justify-end">
           <div className="flex items-center gap-2">
             {isEditing && (
               <button
