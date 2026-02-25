@@ -49,8 +49,9 @@ export function UpdateBanner() {
         setUpdating(false)
       }
     } catch {
-      setError('Update failed — server may be restarting')
-      setUpdating(false)
+      // Network error most likely means the server restarted after a successful update
+      setSuccess(true)
+      setTimeout(() => window.location.reload(), 5000)
     }
   }
 

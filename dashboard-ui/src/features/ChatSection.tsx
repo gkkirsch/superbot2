@@ -609,7 +609,7 @@ export function ChatSection() {
       onDrop={handleDrop}
     >
       <div className="relative flex-1 min-h-0 min-w-0">
-        <div className="pointer-events-none absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-ink to-transparent z-10 rounded-t-xl" />
+
       <div
         ref={chatContainerRef}
         className={`h-full overflow-y-auto overflow-x-hidden rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${

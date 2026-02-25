@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
 import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare } from 'lucide-react'
@@ -465,6 +465,15 @@ function MarketplaceManager() {
     m.url === SUPERCHARGE_MARKETPLACE_URL || m.name === 'superbot-marketplace'
   ) ?? false
 
+  // Auto-add the Supercharge marketplace on first load if not already present
+  const autoAddedRef = useRef(false)
+  useEffect(() => {
+    if (!isLoading && !hasSupercharge && !autoAddedRef.current) {
+      autoAddedRef.current = true
+      doAdd(SUPERCHARGE_MARKETPLACE_URL)
+    }
+  }, [isLoading, hasSupercharge])
+
   async function doAdd(url: string) {
     setAdding(true)
     setError(null)
@@ -545,7 +554,7 @@ function MarketplaceManager() {
         </div>
       ) : null}
 
-      {/* Quick-add Supercharge marketplace */}
+      {/* Quick-add Supercharge marketplace (fallback if auto-add failed) */}
       {!isLoading && !hasSupercharge && (
         <button
           onClick={() => doAdd(SUPERCHARGE_MARKETPLACE_URL)}
@@ -826,44 +835,66 @@ function IMessageCard() {
   )
 }
 
+// --- Marketplace Modal ---
+
+function MarketplaceModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-border-custom shrink-0">
+          <div className="flex items-center gap-2">
+            <Store className="h-4 w-4 text-sand" />
+            <h2 className="font-heading text-xl text-parchment">Marketplaces</h2>
+          </div>
+          <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          <MarketplaceManager />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Marketplace Integration Card ---
 
 function MarketplaceCard() {
   const { data: marketplaces, isLoading } = useMarketplaces()
-  const [expanded, setExpanded] = useState(false)
+  const [showModal, setShowModal] = useState(false)
 
   const configuredCount = marketplaces?.length ?? 0
 
   return (
-    <div className="rounded-xl border border-border-custom bg-surface/50 p-5 hover:border-sand/20 transition-colors">
-      <div className="flex items-start gap-4">
-        <div className="rounded-lg bg-sand/10 p-2.5 shrink-0">
-          <Store className="h-5 w-5 text-sand" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-medium text-parchment">Marketplaces</h3>
-            {!isLoading && (
-              <span className="text-[10px] font-medium text-stone bg-stone/10 rounded-full px-1.5 py-0.5">
-                {configuredCount} source{configuredCount !== 1 ? 's' : ''}
-              </span>
-            )}
+    <>
+      <div
+        className="rounded-xl border border-border-custom bg-surface/50 p-5 hover:border-sand/20 transition-colors cursor-pointer"
+        onClick={() => setShowModal(true)}
+      >
+        <div className="flex items-start gap-4">
+          <div className="rounded-lg bg-sand/10 p-2.5 shrink-0">
+            <Store className="h-5 w-5 text-sand" />
           </div>
-          <p className="text-xs text-stone leading-relaxed mb-3">Browse and install plugins from community marketplaces.</p>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors"
-          >
-            {expanded ? 'Hide' : 'Manage'}
-          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-medium text-parchment">Marketplaces</h3>
+              {!isLoading && (
+                <span className="text-[10px] font-medium text-stone bg-stone/10 rounded-full px-1.5 py-0.5">
+                  {configuredCount} source{configuredCount !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-stone leading-relaxed">Browse and install plugins from community marketplaces.</p>
+          </div>
         </div>
       </div>
-      {expanded && (
-        <div className="mt-4 pt-4 border-t border-border-custom">
-          <MarketplaceManager />
-        </div>
-      )}
-    </div>
+      {showModal && <MarketplaceModal onClose={() => setShowModal(false)} />}
+    </>
   )
 }
 
