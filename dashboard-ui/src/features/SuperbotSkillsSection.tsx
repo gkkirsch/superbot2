@@ -491,7 +491,7 @@ function IMessageSetupModal({ onClose, onComplete }: { onClose: () => void; onCo
 
 // --- iMessage Integration Card ---
 
-function IMessageIntegration() {
+export function IMessageIntegration() {
   const [status, setStatus] = useState<IMessageStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [showSetup, setShowSetup] = useState(false)

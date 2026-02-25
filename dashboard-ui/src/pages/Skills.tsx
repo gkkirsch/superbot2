@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, ChevronDown, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSkills, useAgents, useHooks, usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
 import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, fetchSkillDetail, fetchSkillFile, fetchAgentDetail, deleteSkill, deleteAgent, deleteHook, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, SkillInfo, AgentInfo, HookInfo, AgentDetail, CredentialDeclaration } from '@/lib/types'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
+import { IMessageIntegration } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -1181,6 +1182,15 @@ function InstalledSidebar() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Integrations */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <Cable className="h-3.5 w-3.5 text-moss" />
+          <span className="text-xs font-medium text-moss uppercase tracking-wider">Integrations</span>
+        </div>
+        <IMessageIntegration />
       </div>
 
       {selectedSkill && <SkillsPageSkillDetailModal skill={selectedSkill} onClose={() => setSelectedSkill(null)} />}
