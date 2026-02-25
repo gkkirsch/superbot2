@@ -292,7 +292,7 @@ function AgentDetailModal({ agent, onClose }: { agent: AgentInfo; onClose: () =>
 
 // --- iMessage Setup Modal ---
 
-function IMessageSetupModal({ onClose, onComplete }: { onClose: () => void; onComplete: (status: IMessageStatus) => void }) {
+export function IMessageSetupModal({ onClose, onComplete }: { onClose: () => void; onComplete: (status: IMessageStatus) => void }) {
   const [step, setStep] = useState(1)
   const [appleId, setAppleId] = useState('')
   const [phoneNumber, setPhoneNumber] = useState('')

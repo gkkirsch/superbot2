@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential } from '@/lib/api'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher } from '@/lib/api'
+import type { IMessageStatus } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration } from '@/lib/types'
-import { IMessageIntegration } from '@/features/SuperbotSkillsSection'
+import { IMessageSetupModal } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -722,56 +723,162 @@ function BrowsePlugins() {
   )
 }
 
-// --- Integrations Row ---
+// --- iMessage Integration Card ---
 
-function IntegrationsRow() {
-  const { data: marketplaces, isLoading: marketplacesLoading } = useMarketplaces()
-  const [showMarketplaceManager, setShowMarketplaceManager] = useState(false)
+function IMessageCard() {
+  const [status, setStatus] = useState<IMessageStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [showSetup, setShowSetup] = useState(false)
+
+  async function fetchStatus() {
+    try {
+      const s = await getIMessageStatus()
+      setStatus(s)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchStatus() }, [])
+
+  async function handleStart() {
+    setActionLoading('start')
+    try {
+      await startIMessageWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  async function handleStop() {
+    setActionLoading('stop')
+    try {
+      await stopIMessageWatcher()
+      await fetchStatus()
+    } finally { setActionLoading(null) }
+  }
+
+  const isConfigured = status?.configured
+  const isOnline = status?.watcherRunning
+
+  return (
+    <div className="rounded-xl border border-border-custom bg-surface/50 p-5 flex items-start gap-4 hover:border-sand/20 transition-colors">
+      <div className={`rounded-lg p-2.5 shrink-0 ${isOnline ? 'bg-moss/10' : 'bg-surface'}`}>
+        <MessageSquare className={`h-5 w-5 ${isOnline ? 'text-moss' : 'text-stone/60'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-sm font-medium text-parchment">iMessage</h3>
+          {!loading && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+              isOnline
+                ? 'text-moss bg-moss/15'
+                : isConfigured
+                  ? 'text-stone bg-stone/10'
+                  : 'text-stone/50 bg-stone/5'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-moss' : 'bg-stone/40'}`} />
+              {!isConfigured ? 'Not set up' : isOnline ? 'Online' : 'Offline'}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-stone leading-relaxed mb-3">
+          {isConfigured
+            ? 'Receive and respond to messages via iMessage bridge.'
+            : 'Connect iMessage to receive and respond to texts.'}
+        </p>
+        {loading ? (
+          <div className="h-7 w-16 rounded-md bg-surface animate-pulse" />
+        ) : !isConfigured ? (
+          <button
+            onClick={() => setShowSetup(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors"
+          >
+            Configure <ArrowRight className="h-3 w-3" />
+          </button>
+        ) : isOnline ? (
+          <button
+            onClick={handleStop}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-ink border border-border-custom text-stone hover:text-parchment hover:border-stone/30 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'stop' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Stop Watcher'}
+          </button>
+        ) : (
+          <button
+            onClick={handleStart}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'start' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Start Watcher'}
+          </button>
+        )}
+      </div>
+      {showSetup && (
+        <IMessageSetupModal
+          onClose={() => { setShowSetup(false); fetchStatus() }}
+          onComplete={(s) => { setStatus(s); setShowSetup(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// --- Marketplace Integration Card ---
+
+function MarketplaceCard() {
+  const { data: marketplaces, isLoading } = useMarketplaces()
+  const [expanded, setExpanded] = useState(false)
 
   const configuredCount = marketplaces?.length ?? 0
 
   return (
+    <div className="rounded-xl border border-border-custom bg-surface/50 p-5 hover:border-sand/20 transition-colors">
+      <div className="flex items-start gap-4">
+        <div className="rounded-lg bg-sand/10 p-2.5 shrink-0">
+          <Store className="h-5 w-5 text-sand" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-sm font-medium text-parchment">Marketplaces</h3>
+            {!isLoading && (
+              <span className="text-[10px] font-medium text-stone bg-stone/10 rounded-full px-1.5 py-0.5">
+                {configuredCount} source{configuredCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-stone leading-relaxed mb-3">Browse and install plugins from community marketplaces.</p>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors"
+          >
+            {expanded ? 'Hide' : 'Manage'}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-4 pt-4 border-t border-border-custom">
+          <MarketplaceManager />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Integrations Row ---
+
+function IntegrationsRow() {
+  return (
     <div className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-4">
         <Cable className="h-4 w-4 text-sand" />
         <h2 className="font-heading text-lg text-parchment">Integrations</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {/* iMessage card */}
-        <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
-          <IMessageIntegration />
-        </div>
-
-        {/* Marketplaces card */}
-        <div className="rounded-lg border border-border-custom bg-surface/50 p-4">
-          {showMarketplaceManager ? (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-parchment">Manage Marketplaces</span>
-                <button onClick={() => setShowMarketplaceManager(false)} className="p-1 text-stone hover:text-parchment transition-colors">
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-              <MarketplaceManager />
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-parchment truncate">Marketplaces</p>
-                <p className="text-[10px] text-stone/50 truncate flex items-center gap-1">
-                  <Store className="h-3 w-3 text-stone/40 shrink-0" />
-                  {marketplacesLoading ? 'Loading...' : `${configuredCount} configured`}
-                </p>
-              </div>
-              <button
-                onClick={() => setShowMarketplaceManager(true)}
-                className="px-2 py-0.5 text-[10px] rounded bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors shrink-0"
-              >
-                Manage
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <IMessageCard />
+        <MarketplaceCard />
       </div>
     </div>
   )
