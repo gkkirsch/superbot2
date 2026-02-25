@@ -635,23 +635,6 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 // --- Plugin Card (detailed card for browse list) ---
 
 function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [justInstalled, setJustInstalled] = useState(false)
-  const queryClient = useQueryClient()
-
-  async function handleInstall(e: React.MouseEvent) {
-    e.stopPropagation()
-    setLoading(true)
-    try {
-      await installPlugin(plugin.pluginId)
-      await queryClient.invalidateQueries({ queryKey: ['plugins'] })
-      setJustInstalled(true)
-      setTimeout(() => setJustInstalled(false), 2000)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
     <button
       onClick={onClick}
@@ -661,55 +644,9 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
           : 'border-border-custom bg-surface/50 hover:border-sand/30 hover:bg-surface'
       }`}
     >
-      {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <h3 className="text-sm font-medium text-parchment leading-tight">{titleCase(plugin.name)}</h3>
-        <div className="flex items-center gap-1.5 shrink-0">
-          {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin text-sand" />
-          ) : justInstalled ? (
-            <span className="flex items-center gap-1 text-[10px] text-green-400">
-              <Check className="h-3 w-3" />
-              Installed
-            </span>
-          ) : plugin.installed ? (
-            <>
-              <span className="flex items-center gap-1 text-[10px] text-moss">
-                <Check className="h-3 w-3" />
-                Installed
-              </span>
-              {plugin.hasUnconfiguredCredentials && (
-                <AlertTriangle className="h-3 w-3 text-amber-400" />
-              )}
-            </>
-          ) : (
-            <span
-              onClick={handleInstall}
-              className="flex items-center gap-1 text-[10px] text-stone/50 group-hover:text-sand transition-colors"
-            >
-              <Download className="h-3 w-3" />
-              Install
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Description */}
+      <h3 className="text-sm font-medium text-parchment leading-tight mb-1.5">{titleCase(plugin.name)}</h3>
       {plugin.description && (
-        <p className="text-xs text-stone line-clamp-1 mb-2.5">{plugin.description}</p>
-      )}
-
-
-      {/* Keywords */}
-      {plugin.keywords && plugin.keywords.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {plugin.keywords.slice(0, 4).map(k => (
-            <span key={k} className="text-[10px] text-stone/50 bg-ink/60 px-1.5 py-0.5 rounded">{k}</span>
-          ))}
-          {plugin.keywords.length > 4 && (
-            <span className="text-[10px] text-stone/40">+{plugin.keywords.length - 4}</span>
-          )}
-        </div>
+        <p className="text-xs text-stone line-clamp-1">{plugin.description}</p>
       )}
     </button>
   )
