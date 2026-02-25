@@ -652,8 +652,6 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
     }
   }
 
-  const cc = plugin.componentCounts
-
   return (
     <button
       onClick={onClick}
@@ -701,35 +699,6 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
         <p className="text-xs text-stone line-clamp-1 mb-2.5">{plugin.description}</p>
       )}
 
-      {/* Component counts */}
-      {cc && (cc.skills > 0 || cc.commands > 0 || cc.agents > 0 || cc.hooks > 0) && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {cc.skills > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-stone/60">
-              <Sparkles className="h-2.5 w-2.5" />
-              {cc.skills} {cc.skills === 1 ? 'skill' : 'skills'}
-            </span>
-          )}
-          {cc.commands > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-stone/60">
-              <Terminal className="h-2.5 w-2.5" />
-              {cc.commands} {cc.commands === 1 ? 'command' : 'commands'}
-            </span>
-          )}
-          {cc.agents > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-stone/60">
-              <Bot className="h-2.5 w-2.5" />
-              {cc.agents} {cc.agents === 1 ? 'agent' : 'agents'}
-            </span>
-          )}
-          {cc.hooks > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-stone/60">
-              <Webhook className="h-2.5 w-2.5" />
-              {cc.hooks} {cc.hooks === 1 ? 'hook' : 'hooks'}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Keywords */}
       {plugin.keywords && plugin.keywords.length > 0 && (
