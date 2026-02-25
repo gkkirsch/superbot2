@@ -145,9 +145,6 @@ export function ActivitySection() {
       >
         <div className="flex items-center gap-2">
           <div className="relative flex items-center">
-            {heartbeatRunning && (
-              <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-ember/60 animate-ping" />
-            )}
             <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${heartbeatRunning ? 'bg-ember' : 'bg-stone/30'}`} />
           </div>
           <span className="text-xs text-stone">heartbeat</span>

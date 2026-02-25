@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
 import { SectionHeader } from '@/components/SectionHeader'
+import { useHeartbeatConfig } from '@/hooks/useSpaces'
 import { EscalationsSection } from '@/features/EscalationsSection'
 import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
@@ -26,9 +27,15 @@ function EscalationsDashboardSection() {
 }
 
 function PulseDashboardSection() {
+  const { data: hbConfig } = useHeartbeatConfig()
+  const intervalMinutes = hbConfig?.intervalMinutes ?? 30
   return (
     <section className="group" data-section="pulse">
-      <SectionHeader title="Pulse" icon={Activity} />
+      <SectionHeader
+        title="Pulse"
+        icon={Activity}
+        action={<span className="text-xs text-stone/60">heartbeat every {intervalMinutes}m</span>}
+      />
       <ActivitySection />
     </section>
   )
