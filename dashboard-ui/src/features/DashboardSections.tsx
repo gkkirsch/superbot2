@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig } from '@/hooks/useSpaces'
-import { EscalationsSection } from '@/features/EscalationsSection'
-import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
+import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection } from '@/features/ScheduleSection'
@@ -21,7 +20,7 @@ function EscalationsDashboardSection() {
   return (
     <section className="group" data-section="escalations">
       <SectionHeader title="Escalations" icon={MessageCircleQuestion} />
-      <EscalationsSection />
+      <CombinedEscalationsSection />
     </section>
   )
 }
@@ -127,10 +126,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'escalations',
     Component: EscalationsDashboardSection,
   },
-  'orchestrator-resolved': {
-    id: 'orchestrator-resolved',
-    Component: OrchestratorResolvedSection,
-  },
   'recent-activity': {
     id: 'recent-activity',
     Component: RecentActivitySection,
@@ -168,7 +163,7 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  leftColumn: ['escalations', 'orchestrator-resolved', 'recent-activity'],
+  leftColumn: ['escalations', 'recent-activity'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['spaces'],

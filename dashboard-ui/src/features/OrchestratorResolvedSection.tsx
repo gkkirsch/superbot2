@@ -7,7 +7,7 @@ import { MarkdownContent } from '@/features/MarkdownContent'
 import { SectionHeader } from '@/components/SectionHeader'
 import type { Escalation } from '@/lib/types'
 
-function OrchestratorResolvedCard({ escalation }: { escalation: Escalation }) {
+export function OrchestratorResolvedCard({ escalation }: { escalation: Escalation }) {
   const [expanded, setExpanded] = useState(false)
   const [overriding, setOverriding] = useState(false)
   const [overrideText, setOverrideText] = useState('')
