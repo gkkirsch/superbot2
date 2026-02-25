@@ -636,6 +636,7 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
 function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => void }) {
   const [loading, setLoading] = useState(false)
+  const [justInstalled, setJustInstalled] = useState(false)
   const queryClient = useQueryClient()
 
   async function handleInstall(e: React.MouseEvent) {
@@ -644,6 +645,8 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
     try {
       await installPlugin(plugin.pluginId)
       await queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      setJustInstalled(true)
+      setTimeout(() => setJustInstalled(false), 2000)
     } finally {
       setLoading(false)
     }
@@ -664,16 +667,24 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <h3 className="text-sm font-medium text-parchment leading-tight">{titleCase(plugin.name)}</h3>
         <div className="flex items-center gap-1.5 shrink-0">
-          {plugin.installed && (
-            <span className="flex items-center gap-1 text-[10px] text-moss">
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin text-sand" />
+          ) : justInstalled ? (
+            <span className="flex items-center gap-1 text-[10px] text-green-400">
               <Check className="h-3 w-3" />
               Installed
             </span>
-          )}
-          {plugin.hasUnconfiguredCredentials && (
-            <AlertTriangle className="h-3 w-3 text-amber-400" />
-          )}
-          {!plugin.installed && !loading && (
+          ) : plugin.installed ? (
+            <>
+              <span className="flex items-center gap-1 text-[10px] text-moss">
+                <Check className="h-3 w-3" />
+                Installed
+              </span>
+              {plugin.hasUnconfiguredCredentials && (
+                <AlertTriangle className="h-3 w-3 text-amber-400" />
+              )}
+            </>
+          ) : (
             <span
               onClick={handleInstall}
               className="flex items-center gap-1 text-[10px] text-stone/50 group-hover:text-sand transition-colors"
@@ -682,7 +693,6 @@ function PluginCard({ plugin, onClick }: { plugin: PluginInfo; onClick: () => vo
               Install
             </span>
           )}
-          {loading && <Loader2 className="h-3 w-3 animate-spin text-sand" />}
         </div>
       </div>
 
