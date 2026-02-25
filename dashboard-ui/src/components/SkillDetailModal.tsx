@@ -1,4 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import yaml from 'js-yaml'
 import { Loader2, X, FileText, FolderOpen, File, Package } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -84,7 +85,7 @@ export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, heade
   const isMarkdown = selectedFile.endsWith('.md')
   const parsed = fileContent && isMarkdown ? parseFrontmatter(fileContent) : null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
@@ -176,6 +177,7 @@ export function SkillDetailModal({ skill, onClose, fetchDetail, fetchFile, heade
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

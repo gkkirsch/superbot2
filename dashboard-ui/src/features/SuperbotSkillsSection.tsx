@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
@@ -328,7 +329,7 @@ export function IMessageSetupModal({ onClose, onComplete }: { onClose: () => voi
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
@@ -485,7 +486,8 @@ export function IMessageSetupModal({ onClose, onComplete }: { onClose: () => voi
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

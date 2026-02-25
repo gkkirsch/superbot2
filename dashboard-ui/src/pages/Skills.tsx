@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
 import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare } from 'lucide-react'
@@ -272,7 +273,7 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
   const c = detail?.components
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
@@ -387,7 +388,8 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -666,6 +668,7 @@ function BrowsePlugins() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search plugins..."
+          autoComplete="off"
           className="w-full bg-surface border border-border-custom rounded-lg pl-9 pr-3 py-2 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/50"
         />
         {search && (
@@ -838,7 +841,7 @@ function IMessageCard() {
 // --- Marketplace Modal ---
 
 function MarketplaceModal({ onClose }: { onClose: () => void }) {
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
@@ -858,7 +861,8 @@ function MarketplaceModal({ onClose }: { onClose: () => void }) {
           <MarketplaceManager />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
