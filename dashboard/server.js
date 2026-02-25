@@ -2501,15 +2501,17 @@ app.get('/api/plugins', async (_req, res) => {
       const installPath = p.installPath
       let componentCounts = null
       let keywords = []
+      let localDescription = ''
       let hasUnconfiguredCredentials = false
       if (installPath) {
         try {
           const { counts } = await scanPluginComponents(installPath)
           componentCounts = counts
         } catch { /* ignore */ }
-        // Read keywords from local plugin.json
+        // Read keywords + description from local plugin.json
         const pj = await readJsonFile(join(installPath, '.claude-plugin', 'plugin.json'))
         if (pj?.keywords) keywords = pj.keywords
+        if (pj?.description && !p.description) localDescription = pj.description
         // Check credential status
         const creds = await getPluginCredentials(installPath)
         if (creds.length > 0) {
@@ -2525,7 +2527,7 @@ app.get('/api/plugins', async (_req, res) => {
         ...p,
         pluginId: pid,
         name,
-        description: p.description || '',
+        description: p.description || localDescription || '',
         installed: true,
         componentCounts,
         keywords,
