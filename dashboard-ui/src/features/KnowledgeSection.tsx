@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { ChevronRight, BookOpen } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useKnowledge } from '@/hooks/useSpaces'
 import { FileIcon, FileViewer } from '@/features/KnowledgeFileViewer'
 import type { KnowledgeGroup } from '@/lib/types'
@@ -78,12 +77,6 @@ export function KnowledgeSection() {
         {groups.map((group) => (
           <GroupItem key={group.source} group={group} onOpenFile={openFile} />
         ))}
-        <Link
-          to="/knowledge"
-          className="block text-center text-xs text-stone hover:text-sand transition-colors py-2"
-        >
-          View all &rarr;
-        </Link>
       </div>
 
       {viewerFile && (

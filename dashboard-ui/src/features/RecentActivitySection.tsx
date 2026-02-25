@@ -31,7 +31,7 @@ function SessionCard({ session, onDismiss }: { session: SessionSummary; onDismis
     <div className="rounded-lg border border-stone/15 bg-surface/20 overflow-hidden transition-all duration-200 hover:border-stone/25 group/card">
       <div
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left cursor-pointer"
+        className="w-full flex items-start gap-3 px-3 py-2 text-left cursor-pointer"
         role="button"
       >
         <FolderOpen className="h-4 w-4 text-sand/60 shrink-0 mt-0.5" />
@@ -39,7 +39,7 @@ function SessionCard({ session, onDismiss }: { session: SessionSummary; onDismis
           <div className="flex items-center gap-2">
             <span className="text-xs text-sand/80 font-medium">{session.space}/{session.project}</span>
           </div>
-          <p className={`text-sm text-parchment/90 leading-snug mt-0.5${expanded ? '' : ' line-clamp-2'}`}>{cleanSummary(session.summary, session.space, session.project)}</p>
+          <p className={`text-xs text-parchment/90 leading-snug mt-0.5${expanded ? '' : ' line-clamp-2'}`}>{cleanSummary(session.summary, session.space, session.project)}</p>
           {!expanded && session.filesChanged.length > 0 && (
             <div className="flex items-center gap-1 mt-1">
               <FileText className="h-3 w-3 text-stone/40" />
@@ -48,10 +48,7 @@ function SessionCard({ session, onDismiss }: { session: SessionSummary; onDismis
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 mt-0.5">
-          <div className="text-right">
-            <span className="text-[10px] text-stone/40 block">{completedDate}</span>
-            <span className="text-[10px] text-stone/30 block">{completedTime}</span>
-          </div>
+          <span className="text-[10px] text-stone/40 whitespace-nowrap">{completedDate} {completedTime}</span>
           <button
             onClick={(e) => { e.stopPropagation(); onDismiss(session.id) }}
             className="text-stone/40 hover:text-sand/70 transition-colors p-1.5 shrink-0 rounded"
