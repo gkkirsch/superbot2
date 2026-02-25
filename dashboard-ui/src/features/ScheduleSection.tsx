@@ -216,8 +216,9 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
   return (
     <div className="space-y-3">
       {schedule.length === 0 && !adding && (
-        <div className="rounded-lg border border-border-custom bg-surface/50 py-8 text-center">
-          <p className="text-sm text-stone">No scheduled jobs yet.</p>
+        <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+          <Clock className="h-4 w-4 text-stone/30 shrink-0" />
+          <p className="text-xs text-stone/50">No scheduled jobs yet</p>
         </div>
       )}
 

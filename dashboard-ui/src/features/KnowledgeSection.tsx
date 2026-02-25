@@ -64,9 +64,9 @@ export function KnowledgeSection() {
 
   if (!groups || groups.length === 0) {
     return (
-      <div className="rounded-lg border border-border-custom bg-surface/50 py-12 text-center">
-        <BookOpen className="h-8 w-8 text-stone/20 mx-auto mb-3" />
-        <p className="text-sm text-stone">No knowledge files found</p>
+      <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+        <BookOpen className="h-4 w-4 text-stone/30 shrink-0" />
+        <p className="text-xs text-stone/50">No knowledge files found</p>
       </div>
     )
   }

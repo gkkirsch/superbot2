@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, ChevronDown, ChevronUp, StickyNote, ClipboardList, Play } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, StickyNote, ClipboardList, Play, ListChecks } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
 import { sendMessageToOrchestrator } from '@/lib/api'
@@ -205,7 +205,10 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
       </form>
 
       {incomplete.length === 0 && completed.length === 0 && (
-        <p className="text-xs text-stone/40 text-center py-2">No todos yet</p>
+        <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+          <ListChecks className="h-4 w-4 text-stone/30 shrink-0" />
+          <p className="text-xs text-stone/50">No todos yet</p>
+        </div>
       )}
 
       <div className="space-y-0.5">

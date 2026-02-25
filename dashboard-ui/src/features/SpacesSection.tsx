@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { FolderKanban } from 'lucide-react'
 import { useSpaces } from '@/hooks/useSpaces'
 
 export function SpacesSection() {
@@ -16,8 +17,9 @@ export function SpacesSection() {
 
   if (!spaces || spaces.length === 0) {
     return (
-      <div className="rounded-lg border border-border-custom bg-surface/50 py-6 text-center">
-        <p className="text-sm text-stone">No spaces found</p>
+      <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+        <FolderKanban className="h-4 w-4 text-stone/30 shrink-0" />
+        <p className="text-xs text-stone/50">No spaces found</p>
       </div>
     )
   }

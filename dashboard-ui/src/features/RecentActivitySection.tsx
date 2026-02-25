@@ -120,9 +120,9 @@ export function RecentActivitySection() {
           ))}
         </div>
       ) : !sessions || sessions.length === 0 ? (
-        <div className="rounded-lg border border-border-custom bg-surface/50 py-8 text-center">
-          <FolderOpen className="h-6 w-6 text-stone/20 mx-auto mb-2" />
-          <p className="text-sm text-stone">No recent activity</p>
+        <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+          <FolderOpen className="h-4 w-4 text-stone/30 shrink-0" />
+          <p className="text-xs text-stone/50">No recent activity</p>
         </div>
       ) : (
         <div className="space-y-2">
