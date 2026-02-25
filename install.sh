@@ -135,45 +135,26 @@ echo "Running setup..."
 echo ""
 SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$SUPERBOT2_HOME" bash "$INSTALL_DIR/scripts/setup.sh"
 
-# --- Launch dashboard ---
-
-echo ""
-echo "Starting dashboard..."
-
-# Kill any existing processes on dashboard ports
-lsof -ti:3274 2>/dev/null | xargs kill 2>/dev/null || true
-lsof -ti:5173 2>/dev/null | xargs kill 2>/dev/null || true
-
-# Start both API server (3274) + vite dev server with HMR (5173)
-SUPERBOT2_HOME="$SUPERBOT2_HOME" npm --prefix "$INSTALL_DIR/dashboard-ui" run dev &
-DASHBOARD_PID=$!
-
-# Give servers a moment to start
-sleep 3
-
-# Open in browser (macOS)
-if command -v open &>/dev/null; then
-  open "http://localhost:5173"
-elif command -v xdg-open &>/dev/null; then
-  xdg-open "http://localhost:5173"
-fi
-
-# --- Done ---
+# --- Launch ---
 
 echo ""
 echo "  ╔═══════════════════════════════════════╗"
 echo "  ║        $SUPERBOT2_NAME installed!           ║"
 echo "  ╚═══════════════════════════════════════╝"
 echo ""
-echo "  Dashboard:  http://localhost:5173  (running now)"
-echo "  Data:       $SUPERBOT2_HOME"
-echo "  Code:       $INSTALL_DIR"
+echo "  Data:  $SUPERBOT2_HOME"
+echo "  Code:  $INSTALL_DIR"
 echo ""
-echo "  Next steps:"
-echo "    1. Restart your terminal (to pick up the $SUPERBOT2_NAME alias)"
-echo "    2. Run: $SUPERBOT2_NAME"
+echo "Starting $SUPERBOT2_NAME..."
 echo ""
-echo "  The dashboard is running in the background (PID $DASHBOARD_PID)."
-echo "  It will stop when you close this terminal."
-echo "  Run '$SUPERBOT2_NAME' to start the full system (orchestrator + dashboard)."
+
+SUPERBOT2_NAME="$SUPERBOT2_NAME" SUPERBOT2_HOME="$SUPERBOT2_HOME" "$INSTALL_DIR/superbot2" || true
+
+echo ""
+echo "  $SUPERBOT2_NAME stopped."
+echo ""
+echo "  To start again, your alias is ready — just reload your shell first:"
+echo ""
+echo "    exec \$SHELL    # reload shell (picks up the alias)"
+echo "    $SUPERBOT2_NAME         # then run normally"
 echo ""
