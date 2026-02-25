@@ -106,11 +106,6 @@
       color: #8a9a7b;
     }
 
-    /* Screenshot placeholder */
-    .screenshot-placeholder {
-      background: linear-gradient(135deg, #141414 0%, #1a1a18 50%, #141414 100%);
-      border: 1px dashed #1f1f1e;
-    }
   </style>
 </head>
 <body class="font-sans antialiased">
@@ -122,7 +117,6 @@
       <div class="hidden md:flex items-center gap-6 text-sm text-stone">
         <a href="#features" class="hover:text-parchment transition-colors">Features</a>
         <a href="#architecture" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" class="hover:text-parchment transition-colors">Dashboard</a>
         <a href="#install" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -139,7 +133,6 @@
       <div class="flex flex-col px-6 py-4 gap-3 text-sm text-stone">
         <a href="#features" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Features</a>
         <a href="#architecture" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Dashboard</a>
         <a href="#install" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -328,21 +321,6 @@
             <span class="text-[10px] font-mono bg-stone/10 rounded-full px-2 py-0.5">tag</span>
             <span>Project</span>
           </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Dashboard Preview -->
-  <section id="dashboard" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto fade-up-scroll">
-      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Dashboard</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A real-time web UI for managing escalations, chatting with the orchestrator, and monitoring system health.</p>
-
-      <div class="screenshot-placeholder rounded-lg aspect-video flex items-center justify-center max-w-4xl mx-auto">
-        <div class="text-center">
-          <div class="text-stone/40 text-sm font-mono mb-2">[ Dashboard Screenshot ]</div>
-          <div class="text-stone/25 text-xs">3-column layout: Escalations &middot; Chat &middot; System Status</div>
         </div>
       </div>
     </div>
