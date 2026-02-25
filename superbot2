@@ -29,10 +29,17 @@ start_dashboard_ui() {
     return
   fi
 
-  # Check if already running on port 3274
-  if lsof -ti:3274 &>/dev/null; then
-    echo "Dashboard already running → http://localhost:3274"
-    return
+  # Kill any existing server on port 3274 (e.g., from setup.sh or previous run)
+  # so we always start fresh with file watching via npm run dev.
+  # Use -sTCP:LISTEN to only kill the server, not browser clients connected to it.
+  if lsof -ti:3274 -sTCP:LISTEN &>/dev/null; then
+    echo "Stopping existing dashboard on port 3274..."
+    lsof -ti:3274 -sTCP:LISTEN | xargs kill 2>/dev/null || true
+    # Wait for port to free up
+    for i in {1..20}; do
+      lsof -ti:3274 -sTCP:LISTEN &>/dev/null || break
+      sleep 0.25
+    done
   fi
 
   echo "Starting dashboard → http://localhost:3274"
