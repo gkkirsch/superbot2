@@ -22,7 +22,7 @@ import {
 } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Settings, X, Plus, RotateCcw } from 'lucide-react'
+import { GripVertical, Pencil, Check, X, Plus, RotateCcw } from 'lucide-react'
 import { useDashboardConfig } from '@/hooks/useSpaces'
 import { SECTION_REGISTRY, DEFAULT_DASHBOARD_CONFIG } from '@/features/DashboardSections'
 import type { DashboardConfig } from '@/lib/types'
@@ -372,14 +372,14 @@ export function Dashboard() {
             )}
             <button
               onClick={toggleEditing}
-              className={`text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
+              className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all ${
                 isEditing
-                  ? 'bg-sand text-ink font-medium'
+                  ? 'bg-sand text-ink'
                   : 'text-stone hover:text-sand border border-stone/20 hover:border-sand/30'
               }`}
+              title={isEditing ? 'Done' : 'Customize layout'}
             >
-              <Settings className="h-3.5 w-3.5" />
-              {isEditing ? 'Done' : 'Customize'}
+              {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
             </button>
           </div>
         </div>
