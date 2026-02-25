@@ -135,30 +135,7 @@ function DroppableColumn({ id, sectionIds, isEditing, onHide }: {
   )
 }
 
-// --- Hidden sections tray ---
-
-function HiddenSectionsTray({ hidden, onRestore }: {
-  hidden: string[]
-  onRestore: (id: string) => void
-}) {
-  if (hidden.length === 0) return null
-
-  return (
-    <div className="mb-6 flex items-center gap-3 flex-wrap">
-      <span className="text-xs text-stone/40 uppercase tracking-wider">Hidden:</span>
-      {hidden.map((id) => (
-        <button
-          key={id}
-          onClick={() => onRestore(id)}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/15 bg-surface/30 text-xs text-stone/60 hover:text-sand hover:border-sand/30 transition-colors"
-        >
-          <Plus className="h-3 w-3" />
-          {SECTION_LABELS[id] || id}
-        </button>
-      ))}
-    </div>
-  )
-}
+// --- Hidden sections (now inlined in header) ---
 
 // --- Main Dashboard ---
 
@@ -366,8 +343,24 @@ export function Dashboard() {
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-end">
-          <div className="flex items-center gap-2">
+        <div className="mb-8 flex items-center justify-end gap-3 flex-wrap">
+          {/* Hidden sections tray — inline with buttons, no layout jump */}
+          {isEditing && layout.hidden.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap flex-1">
+              <span className="text-xs text-stone/40 uppercase tracking-wider">Hidden:</span>
+              {layout.hidden.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => handleRestoreSection(id)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/15 bg-surface/30 text-xs text-stone/60 hover:text-sand hover:border-sand/30 transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  {SECTION_LABELS[id] || id}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 shrink-0">
             {isEditing && (
               <button
                 onClick={handleResetDefaults}
@@ -393,11 +386,6 @@ export function Dashboard() {
 
         {saveError && (
           <p className="text-xs text-ember">Failed to save layout: {saveError.message}</p>
-        )}
-
-        {/* Hidden sections tray — only visible in edit mode */}
-        {isEditing && (
-          <HiddenSectionsTray hidden={layout.hidden} onRestore={handleRestoreSection} />
         )}
 
         <DndContext
