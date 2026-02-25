@@ -707,7 +707,7 @@ export function SkillCreator() {
       const res = await fetch('/api/skill-creator/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, sessionId }),
+        body: JSON.stringify({ message: messageText, sessionId, draftName: selectedDraft || draftName || undefined }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -718,7 +718,7 @@ export function SkillCreator() {
       setError('Failed to connect to server')
       setIsProcessing(false)
     }
-  }, [attachedFiles, isProcessing, sessionId])
+  }, [attachedFiles, isProcessing, sessionId, selectedDraft, draftName])
 
   // New session
   const handleNewSession = useCallback(async () => {

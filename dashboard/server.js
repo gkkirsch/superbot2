@@ -3376,7 +3376,7 @@ What this skill does and how to use it.
 // Chat endpoint
 app.post('/api/skill-creator/chat', async (req, res) => {
   try {
-    const { message, sessionId } = req.body
+    const { message, sessionId, draftName: requestDraftName } = req.body
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' })
     if (!message || !message.trim()) return res.status(400).json({ error: 'message required' })
 
@@ -3394,28 +3394,43 @@ app.post('/api/skill-creator/chat', async (req, res) => {
       return res.json({ ok: true, action: 'message_sent' })
     }
 
-    // Create draft directory for this session with full plugin scaffold
-    const draftName = `draft-${Date.now()}`
-    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
-    await mkdir(draftPath, { recursive: true })
-
-    // Scaffold default plugin structure
-    const pluginSlug = draftName
-    await mkdir(join(draftPath, '.claude-plugin'), { recursive: true })
-    await mkdir(join(draftPath, 'skills', pluginSlug), { recursive: true })
-
-    // plugin.json — pre-filled with name and empty description
-    const pluginJson = {
-      name: pluginSlug,
-      version: '1.0.0',
-      description: '',
-      author: { name: 'superbot2' },
-      skills: [`./skills/${pluginSlug}`],
+    // Check if we should resume an existing draft's session
+    let draftName, draftPath, claudeSessionId
+    if (requestDraftName) {
+      draftPath = join(SKILL_CREATOR_DRAFTS_DIR, requestDraftName)
+      try {
+        const metaRaw = await readFile(join(draftPath, 'draft-metadata.json'), 'utf-8')
+        const meta = JSON.parse(metaRaw)
+        claudeSessionId = meta.claudeSessionId || null
+        draftName = requestDraftName
+      } catch {
+        // Draft doesn't exist or no metadata — fall through to create new
+      }
     }
-    await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
 
-    // SKILL.md — minimal frontmatter template with credentials example
-    const skillMd = `---
+    if (!draftName) {
+      // Create draft directory for this session with full plugin scaffold
+      draftName = `draft-${Date.now()}`
+      draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
+      await mkdir(draftPath, { recursive: true })
+
+      // Scaffold default plugin structure
+      const pluginSlug = draftName
+      await mkdir(join(draftPath, '.claude-plugin'), { recursive: true })
+      await mkdir(join(draftPath, 'skills', pluginSlug), { recursive: true })
+
+      // plugin.json — pre-filled with name and empty description
+      const pluginJson = {
+        name: pluginSlug,
+        version: '1.0.0',
+        description: '',
+        author: { name: 'superbot2' },
+        skills: [`./skills/${pluginSlug}`],
+      }
+      await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
+
+      // SKILL.md — minimal frontmatter template with credentials example
+      const skillMd = `---
 name: ${pluginSlug}
 description: >
   TODO: Describe when this skill should be triggered.
@@ -3433,10 +3448,10 @@ user-invocable: true
 
 TODO: Add skill instructions here.
 `
-    await writeFile(join(draftPath, 'skills', pluginSlug, 'SKILL.md'), skillMd)
+      await writeFile(join(draftPath, 'skills', pluginSlug, 'SKILL.md'), skillMd)
 
-    // README.md
-    const readmeMd = `# ${pluginSlug}
+      // README.md
+      const readmeMd = `# ${pluginSlug}
 
 A Claude Code plugin.
 
@@ -3446,29 +3461,43 @@ A Claude Code plugin.
 claude plugin install ${pluginSlug}
 \`\`\`
 `
-    await writeFile(join(draftPath, 'README.md'), readmeMd)
+      await writeFile(join(draftPath, 'README.md'), readmeMd)
 
-    // Write draft metadata
-    const draftMetadata = {
-      sessionId,
-      createdAt: new Date().toISOString(),
-      status: 'in_progress',
-      type: 'plugin',
+      // Write draft metadata
+      const draftMetadata = {
+        sessionId,
+        createdAt: new Date().toISOString(),
+        status: 'in_progress',
+        type: 'plugin',
+      }
+      await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(draftMetadata, null, 2))
+
+      // Notify frontend of draft creation
+      if (session.sseResponse) {
+        session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath, draftType: 'plugin' })}\n\n`)
+      }
+    } else {
+      // Resuming existing draft — update metadata status
+      try {
+        const metaPath = join(draftPath, 'draft-metadata.json')
+        const raw = await readFile(metaPath, 'utf-8')
+        const meta = JSON.parse(raw)
+        meta.status = 'in_progress'
+        await writeFile(metaPath, JSON.stringify(meta, null, 2))
+      } catch {}
+      // Notify frontend which draft we're resuming
+      if (session.sseResponse) {
+        session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath, draftType: 'plugin' })}\n\n`)
+      }
     }
-    await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(draftMetadata, null, 2))
 
     session.draftName = draftName
     session.draftPath = draftPath
 
-    // Notify frontend of draft creation
-    if (session.sseResponse) {
-      session.sseResponse.write(`data: ${JSON.stringify({ type: 'draft_created', name: draftName, path: draftPath, draftType: 'plugin' })}\n\n`)
-    }
-
-    // Spawn new claude -p process (absolute path — aliases don't work with spawn)
+    // Spawn claude -p process (absolute path — aliases don't work with spawn)
     const env = { ...process.env }
     delete env.CLAUDECODE // Must delete, not set to undefined
-    const child = spawn(CLAUDE_BIN, [
+    const spawnArgs = [
       '-p',
       '--output-format', 'stream-json',
       '--input-format', 'stream-json',
@@ -3478,9 +3507,13 @@ claude plugin install ${pluginSlug}
       '--append-system-prompt', `\n\nDraft output directory (create ALL plugin files here): ${draftPath}\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
       '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
       '--permission-mode', 'bypassPermissions',
-      '--no-session-persistence',
       '--model', 'sonnet'
-    ], {
+    ]
+    // Resume existing claude session if available
+    if (claudeSessionId) {
+      spawnArgs.push('--resume', claudeSessionId)
+    }
+    const child = spawn(CLAUDE_BIN, spawnArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env
     })
@@ -3496,6 +3529,19 @@ claude plugin install ${pluginSlug}
         const event = JSON.parse(line)
         const sseRes = SKILL_CREATOR_SESSIONS.get(sessionId)?.sseResponse
         if (!sseRes) return
+
+        // Capture claude session ID from init event and save to draft metadata
+        if (event.type === 'system' && event.session_id) {
+          const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
+          if (sess?.draftPath) {
+            const metaPath = join(sess.draftPath, 'draft-metadata.json')
+            readFile(metaPath, 'utf-8').then(raw => {
+              const meta = JSON.parse(raw)
+              meta.claudeSessionId = event.session_id
+              return writeFile(metaPath, JSON.stringify(meta, null, 2))
+            }).catch(() => {})
+          }
+        }
 
         if (event.type === 'stream_event') {
           // Token-level streaming events (wrapped in stream_event)
