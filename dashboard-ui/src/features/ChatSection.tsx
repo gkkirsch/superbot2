@@ -577,9 +577,11 @@ export function ChatSection() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <div className="relative flex-1 min-h-0">
+        <div className="pointer-events-none absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-ink to-transparent z-10 rounded-t-xl" />
       <div
         ref={chatContainerRef}
-        className={`flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0 transition-colors ${
+        className={`h-full overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
           isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
         }`}
       >
@@ -620,6 +622,7 @@ export function ChatSection() {
             {waitingForReply && <TypingIndicator />}
           </>
         )}
+      </div>
       </div>
 
       {attachedImages.length > 0 && (
