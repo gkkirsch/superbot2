@@ -111,6 +111,14 @@ case "${1:-}" in
       echo "  WARNING: Build failed — using pre-built dist/ from dev repo"
     fi
 
+    # Sync git HEAD in app dir so the update checker shows "up to date"
+    # (rsync doesn't touch .git, so HEAD would be stale without this)
+    if [[ -d "$APP_DIR/.git" ]]; then
+      git -C "$APP_DIR" fetch origin --quiet 2>/dev/null || true
+      git -C "$APP_DIR" reset --mixed origin/main --quiet 2>/dev/null || true
+      echo "  Git state synced"
+    fi
+
     # Update alias to point to app dir (only — do NOT run setup.sh, it would
     # back up and overwrite the live ~/.superbot2 runtime data)
     echo ""
