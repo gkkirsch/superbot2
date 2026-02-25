@@ -581,7 +581,7 @@ export function ChatSection() {
         <div className="pointer-events-none absolute top-0 inset-x-0 h-12 bg-gradient-to-b from-ink to-transparent z-10 rounded-t-xl" />
       <div
         ref={chatContainerRef}
-        className={`h-full overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
+        className={`h-full overflow-y-auto overflow-x-hidden rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
           isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
         }`}
       >
