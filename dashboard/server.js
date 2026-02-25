@@ -1035,17 +1035,9 @@ app.get('/api/heartbeat/activity', async (_req, res) => {
 
 const TODOS_FILE = join(SUPERBOT_DIR, 'todos.json')
 
-const DEFAULT_TODOS = [
-  { id: '1', text: 'Better memory/daily summaries', completed: false, notes: [] },
-  { id: '2', text: 'Heartbeat audit', completed: false, notes: [] },
-  { id: '3', text: 'User memory/profile', completed: false, notes: [] },
-  { id: '4', text: 'Identity', completed: false, notes: [] },
-  { id: '5', text: 'Natural language hooks/enforcement', completed: false, notes: [] },
-]
-
 async function readTodos() {
   const data = await readJsonFile(TODOS_FILE)
-  if (!data) return DEFAULT_TODOS
+  if (!data) return []
   // Migrate: ensure every todo has a notes array
   return data.map(t => ({ ...t, notes: t.notes || [] }))
 }
