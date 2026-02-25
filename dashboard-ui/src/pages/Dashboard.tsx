@@ -347,12 +347,12 @@ export function Dashboard() {
           {/* Hidden sections tray — inline with buttons, no layout jump */}
           {isEditing && layout.hidden.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap flex-1">
-              <span className="text-xs text-stone/40 uppercase tracking-wider">Hidden:</span>
+              <span className="text-xs text-stone/70 uppercase tracking-wider">Hidden:</span>
               {layout.hidden.map((id) => (
                 <button
                   key={id}
                   onClick={() => handleRestoreSection(id)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/15 bg-surface/30 text-xs text-stone/60 hover:text-sand hover:border-sand/30 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/40 bg-surface/60 text-xs text-parchment/70 hover:text-sand hover:border-sand/50 hover:bg-surface transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                   {SECTION_LABELS[id] || id}
