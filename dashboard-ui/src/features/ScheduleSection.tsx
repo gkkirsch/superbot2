@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Check, X, Trash2, Clock } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSchedule, useSystemStatus } from '@/hooks/useSpaces'
+import { useSchedule } from '@/hooks/useSpaces'
 import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
 import type { ScheduledJob } from '@/lib/types'
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
+}
+const SHORT_DAY_LABELS: Record<string, string> = {
+  mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su',
 }
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
@@ -23,20 +26,18 @@ function to12Hour(time24: string): string {
   return `${h}:${mStr} ${suffix}`
 }
 
-export function SchedulerStatus() {
-  const { data } = useSystemStatus()
-  const running = data?.schedulerRunning ?? false
-  return (
-    <div className="flex items-center gap-2">
-      <div className="relative flex items-center">
-        {running && (
-          <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-moss/60 animate-ping" />
-        )}
-        <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${running ? 'bg-moss' : 'bg-stone/30'}`} />
-      </div>
-      <span className="text-xs text-stone">{running ? 'Running' : 'Stopped'}</span>
-    </div>
-  )
+function relativeTime(dateStr: string): string {
+  const now = new Date()
+  const then = new Date(dateStr)
+  const diffMs = now.getTime() - then.getTime()
+  if (diffMs < 0) return 'just now'
+  const diffMins = Math.floor(diffMs / 60000)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
 }
 
 function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
@@ -223,9 +224,7 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
       {schedule.map((job) => {
         const lastKey = lastRun[job.name]
         const lastDate = lastKey ? lastKey.split(':').slice(1).join(':') : null
-        const days = job.days && job.days.length > 0 && job.days.length < 7
-          ? job.days.map(d => DAY_LABELS[d] || d).join(', ')
-          : 'Every day'
+        const activeDays = job.days && job.days.length > 0 && job.days.length < 7 ? job.days : ALL_DAYS
 
         return (
           <button
@@ -234,20 +233,26 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
             className="w-full text-left rounded-lg border border-border-custom bg-surface/30 px-4 py-3 hover:border-sand/30 hover:bg-surface/50 transition-colors"
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-medium text-parchment text-sm">{toTitleCase(job.name)}</span>
-                {job.space && (
-                  <span className="text-xs text-stone bg-stone/10 rounded px-1.5 py-0.5">{job.space}</span>
-                )}
-              </div>
+              <span className="font-medium text-parchment text-sm">{toTitleCase(job.name)}</span>
               <div className="flex items-center gap-1 text-sand text-xs shrink-0 ml-3">
                 <Clock className="h-3 w-3" />
                 <span>{to12Hour(job.time)}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3 mt-1.5 text-xs text-stone/70">
-              <span>{days}</span>
-              {lastDate && <span>Last ran: {lastDate}</span>}
+            <div className="flex items-center justify-between mt-1.5">
+              <div className="flex items-center gap-0.5">
+                {ALL_DAYS.map(day => (
+                  <span
+                    key={day}
+                    className={`text-[10px] leading-none px-1 py-0.5 rounded ${
+                      activeDays.includes(day) ? 'text-stone bg-stone/15' : 'text-stone/20'
+                    }`}
+                  >
+                    {SHORT_DAY_LABELS[day]}
+                  </span>
+                ))}
+              </div>
+              {lastDate && <span className="text-[11px] text-sand/40">{relativeTime(lastDate)}</span>}
             </div>
           </button>
         )

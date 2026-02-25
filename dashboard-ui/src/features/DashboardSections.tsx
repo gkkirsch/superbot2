@@ -5,7 +5,7 @@ import { EscalationsSection } from '@/features/EscalationsSection'
 import { OrchestratorResolvedSection } from '@/features/OrchestratorResolvedSection'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
-import { ScheduleSection, SchedulerStatus } from '@/features/ScheduleSection'
+import { ScheduleSection } from '@/features/ScheduleSection'
 import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
@@ -51,10 +51,7 @@ function ScheduleDashboardSection() {
           </button>
         }
       />
-      <div className="space-y-3">
-        <SchedulerStatus />
-        <ScheduleSection adding={addingJob} setAdding={setAddingJob} />
-      </div>
+      <ScheduleSection adding={addingJob} setAdding={setAddingJob} />
     </section>
   )
 }
