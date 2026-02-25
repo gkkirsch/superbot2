@@ -669,6 +669,8 @@ function BrowsePlugins() {
           onChange={e => setSearch(e.target.value)}
           placeholder="Search plugins..."
           autoComplete="off"
+          readOnly={!!selectedPlugin}
+          tabIndex={selectedPlugin ? -1 : 0}
           className="w-full bg-surface border border-border-custom rounded-lg pl-9 pr-3 py-2 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/50"
         />
         {search && (
