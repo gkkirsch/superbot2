@@ -17,6 +17,24 @@ TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
 RESTART_FLAG="$DIR/.restart"
 LAUNCHER_PID=$$
 LAUNCHER_PID_FILE="$DIR/.launcher.pid"
+
+# ─── Single-instance guard ───
+# If another launcher is already running, kill it before starting a new one.
+# This prevents duplicate iMessage sends, duplicate heartbeat triggers, etc.
+if [[ -f "$LAUNCHER_PID_FILE" ]]; then
+  OLD_PID=$(cat "$LAUNCHER_PID_FILE" 2>/dev/null || echo "")
+  if [[ -n "$OLD_PID" ]] && [[ "$OLD_PID" != "$$" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Found existing superbot2 launcher (PID $OLD_PID). Stopping it..."
+    # Kill the old launcher and all its child processes (claude, dashboard, watchdog)
+    pkill -TERM -P "$OLD_PID" 2>/dev/null || true
+    kill -TERM "$OLD_PID" 2>/dev/null || true
+    sleep 2
+    # Force kill if still alive
+    kill -9 "$OLD_PID" 2>/dev/null || true
+    echo "Old launcher stopped."
+  fi
+fi
+
 echo "$LAUNCHER_PID" > "$LAUNCHER_PID_FILE"
 DASHBOARD_UI_PID=""
 
