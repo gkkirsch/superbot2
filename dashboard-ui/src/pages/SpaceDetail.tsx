@@ -92,7 +92,7 @@ function SpaceActions({ slug }: { slug: string }) {
           className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
             running
               ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30'
-              : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30'
+              : 'bg-moss/10 text-moss hover:bg-moss/20 border border-moss/30'
           } disabled:opacity-50`}
         >
           {devLoading ? (
