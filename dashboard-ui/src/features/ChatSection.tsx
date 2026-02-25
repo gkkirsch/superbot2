@@ -790,8 +790,6 @@ function UserBubble({ msg }: { msg: InboxMessage }) {
 }
 
 function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
-  const [expanded, setExpanded] = useState(false)
-  const isLong = msg.text.length > 500
   const isOnboarding = !!(msg.metadata as Record<string, unknown> | undefined)?.onboarding
   const isFirstOnboarding = !!(msg.metadata as Record<string, unknown> | undefined)?.first
   const imagePaths = useMemo(
@@ -819,25 +817,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
           )}
         </span>
         <div className={`rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
-          {isLong && !expanded ? (
-            <>
-              <div className="max-h-32 overflow-hidden">
-                <MarkdownContent content={processedText} className="text-parchment/80" />
-              </div>
-              <button onClick={() => setExpanded(true)} className="text-xs text-stone/50 mt-1.5">
-                Show more
-              </button>
-            </>
-          ) : (
-            <>
-              <MarkdownContent content={processedText} className="text-parchment/80" />
-              {isLong && (
-                <button onClick={() => setExpanded(false)} className="text-xs text-stone/50 mt-1.5">
-                  Show less
-                </button>
-              )}
-            </>
-          )}
+          <MarkdownContent content={processedText} className="text-parchment/80" />
         </div>
         {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}
         {pdfPaths.length > 0 && <PdfAttachments paths={pdfPaths} />}
