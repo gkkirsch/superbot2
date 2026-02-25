@@ -958,6 +958,15 @@ function InstalledSidebar() {
 
   return (
     <div className="space-y-6">
+      {/* Integrations */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <Cable className="h-3.5 w-3.5 text-moss" />
+          <span className="text-xs font-medium text-moss uppercase tracking-wider">Integrations</span>
+        </div>
+        <IMessageIntegration />
+      </div>
+
       {/* Marketplace management */}
       <MarketplaceManager />
 
@@ -1182,15 +1191,6 @@ function InstalledSidebar() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Integrations */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-3">
-          <Cable className="h-3.5 w-3.5 text-moss" />
-          <span className="text-xs font-medium text-moss uppercase tracking-wider">Integrations</span>
-        </div>
-        <IMessageIntegration />
       </div>
 
       {selectedSkill && <SkillsPageSkillDetailModal skill={selectedSkill} onClose={() => setSelectedSkill(null)} />}
