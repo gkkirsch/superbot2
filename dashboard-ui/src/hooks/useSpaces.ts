@@ -32,6 +32,9 @@ import {
   saveUser,
   fetchActiveWorkers,
   uploadKnowledgeFile,
+  fetchAutoTriageRules,
+  deleteAutoTriageRule,
+  updateAutoTriageRule,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -264,6 +267,30 @@ export function useTodoResearch() {
     staleTime: 30_000,
     refetchInterval: 60_000,
   })
+}
+
+// --- Auto-triage rules ---
+
+export function useAutoTriageRules() {
+  const qc = useQueryClient()
+  const query = useQuery({ queryKey: ['auto-triage-rules'], queryFn: fetchAutoTriageRules, staleTime: 10_000 })
+
+  const deleteMutation = useMutation({
+    mutationFn: (index: number) => deleteAutoTriageRule(index),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auto-triage-rules'] }),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ index, rule }: { index: number; rule: string }) => updateAutoTriageRule(index, rule),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['auto-triage-rules'] }),
+  })
+
+  return {
+    rules: query.data ?? [],
+    isLoading: query.isLoading,
+    remove: deleteMutation.mutate,
+    update: updateMutation.mutate,
+  }
 }
 
 // --- Active workers ---

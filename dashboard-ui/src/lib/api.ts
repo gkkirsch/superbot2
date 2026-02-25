@@ -616,11 +616,40 @@ export async function deleteTodo(id: string): Promise<void> {
 
 // --- Auto-triage rules ---
 
-export async function addAutoTriageRule(rule: string, source?: string, space?: string, project?: string): Promise<{ rule: string; source: string | null; addedAt: string; space: string | null; project: string | null }> {
+export interface AutoTriageRule {
+  index: number
+  rule: string
+  source: string | null
+  addedAt: string
+  space: string | null
+  project: string | null
+}
+
+export async function fetchAutoTriageRules(): Promise<AutoTriageRule[]> {
+  const data = await fetchJson<{ rules: AutoTriageRule[] }>('/auto-triage-rules')
+  return data.rules
+}
+
+export async function addAutoTriageRule(rule: string, source?: string, space?: string, project?: string): Promise<AutoTriageRule> {
   const response = await fetch(`${API_BASE}/auto-triage-rules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rule, source, space, project }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function deleteAutoTriageRule(index: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/auto-triage-rules/${index}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function updateAutoTriageRule(index: number, rule: string): Promise<AutoTriageRule> {
+  const response = await fetch(`${API_BASE}/auto-triage-rules/${index}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rule }),
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()

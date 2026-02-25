@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import type { Filter } from '@/features/CombinedEscalationsSection'
+import { AutoTriageRulesModal } from '@/components/AutoTriageRulesModal'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection } from '@/features/ScheduleSection'
@@ -21,6 +22,7 @@ import type { DashboardConfig } from '@/lib/types'
 
 function EscalationsDashboardSection() {
   const [filters, setFilters] = useState<Set<Filter>>(new Set(['needs_review', 'orchestrator']))
+  const [showRulesModal, setShowRulesModal] = useState(false)
 
   const toggle = (f: Filter) => {
     setFilters(prev => {
@@ -37,24 +39,35 @@ function EscalationsDashboardSection() {
         title="Escalations"
         icon={MessageCircleQuestion}
         action={
-          <div className="flex items-center gap-1">
-            {(['needs_review', 'orchestrator'] as const).map(f => (
-              <button
-                key={f}
-                onClick={e => { e.stopPropagation(); toggle(f) }}
-                className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                  filters.has(f)
-                    ? 'bg-sand/15 text-sand'
-                    : 'text-stone/40 hover:text-stone border border-stone/20'
-                }`}
-              >
-                {f === 'needs_review' ? 'Review' : 'Auto'}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={e => { e.stopPropagation(); setShowRulesModal(true) }}
+              className="text-[10px] text-stone/50 hover:text-sand transition-colors flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-sand/10"
+              title="View and edit auto-triage rules"
+            >
+              <Zap className="h-3 w-3" />
+              Auto-rules
+            </button>
+            <div className="flex items-center gap-1">
+              {(['needs_review', 'orchestrator'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={e => { e.stopPropagation(); toggle(f) }}
+                  className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                    filters.has(f)
+                      ? 'bg-sand/15 text-sand'
+                      : 'text-stone/40 hover:text-stone border border-stone/20'
+                  }`}
+                >
+                  {f === 'needs_review' ? 'Review' : 'Auto'}
+                </button>
+              ))}
+            </div>
           </div>
         }
       />
       <CombinedEscalationsSection filters={filters} />
+      {showRulesModal && <AutoTriageRulesModal onClose={() => setShowRulesModal(false)} />}
     </section>
   )
 }

@@ -595,6 +595,83 @@ app.delete('/api/escalations/:id', async (req, res) => {
   }
 })
 
+// --- GET /api/auto-triage-rules ---
+
+app.get('/api/auto-triage-rules', async (req, res) => {
+  try {
+    const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
+    let content = ''
+    try {
+      const { readFile } = await import('node:fs/promises')
+      content = await readFile(rulesFile, 'utf-8')
+    } catch {
+      return res.json({ rules: [] })
+    }
+    const rules = content
+      .split('\n')
+      .filter(line => line.trim())
+      .map((line, index) => {
+        try {
+          return { ...JSON.parse(line), index }
+        } catch {
+          return null
+        }
+      })
+      .filter(Boolean)
+    res.json({ rules })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- DELETE /api/auto-triage-rules/:index ---
+
+app.delete('/api/auto-triage-rules/:index', async (req, res) => {
+  try {
+    const idx = parseInt(req.params.index, 10)
+    const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
+    const { readFile, writeFile } = await import('node:fs/promises')
+    let content = ''
+    try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
+    const lines = content.split('\n').filter(l => l.trim())
+    if (idx < 0 || idx >= lines.length) {
+      return res.status(404).json({ error: 'Rule not found' })
+    }
+    lines.splice(idx, 1)
+    await writeFile(rulesFile, lines.join('\n') + (lines.length ? '\n' : ''), 'utf-8')
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- PUT /api/auto-triage-rules/:index ---
+
+app.put('/api/auto-triage-rules/:index', async (req, res) => {
+  try {
+    const idx = parseInt(req.params.index, 10)
+    const { rule } = req.body
+    if (!rule || typeof rule !== 'string' || !rule.trim()) {
+      return res.status(400).json({ error: 'rule is required' })
+    }
+    const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
+    const { readFile, writeFile } = await import('node:fs/promises')
+    let content = ''
+    try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
+    const lines = content.split('\n').filter(l => l.trim())
+    if (idx < 0 || idx >= lines.length) {
+      return res.status(404).json({ error: 'Rule not found' })
+    }
+    const existing = JSON.parse(lines[idx])
+    existing.rule = rule.trim()
+    lines[idx] = JSON.stringify(existing)
+    await writeFile(rulesFile, lines.join('\n') + '\n', 'utf-8')
+    res.json({ ...existing, index: idx })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- POST /api/auto-triage-rules ---
 
 app.post('/api/auto-triage-rules', async (req, res) => {
