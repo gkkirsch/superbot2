@@ -158,5 +158,7 @@ Facebook: ~6-8 comments per session before profile-switch modals appear.
 
 | Template | Description |
 |----------|-------------|
-| [templates/setup.sh](templates/setup.sh) | First-time Chrome profile setup |
+| [templates/setup.sh](templates/setup.sh) | Launch Chrome with superbot2 profile + CDP (run before any automation session) |
 | [templates/google-oauth.sh](templates/google-oauth.sh) | Navigate to Google services |
+
+> **First-time setup**: Run `~/.superbot2/scripts/setup-superbot-chrome.sh` once to create the Chrome profile. After that, use `templates/setup.sh` or `~/.superbot2/scripts/open-superbot-chrome.sh` to launch Chrome with CDP before each automation session.
