@@ -59,7 +59,7 @@ cat > "$PROFILE_DIR/Preferences" << EOF
   "credentials_enable_autosignin": false,
   "devtools": {
     "preferences": {
-      "currentDockState": "\"right\"",
+      "currentDockState": "\"undocked\"",
       "releaseNoteVersionSeen": "145"
     }
   },
