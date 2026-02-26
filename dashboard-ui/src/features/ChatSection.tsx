@@ -301,7 +301,7 @@ const ACCEPTED_FILE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp
 export function ChatSection() {
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [sent, setSent] = useState(false)
+  const [_sent, setSent] = useState(false)
   const [waitingForReply, setWaitingForReply] = useState(false)
   const [messages, setMessages] = useState<InboxMessage[]>([])
   const [hasMore, setHasMore] = useState(false)

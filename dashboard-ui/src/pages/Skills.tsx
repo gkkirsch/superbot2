@@ -2,11 +2,11 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare, Send } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare, Send, Globe } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
-import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher, getTelegramStatus, startTelegramWatcher, stopTelegramWatcher } from '@/lib/api'
-import type { IMessageStatus, TelegramStatus } from '@/lib/api'
+import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher, getTelegramStatus, startTelegramWatcher, stopTelegramWatcher, getBrowserStatus, setupBrowser, openBrowser } from '@/lib/api'
+import type { IMessageStatus, TelegramStatus, BrowserStatus } from '@/lib/api'
 import type { PluginInfo, PluginDetail, PluginComponent, CredentialDeclaration, MissingBin } from '@/lib/types'
 import { IMessageSetupModal, TelegramSetupModal } from '@/features/SuperbotSkillsSection'
 import ReactMarkdown from 'react-markdown'
@@ -1092,6 +1092,133 @@ function MarketplaceCard() {
   )
 }
 
+// --- Browser Integration Card ---
+
+function BrowserCard() {
+  const [status, setStatus] = useState<BrowserStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  async function fetchStatus() {
+    try {
+      const s = await getBrowserStatus()
+      setStatus(s)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchStatus() }, [])
+
+  useEffect(() => {
+    if (feedback) {
+      const t = setTimeout(() => setFeedback(null), 5000)
+      return () => clearTimeout(t)
+    }
+  }, [feedback])
+
+  async function handleSetup() {
+    setActionLoading('setup')
+    setFeedback(null)
+    try {
+      const result = await setupBrowser()
+      if (result.success) {
+        setFeedback({ type: 'success', message: 'Browser set up successfully' })
+        await fetchStatus()
+      } else {
+        setFeedback({ type: 'error', message: result.error || 'Setup failed' })
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err instanceof Error ? err.message : 'Setup failed' })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleOpen() {
+    setActionLoading('open')
+    setFeedback(null)
+    try {
+      const result = await openBrowser()
+      if (result.success) {
+        setFeedback({ type: 'success', message: 'Browser opened' })
+        // Re-check status after a short delay for port 9222 to come up
+        setTimeout(() => fetchStatus(), 3000)
+      } else {
+        setFeedback({ type: 'error', message: result.error || 'Failed to open' })
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err instanceof Error ? err.message : 'Failed to open' })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const isConfigured = status?.configured
+  const isRunning = status?.running
+
+  return (
+    <div className="rounded-xl border border-border-custom bg-surface/50 p-5 flex items-start gap-4 hover:border-sand/20 transition-colors">
+      <div className={`rounded-lg p-2.5 shrink-0 ${isRunning ? 'bg-sky-400/10' : 'bg-surface'}`}>
+        <Globe className={`h-5 w-5 ${isRunning ? 'text-sky-400' : 'text-stone/60'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-sm font-medium text-parchment">superbot2 Browser</h3>
+          {!loading && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+              isRunning
+                ? 'text-sky-400 bg-sky-400/15'
+                : isConfigured
+                  ? 'text-stone bg-stone/10'
+                  : 'text-stone/50 bg-stone/5'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'bg-sky-400' : 'bg-stone/40'}`} />
+              {!isConfigured ? 'Not set up' : isRunning ? 'Running' : 'Ready'}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-stone leading-relaxed mb-3">
+          {isConfigured
+            ? 'Dedicated Chrome profile for browser automation via CDP.'
+            : 'Set up a dedicated Chrome profile for automated browsing.'}
+        </p>
+        {feedback && (
+          <p className={`text-xs mb-2 ${feedback.type === 'success' ? 'text-moss' : 'text-red-400'}`}>
+            {feedback.message}
+          </p>
+        )}
+        {loading ? (
+          <div className="h-7 w-16 rounded-md bg-surface animate-pulse" />
+        ) : !isConfigured ? (
+          <button
+            onClick={handleSetup}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sky-400/15 border border-sky-400/25 text-sky-400 hover:bg-sky-400/25 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'setup' ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Setup <ArrowRight className="h-3 w-3" /></>}
+          </button>
+        ) : isRunning ? (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sky-400/70">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" /> CDP on port 9222
+          </span>
+        ) : (
+          <button
+            onClick={handleOpen}
+            disabled={actionLoading !== null}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sky-400/15 border border-sky-400/25 text-sky-400 hover:bg-sky-400/25 transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'open' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open Browser'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // --- Integrations Row ---
 
 function IntegrationsRow() {
@@ -1101,7 +1228,8 @@ function IntegrationsRow() {
         <Cable className="h-4 w-4 text-sand" />
         <h2 className="font-heading text-lg text-parchment">Integrations</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <BrowserCard />
         <IMessageCard />
         <TelegramCard />
         <MarketplaceCard />

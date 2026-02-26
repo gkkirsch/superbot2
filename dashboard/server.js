@@ -1212,6 +1212,96 @@ app.post('/api/telegram/test', async (_req, res) => {
   }
 })
 
+// --- Browser (superbot2 Chrome profile) ---
+
+app.get('/api/browser/status', async (_req, res) => {
+  try {
+    const profileDir = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'superbot2')
+    const configured = existsSync(profileDir)
+
+    let running = false
+    try {
+      execFileSync('lsof', ['-i', ':9222'], { stdio: 'pipe' })
+      running = true
+    } catch {}
+
+    let agentBrowserInstalled = false
+    try {
+      execFileSync('npx', ['agent-browser', '--version'], { stdio: 'pipe', timeout: 10000 })
+      agentBrowserInstalled = true
+    } catch {}
+
+    res.json({ configured, running, agentBrowserInstalled })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/browser/setup', async (_req, res) => {
+  try {
+    // Check if Chrome is running (setup requires Chrome to be quit)
+    let chromeRunning = false
+    try {
+      execFileSync('pgrep', ['-x', 'Google Chrome'], { stdio: 'pipe' })
+      chromeRunning = true
+    } catch {}
+
+    if (chromeRunning) {
+      return res.status(409).json({
+        success: false,
+        error: 'Chrome is currently running. Please quit Chrome first (Cmd+Q), then try again.'
+      })
+    }
+
+    // Run setup script
+    const setupScript = join(SUPERBOT_DIR, 'scripts', 'setup-superbot-chrome.sh')
+    const setupOutput = await new Promise((resolve, reject) => {
+      execFile('bash', [setupScript], { timeout: 30000 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message))
+        else resolve(stdout)
+      })
+    })
+
+    // Install agent-browser for CDP automation
+    let agentBrowserOutput = ''
+    try {
+      agentBrowserOutput = await new Promise((resolve, reject) => {
+        execFile('npm', ['install', '-g', 'agent-browser'], { timeout: 60000 }, (err, stdout, stderr) => {
+          if (err) reject(new Error(stderr || err.message))
+          else resolve(stdout)
+        })
+      })
+    } catch (abErr) {
+      // Non-fatal — agent-browser can still be used via npx
+      agentBrowserOutput = `Warning: agent-browser install failed (${abErr.message}). It will be downloaded on first use via npx.`
+    }
+
+    res.json({ success: true, output: setupOutput + '\n' + agentBrowserOutput })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
+app.post('/api/browser/open', async (_req, res) => {
+  try {
+    const openScript = join(SUPERBOT_DIR, 'scripts', 'open-superbot-chrome.sh')
+    if (!existsSync(openScript)) {
+      return res.status(404).json({ success: false, error: 'open-superbot-chrome.sh not found. Run setup first.' })
+    }
+
+    await new Promise((resolve, reject) => {
+      execFile('bash', [openScript], { timeout: 15000 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message))
+        else resolve(stdout)
+      })
+    })
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message })
+  }
+})
+
 // --- Heartbeat config ---
 
 app.get('/api/heartbeat', async (_req, res) => {

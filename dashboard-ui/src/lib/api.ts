@@ -781,6 +781,28 @@ export async function testTelegram(): Promise<{ sent: boolean; error?: string }>
   return response.json()
 }
 
+// --- Browser (superbot2 Chrome profile) ---
+
+export interface BrowserStatus {
+  configured: boolean
+  running: boolean
+  agentBrowserInstalled: boolean
+}
+
+export async function getBrowserStatus(): Promise<BrowserStatus> {
+  return fetchJson<BrowserStatus>('/browser/status')
+}
+
+export async function setupBrowser(): Promise<{ success: boolean; output?: string; error?: string }> {
+  const response = await fetch(`${API_BASE}/browser/setup`, { method: 'POST' })
+  return response.json()
+}
+
+export async function openBrowser(): Promise<{ success: boolean; error?: string }> {
+  const response = await fetch(`${API_BASE}/browser/open`, { method: 'POST' })
+  return response.json()
+}
+
 export async function saveUser(content: string): Promise<void> {
   const response = await fetch(`${API_BASE}/user`, {
     method: 'PUT',

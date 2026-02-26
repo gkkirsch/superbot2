@@ -5,7 +5,7 @@ import { sendMessageToOrchestrator } from '@/lib/api'
 
 export function MessageInput() {
   const [text, setText] = useState('')
-  const [sent, setSent] = useState(false)
+  const [_sent, setSent] = useState(false)
 
   const mutation = useMutation({
     mutationFn: (message: string) => sendMessageToOrchestrator(message),
