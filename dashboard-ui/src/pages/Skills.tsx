@@ -688,9 +688,13 @@ function MarketplaceManager() {
 
 function BrowsePlugins() {
   const { data: plugins, isLoading } = usePlugins()
+  const { data: marketplaces } = useMarketplaces()
   const [search, setSearch] = useState('')
   const [selectedPlugin, setSelectedPlugin] = useState<PluginInfo | null>(null)
   const [activeMarketplace, setActiveMarketplace] = useState<string | null>(null)
+  const [showMarketplaceModal, setShowMarketplaceModal] = useState(false)
+
+  const marketplaceCount = marketplaces?.length ?? 0
 
   const allPlugins = plugins ?? []
 
@@ -734,10 +738,23 @@ function BrowsePlugins() {
           <h2 className="font-heading text-lg text-parchment">Browse Plugins</h2>
           <span className="text-xs text-stone bg-surface px-2 py-0.5 rounded-full">{allPlugins.length}</span>
         </div>
-        {installedCount > 0 && (
-          <span className="text-xs text-moss">{installedCount} installed</span>
-        )}
+        <div className="flex items-center gap-3">
+          {installedCount > 0 && (
+            <span className="text-xs text-moss">{installedCount} installed</span>
+          )}
+          <button
+            onClick={() => setShowMarketplaceModal(true)}
+            className="flex items-center gap-1.5 text-xs text-stone/60 hover:text-parchment transition-colors"
+          >
+            <Store className="h-3.5 w-3.5" />
+            <span>Sources</span>
+            {marketplaceCount > 0 && (
+              <span className="text-[10px] bg-surface text-stone px-1.5 py-0.5 rounded-full">{marketplaceCount}</span>
+            )}
+          </button>
+        </div>
       </div>
+      {showMarketplaceModal && <MarketplaceModal onClose={() => setShowMarketplaceModal(false)} />}
 
       {/* Search */}
       <div className="relative mb-3">
@@ -1056,42 +1073,6 @@ function MarketplaceModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// --- Marketplace Integration Card ---
-
-function MarketplaceCard() {
-  const { data: marketplaces, isLoading } = useMarketplaces()
-  const [showModal, setShowModal] = useState(false)
-
-  const configuredCount = marketplaces?.length ?? 0
-
-  return (
-    <>
-      <div
-        className="rounded-xl border border-border-custom bg-surface/50 p-5 hover:border-sand/20 transition-colors cursor-pointer"
-        onClick={() => setShowModal(true)}
-      >
-        <div className="flex items-start gap-4">
-          <div className="rounded-lg bg-sand/10 p-2.5 shrink-0">
-            <Store className="h-5 w-5 text-sand" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-medium text-parchment">Marketplaces</h3>
-              {!isLoading && (
-                <span className="text-[10px] font-medium text-stone bg-stone/10 rounded-full px-1.5 py-0.5">
-                  {configuredCount} source{configuredCount !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-stone leading-relaxed">Browse and install plugins from community marketplaces.</p>
-          </div>
-        </div>
-      </div>
-      {showModal && <MarketplaceModal onClose={() => setShowModal(false)} />}
-    </>
-  )
-}
-
 // --- Browser Integration Card ---
 
 function BrowserCard() {
@@ -1228,11 +1209,10 @@ function IntegrationsRow() {
         <Cable className="h-4 w-4 text-sand" />
         <h2 className="font-heading text-lg text-parchment">Integrations</h2>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <BrowserCard />
         <IMessageCard />
         <TelegramCard />
-        <MarketplaceCard />
       </div>
     </div>
   )
