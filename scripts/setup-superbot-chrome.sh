@@ -10,7 +10,7 @@ PROFILE_NAME="superbot2"
 CHROME_DIR="/Users/gkkirsch/Library/Application Support/Google/Chrome"
 PROFILE_DIR="$CHROME_DIR/$PROFILE_NAME"
 LOCAL_STATE="$CHROME_DIR/Local State"
-AVATAR_SRC="$HOME/dev/superbot2/dashboard-ui/public/logo.png"
+AVATAR_SRC="${SUPERBOT2_APP_DIR:-$HOME/.superbot2-app}/assets/logo.png"
 AVATAR_DEST="$PROFILE_DIR/Google Profile Picture.png"
 
 # --- Check Chrome is not running ---
@@ -31,7 +31,7 @@ if [ -f "$AVATAR_SRC" ]; then
   echo "✅ Avatar copied → Google Profile Picture.png"
 else
   echo "⚠️  Avatar not found at: $AVATAR_SRC"
-  echo "   Expected: ~/dev/superbot2/dashboard-ui/public/logo.png"
+  echo "   Expected: ~/.superbot2-app/assets/logo.png"
 fi
 
 # --- Ensure downloads directory exists ---
