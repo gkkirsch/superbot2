@@ -26,13 +26,16 @@ if [[ -f "$PID_FILE" ]]; then
   rm -f "$PID_FILE"
 fi
 
+API_PORT="${SUPERBOT2_API_PORT:-3274}"
+UI_PORT="${SUPERBOT2_UI_PORT:-47474}"
+
 # Also kill anything on both ports as a fallback
-for port in 3274 5173; do
+for port in "$API_PORT" "$UI_PORT"; do
   lsof -ti:$port | xargs kill 2>/dev/null || true
 done
 
-# Start dashboard (API on 3274 + vite HMR on 5173)
-SUPERBOT2_HOME="$SUPERBOT2_HOME" nohup npm --prefix "$REPO_DIR/dashboard-ui" run dev > "$SUPERBOT2_HOME/dashboard.log" 2>&1 &
+# Start dashboard (API on $API_PORT + vite HMR on $UI_PORT)
+SUPERBOT2_HOME="$SUPERBOT2_HOME" SUPERBOT2_API_PORT="$API_PORT" SUPERBOT2_UI_PORT="$UI_PORT" nohup npm --prefix "$REPO_DIR/dashboard-ui" run dev > "$SUPERBOT2_HOME/dashboard.log" 2>&1 &
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
-echo "Dashboard restarted (PID $NEW_PID) → http://localhost:5173"
+echo "Dashboard restarted (PID $NEW_PID) → http://localhost:${UI_PORT}"

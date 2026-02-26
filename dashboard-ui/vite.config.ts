@@ -12,10 +12,10 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: parseInt(process.env.SUPERBOT2_UI_PORT || '47474', 10),
     proxy: {
       '/api': {
-        target: 'http://localhost:3274',
+        target: `http://localhost:${process.env.SUPERBOT2_API_PORT || '3274'}`,
         changeOrigin: true,
       },
     },

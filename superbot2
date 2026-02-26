@@ -47,9 +47,12 @@ start_dashboard_ui() {
     return
   fi
 
+  local api_port="${SUPERBOT2_API_PORT:-3274}"
+  local ui_port="${SUPERBOT2_UI_PORT:-47474}"
+
   # Kill any existing processes on both ports (e.g., from setup.sh or previous run)
-  # so we always start fresh. Port 3274 = API server, port 5173 = vite dev server.
-  for port in 3274 5173; do
+  # so we always start fresh.
+  for port in "$api_port" "$ui_port"; do
     if lsof -ti:$port -sTCP:LISTEN &>/dev/null; then
       echo "Stopping existing process on port $port..."
       lsof -ti:$port -sTCP:LISTEN | xargs kill 2>/dev/null || true
@@ -60,8 +63,8 @@ start_dashboard_ui() {
     fi
   done
 
-  echo "Starting dashboard → http://localhost:5173"
-  (cd "$ui_dir" && npm run dev) >>/tmp/superbot2-dashboard-ui.log 2>&1 &
+  echo "Starting dashboard → http://localhost:${ui_port}"
+  (cd "$ui_dir" && SUPERBOT2_API_PORT="$api_port" SUPERBOT2_UI_PORT="$ui_port" npm run dev) >>/tmp/superbot2-dashboard-ui.log 2>&1 &
   DASHBOARD_UI_PID=$!
   echo "Dashboard started (PID $DASHBOARD_UI_PID)"
 }

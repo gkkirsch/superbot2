@@ -8,7 +8,7 @@ import yaml from 'js-yaml'
 import multer from 'multer'
 
 const app = express()
-const PORT = 3274
+const PORT = parseInt(process.env.SUPERBOT2_API_PORT || '3274', 10)
 const SUPERBOT2_NAME = process.env.SUPERBOT2_NAME || 'superbot2'
 const SUPERBOT_DIR = process.env.SUPERBOT2_HOME || join(homedir(), `.${SUPERBOT2_NAME}`)
 const SPACES_DIR = join(SUPERBOT_DIR, 'spaces')
