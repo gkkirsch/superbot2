@@ -1,192 +1,163 @@
 ---
 name: superbot-browser
 description: >
-  Browser automation using agent-browser CLI with a persistent superbot2 profile.
-  agent-browser manages its own Chromium browser — no need to launch Chrome separately.
-  Sessions (cookies, logins, localStorage) persist across runs.
-  Use when you need to automate web interactions — navigate sites, fill forms, click buttons,
-  take screenshots, extract data, or interact with authenticated sessions.
+  Browser automation using the superbot2 Chrome profile via CDP.
+  The superbot2 profile is a real Chrome profile with persistent logins (Cloudflare, Facebook, Instagram, X, Google, etc.).
+  Use when you need to automate web interactions that require authenticated sessions.
   Triggers: "automate browser", "navigate to", "fill out form on", "click button on",
   "extract data from website", "take screenshot of page", "browser", "agent-browser".
   NOT for: headless scraping without auth, raw Playwright scripts.
 allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*)
 ---
 
-# Browser Automation with agent-browser
+# Browser Automation with agent-browser + superbot2 Chrome Profile
 
-agent-browser is a CLI tool that manages its own Chromium browser with a **persistent profile**. Log in once, and your sessions (cookies, localStorage, logins) persist across all future runs.
+The superbot2 Chrome profile lives inside the real Chrome app and has all sessions (Cloudflare, Facebook, Tami Browning Instagram, etc.) already logged in.
 
-No need to launch Chrome separately. No ports to check. Just run commands.
+**Always use CDP mode** — connect to real Chrome running with the superbot2 profile. This is the only reliable way to access the saved sessions.
 
-## Profile Setup
-
-The superbot2 browser profile lives at `~/.superbot2/browser/profile`. Set the env var so every command uses it automatically:
+## Standard Startup
 
 ```bash
-export AGENT_BROWSER_PROFILE="$HOME/.superbot2/browser/profile"
+# Step 1: Copy superbot2 profile to temp dir (Chrome requires non-default --user-data-dir for CDP)
+rm -rf /tmp/chrome-superbot2
+mkdir -p /tmp/chrome-superbot2/Default
+cp -r "$HOME/Library/Application Support/Google/Chrome/superbot2/." /tmp/chrome-superbot2/Default/
+
+# Step 2: Launch real Chrome with CDP (must not be running already)
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --user-data-dir="/tmp/chrome-superbot2" \
+  --remote-debugging-port=9222 \
+  --no-first-run \
+  --no-default-browser-check \
+  "about:blank" &
+
+# Step 3: Wait for CDP to be ready
+sleep 5
+curl -s http://localhost:9222/json/version | python3 -c "import json,sys; print('✅ CDP ready:', json.load(sys.stdin)['Browser'])"
+
+# Step 4: Create a tab and navigate
+curl -s -X PUT "http://localhost:9222/json/new?https://your-target-url.com" > /dev/null
+sleep 3
 ```
-
-This env var should be in your shell profile (`~/.zshrc` or `~/.bashrc`). Once set, every `agent-browser` command uses the superbot2 profile without needing `--profile` on every call.
-
-### First-Time Login
-
-The first time you use the profile, log into your accounts with `--headed` so you can see the browser:
-
-```bash
-# Open browser visibly to log into accounts
-agent-browser --headed open "https://accounts.google.com"
-# Log in manually in the browser window
-# Sessions persist — you won't need to log in again
-
-# Verify: open a service that requires auth
-agent-browser --headed open "https://console.cloud.google.com"
-# If you see the dashboard (not a login page), you're set
-```
-
-After logging in once, all future commands (headed or headless) inherit those sessions.
 
 ## Core Workflow
 
-Every browser automation follows this pattern:
-
-```
-1. Open URL        →  agent-browser open <url>
-2. Snapshot        →  agent-browser snapshot -i
-3. Interact        →  agent-browser click/fill/select @ref
-4. Re-snapshot     →  agent-browser snapshot -i
-```
-
-### Step-by-Step
-
 ```bash
-# 1. Navigate to your target
-agent-browser open "https://example.com"
+# Navigate
+agent-browser --cdp 9222 open "https://example.com"
 
-# 2. Wait for page to load (if needed for heavy pages)
-agent-browser wait 3000
+# Snapshot interactive elements
+agent-browser --cdp 9222 snapshot -i
 
-# 3. Snapshot to get interactive element refs
-agent-browser snapshot -i
-# Output:
-# @e1  button "Sign In"
-# @e2  textbox "Email"
-# @e3  link "Dashboard"
+# Interact using @refs from snapshot
+agent-browser --cdp 9222 click @e1
+agent-browser --cdp 9222 fill @e2 "text"
+agent-browser --cdp 9222 select @e3 "option value"
 
-# 4. Interact using refs from the snapshot
-agent-browser click @e3
-agent-browser fill @e2 "user@example.com"
+# Re-snapshot after any DOM change
+agent-browser --cdp 9222 snapshot -i
 
-# 5. Re-snapshot after any navigation or DOM change
-agent-browser snapshot -i
+# Screenshot for debugging
+agent-browser --cdp 9222 screenshot ~/.superbot2/uploads/shot.png
 ```
+
+**Every command needs `--cdp 9222`.**
 
 ## Essential Commands
 
 ```bash
 # Navigation
-agent-browser open <url>                    # Navigate to URL
-agent-browser back                          # Go back
-agent-browser forward                       # Go forward
-agent-browser reload                        # Reload page
+agent-browser --cdp 9222 open <url>
+agent-browser --cdp 9222 get url
+agent-browser --cdp 9222 get title
 
-# Snapshot (always do this before interacting)
-agent-browser snapshot -i                   # Interactive elements with refs
-agent-browser snapshot -i -c                # Compact (remove empty elements)
-agent-browser snapshot -s "#main"           # Scope to CSS selector
+# Snapshot
+agent-browser --cdp 9222 snapshot -i           # Interactive elements with @refs
+agent-browser --cdp 9222 snapshot -i -C        # Include cursor-interactive (onclick divs)
+agent-browser --cdp 9222 snapshot -i -c        # Compact (remove empty elements)
 
-# Interaction (use @refs from snapshot)
-agent-browser click @e1                     # Click element
-agent-browser fill @e2 "text"               # Clear field and type
-agent-browser type @e2 "text"               # Type without clearing
-agent-browser select @e1 "option"           # Select dropdown option
-agent-browser check @e1                     # Check checkbox
-agent-browser uncheck @e1                   # Uncheck checkbox
-agent-browser press Enter                   # Press key
-agent-browser scroll down 500               # Scroll page
-agent-browser hover @e1                     # Hover element
+# Interaction
+agent-browser --cdp 9222 click @e1
+agent-browser --cdp 9222 fill @e2 "text"
+agent-browser --cdp 9222 type @e2 "text"       # Type without clearing
+agent-browser --cdp 9222 select @e1 "option"
+agent-browser --cdp 9222 check @e1
+agent-browser --cdp 9222 press Enter
+agent-browser --cdp 9222 scroll down 500
+agent-browser --cdp 9222 find text "Submit" click
 
-# Get information
-agent-browser get text @e1                  # Element text
-agent-browser get value @e1                 # Input value
-agent-browser get url                       # Current URL
-agent-browser get title                     # Page title
+# Info
+agent-browser --cdp 9222 get text @e1
+agent-browser --cdp 9222 get value @e1
 
 # Wait
-agent-browser wait @e1                      # Wait for element
-agent-browser wait 3000                     # Wait milliseconds
-agent-browser wait --url "**/page"          # Wait for URL pattern
+agent-browser --cdp 9222 wait 3000
+agent-browser --cdp 9222 wait @e1
 
-# Screenshots — save to ~/.superbot2/uploads/ so images render in dashboard
-agent-browser screenshot ~/.superbot2/uploads/shot.png    # Recommended path
-agent-browser screenshot /tmp/shot.png                     # Temp dir
-agent-browser screenshot --full                            # Full page
-
-# Semantic locators (when you don't have refs)
-agent-browser find text "Sign In" click                    # Find by visible text
-agent-browser find label "Email" fill "user@test.com"      # Find by label
-agent-browser find role button click --name "Submit"       # Find by ARIA role
-agent-browser find placeholder "Search" type "query"       # Find by placeholder
-
-# Tab management
-agent-browser tab new                       # New tab
-agent-browser tab list                      # List tabs
-agent-browser tab close                     # Close current tab
-agent-browser tab 2                         # Switch to tab 2
-
-# JavaScript evaluation
-agent-browser eval 'document.title'         # Simple expression
-agent-browser eval --stdin <<'EOF'          # Complex (avoids shell quoting)
-JSON.stringify(Array.from(document.querySelectorAll("a")).map(a => a.href))
-EOF
+# Screenshot — save to uploads/ so dashboard can render it
+agent-browser --cdp 9222 screenshot ~/.superbot2/uploads/shot.png
+agent-browser --cdp 9222 screenshot --full ~/.superbot2/uploads/shot.png
 ```
 
-## Always Run Headed
+## Profile Details
 
-**Always use `--headed`** so the browser window is visible. This makes automation easier to debug, handles CAPTCHAs and 2FA prompts, and lets you see exactly what's happening.
-
-```bash
-# Correct — always headed
-agent-browser --headed open "https://example.com"
-
-# Wrong — headless hides the browser, harder to debug
-agent-browser open "https://example.com"
-```
+| Item | Value |
+|------|-------|
+| Profile location | `~/Library/Application Support/Google/Chrome/superbot2` |
+| Setup script | `~/.superbot2/scripts/setup-superbot-chrome.sh` |
+| Open script | `~/.superbot2/scripts/open-superbot-chrome.sh` |
+| CDP port | `9222` |
+| Accounts logged in | Cloudflare (ibekidkirsch@gmail.com), Facebook (Tami Browning), Instagram (Tami Browning), X |
 
 ## Gotchas
 
-### 1. Snapshot refs invalidate on DOM changes
-After clicking a button that navigates, opens a modal, or loads new content, all `@eN` refs become stale. **Always re-snapshot after any action that changes the page.**
-
-### 2. `wait --load networkidle` times out on heavy SPAs
-Google Cloud Console, Facebook, and similar SPAs have continuous background requests. Use `wait 3000` or `wait 5000` instead.
-
-### 3. Overlays block clicks
-Notification toasts, cookie banners, and modal overlays can block clicks on underlying elements. Dismiss them first, or navigate directly via URL:
+### 1. Chrome must be quit before launching with CDP
+If Chrome is already running, `--remote-debugging-port` is ignored (single-instance). Quit Chrome first:
 ```bash
-agent-browser open "https://console.cloud.google.com/apis/library?project=PROJECT_ID"
+osascript -e 'quit app "Google Chrome"'
+sleep 2
 ```
 
-### 4. First run downloads Chromium
-The first time agent-browser runs with a new profile, it may need to download Chromium. This is a one-time operation — subsequent runs are fast.
+### 2. Must use temp --user-data-dir
+Chrome blocks CDP on its default data directory. Copy the profile to `/tmp/chrome-superbot2` first (see Standard Startup above).
 
-### 5. Profile env var is required
-Without `AGENT_BROWSER_PROFILE` set (or `--profile` on every command), agent-browser uses a temporary profile that doesn't persist sessions. Always ensure the env var is set.
+### 3. Create a tab via curl before using agent-browser
+CDP starts with no page targets. You MUST create a tab first:
+```bash
+curl -s -X PUT "http://localhost:9222/json/new?https://your-url.com" > /dev/null
+sleep 3
+```
 
-### 6. Social media session limits
-Facebook allows ~6-8 comments per session before showing profile-switch modals. Plan short, focused sessions. See [references/social-media.md](references/social-media.md).
+### 4. Snapshot refs go stale after DOM changes
+Always re-snapshot after clicking, navigating, or opening modals.
+
+### 5. Combobox dropdowns need to be opened first
+Cloudflare and similar SPAs use custom dropdowns. Click the element to open it, then snapshot to find refs inside, then select:
+```bash
+agent-browser --cdp 9222 click @e_dropdown   # opens dropdown
+agent-browser --cdp 9222 snapshot -i          # get refs for options
+agent-browser --cdp 9222 click @e_option      # click the option
+```
+
+### 6. `wait --load networkidle` times out on SPAs
+Use `wait 3000` or `wait 5000` instead.
+
+### 7. Social media session limits
+Facebook: ~6-8 comments per session before profile-switch modals appear.
 
 ## Deep-Dive Documentation
 
 | Reference | When to Use |
 |-----------|-------------|
-| [references/commands.md](references/commands.md) | Full command reference (40+ commands) |
-| [references/patterns.md](references/patterns.md) | Common automation patterns (login, forms, Google/GCP) |
-| [references/troubleshooting.md](references/troubleshooting.md) | What to do when things go wrong |
-| [references/social-media.md](references/social-media.md) | Facebook, Instagram, X automation tips |
+| [references/commands.md](references/commands.md) | Full command reference |
+| [references/patterns.md](references/patterns.md) | Common automation patterns |
+| [references/troubleshooting.md](references/troubleshooting.md) | What to do when things break |
+| [references/social-media.md](references/social-media.md) | Facebook, Instagram, X tips |
 
 ## Ready-to-Use Templates
 
 | Template | Description |
 |----------|-------------|
-| [templates/setup.sh](templates/setup.sh) | First-time profile setup and login |
-| [templates/google-oauth.sh](templates/google-oauth.sh) | Navigate to Google services with auth |
+| [templates/setup.sh](templates/setup.sh) | First-time Chrome profile setup |
+| [templates/google-oauth.sh](templates/google-oauth.sh) | Navigate to Google services |
