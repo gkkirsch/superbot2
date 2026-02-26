@@ -4,7 +4,7 @@ All commands require `--cdp 9222`. This is not optional.
 
 ## Tab Creation (via CDP HTTP API)
 
-Before using agent-browser, create a tab in the user's Chrome:
+Before using agent-browser, create a tab in Chrome:
 
 ```bash
 # Create a new tab navigated to a URL (MUST use PUT)

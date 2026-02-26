@@ -41,21 +41,17 @@ curl -s -X PUT "http://localhost:9222/json/new?https://example.com"
 
 **Cause**: Chrome was not launched with `--remote-debugging-port=9222`.
 
-**Fix**: Quit Chrome completely and relaunch with the flag:
+**Fix**: Launch the superbot2 Chrome profile (it includes `--remote-debugging-port=9222`):
 ```bash
-# Quit Chrome first (the flag only works at launch)
-osascript -e 'quit app "Google Chrome"'
-sleep 2
-
-# Relaunch with remote debugging
-open -a "Google Chrome" --args --remote-debugging-port=9222
+# Launch superbot2 profile with CDP
+bash ~/.superbot2/scripts/open-superbot-chrome.sh
 sleep 3
 
 # Verify
 lsof -i :9222
 ```
 
-**Note**: If the user has the Claude in Chrome extension, Chrome may already be running with this flag.
+**Note**: The superbot2 profile automatically enables CDP on port 9222. If the user has Chrome running without CDP, they don't need to quit it — the superbot2 profile opens alongside it.
 
 ---
 
@@ -135,7 +131,7 @@ curl -s -X PUT "http://localhost:9222/json/close/TAB_ID"
 
 ## Agent-browser launches a separate browser
 
-**Symptom**: A new browser window opens instead of connecting to the user's Chrome. The user's cookies and sessions are not available.
+**Symptom**: A new browser window opens instead of connecting to the superbot2 Chrome profile. The cookies and sessions are not available.
 
 **Cause**: You forgot the `--cdp 9222` flag. Without it, agent-browser launches its own Playwright-managed browser.
 
@@ -144,7 +140,7 @@ curl -s -X PUT "http://localhost:9222/json/close/TAB_ID"
 # Wrong — launches separate browser
 npx agent-browser snapshot -i
 
-# Correct — connects to user's Chrome
+# Correct — connects to superbot2 Chrome profile
 npx agent-browser --cdp 9222 snapshot -i
 ```
 

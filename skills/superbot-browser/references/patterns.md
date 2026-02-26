@@ -125,7 +125,7 @@ npx agent-browser --cdp 9222 screenshot /tmp/after-action.png
 
 ## Google OAuth Flow
 
-When a site redirects to Google sign-in, the user's Chrome session handles it automatically since they're already logged into Google.
+When a site redirects to Google sign-in, the superbot2 Chrome session handles it automatically since it's already logged into Google.
 
 ### Account Picker
 

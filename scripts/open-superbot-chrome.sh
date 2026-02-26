@@ -10,7 +10,8 @@ if [ ! -d "$PROFILE_DIR" ]; then
   exit 1
 fi
 
-echo "🤖 Opening Chrome → superbot2 profile..."
+echo "🤖 Opening Chrome → superbot2 profile (CDP port 9222)..."
 open -a "Google Chrome" --args \
   --profile-directory="$PROFILE_NAME" \
+  --remote-debugging-port=9222 \
   --disable-infobars

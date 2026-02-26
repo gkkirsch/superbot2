@@ -1,5 +1,5 @@
 #!/bin/bash
-# Template: Navigate to a Google service using the user's authenticated Chrome
+# Template: Navigate to a Google service using the superbot2 Chrome profile
 # Usage: bash google-oauth.sh <google-service-url>
 # Examples:
 #   bash google-oauth.sh "https://console.cloud.google.com/"
@@ -7,8 +7,8 @@
 #   bash google-oauth.sh "https://console.anthropic.com/"
 #
 # Prerequisites:
-#   - Chrome running with --remote-debugging-port=9222
-#   - User logged into Google in their Chrome profile
+#   - superbot2 Chrome profile running with --remote-debugging-port=9222
+#   - Google account logged in on the superbot2 profile
 
 set -euo pipefail
 
@@ -40,7 +40,7 @@ echo "Current URL: $CURRENT_URL"
 if echo "$CURRENT_URL" | grep -q "accounts.google.com"; then
   echo ""
   echo "Landed on Google sign-in page."
-  echo "This means the user's Chrome session is not authenticated with Google."
+  echo "This means the superbot2 Chrome session is not authenticated with Google."
   echo ""
   echo "Taking snapshot of sign-in page..."
   npx agent-browser --cdp $CDP_PORT snapshot -i

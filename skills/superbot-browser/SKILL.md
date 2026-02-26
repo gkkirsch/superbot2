@@ -2,7 +2,7 @@
 name: superbot-browser
 description: >
   Browser automation via CDP (Chrome DevTools Protocol).
-  Connects to an existing Chrome with CDP enabled, or auto-launches an isolated Chrome profile as fallback.
+  Connects to the superbot2 Chrome profile on port 9222, or auto-launches it as fallback.
   Use when you need to automate web interactions — navigate sites, fill forms, click buttons,
   take screenshots, extract data, or interact with authenticated sessions.
   Triggers: "automate browser", "use my Chrome", "navigate to", "fill out form on", "click button on",
@@ -12,29 +12,25 @@ description: >
 
 # Browser Automation via CDP (Chrome DevTools Protocol)
 
-Superbot2 connects to Chrome via CDP on port 9222. It supports two modes:
+Superbot2 connects to Chrome via CDP on port 9222 using the **superbot2 Chrome profile**. This is a dedicated Chrome profile with its own logins, cookies, and sessions for automation.
 
-1. **User's Chrome** — If the user has launched Chrome with `--remote-debugging-port=9222`, the skill connects to it directly. This gives access to all existing logins, cookies, and sessions.
-2. **Isolated profile** (fallback) — If nothing is on port 9222, the skill auto-launches a separate Chrome instance with its own profile at `~/.superbot2/chrome-profile`. This runs alongside the user's main browser without interfering.
+The superbot2 profile is set up via `~/.superbot2/scripts/setup-superbot-chrome.sh` and opened via `~/.superbot2/scripts/open-superbot-chrome.sh` (which launches Chrome with `--remote-debugging-port=9222`).
 
 ## Prerequisites
 
-**Always check port 9222 first.** Only launch the isolated profile if nothing is already listening.
+**Always check port 9222 first.** Only launch the superbot2 profile if nothing is already listening.
 
 ```bash
-# Check if any Chrome is already listening on CDP port
+# Check if Chrome is already listening on CDP port
 if lsof -i :9222 > /dev/null 2>&1; then
   echo "Using existing Chrome on port 9222"
 else
-  # No Chrome on 9222 — launch isolated profile as fallback
-  echo "Launching isolated Chrome profile..."
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    --user-data-dir="$HOME/.superbot2/chrome-profile" \
+  # No Chrome on 9222 — launch superbot2 profile with CDP
+  echo "Launching superbot2 Chrome profile..."
+  open -a "Google Chrome" --args \
+    --profile-directory="superbot2" \
     --remote-debugging-port=9222 \
-    --no-first-run \
-    --no-default-browser-check \
-    "about:blank" &
-  disown 2>/dev/null || true
+    --disable-infobars &
   sleep 3
 fi
 
@@ -43,10 +39,10 @@ curl -s http://localhost:9222/json/version | python3 -c "import json,sys; d=json
 ```
 
 **Key points:**
-- If the user's Chrome is already on port 9222, use it — it has their authenticated sessions
-- If not, the isolated profile launches automatically — no user action needed
-- The isolated profile directory (`~/.superbot2/chrome-profile`) persists logins, cookies, and sessions across restarts
-- To switch modes, use the `switch-browser-mode.sh` helper script (see below)
+- The superbot2 Chrome profile has its own authenticated sessions (Facebook, Instagram, etc.)
+- If Chrome is already on port 9222, connect to it directly
+- If not, the superbot2 profile launches automatically with CDP enabled
+- The profile persists logins, cookies, and sessions across restarts
 
 ## Core Workflow
 
@@ -64,12 +60,12 @@ Every browser automation follows this pattern:
 ### Step-by-Step
 
 ```bash
-# 1. Ensure Chrome is available on CDP port (use existing or launch isolated)
+# 1. Ensure Chrome is available on CDP port (use existing or launch superbot2 profile)
 if ! lsof -i :9222 > /dev/null 2>&1; then
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    --user-data-dir="$HOME/.superbot2/chrome-profile" \
+  open -a "Google Chrome" --args \
+    --profile-directory="superbot2" \
     --remote-debugging-port=9222 \
-    --no-first-run --no-default-browser-check "about:blank" &
+    --disable-infobars &
   sleep 3
 fi
 
@@ -154,8 +150,8 @@ Chrome's CDP endpoint only lists extension service workers, not page tabs. You M
 ### 2. PUT not GET for /json/new
 The `/json/new` endpoint rejects GET requests. Always use `-X PUT`.
 
-### 3. Two browser modes — user's Chrome or isolated profile
-The skill first checks if port 9222 is already in use. If the user launched their Chrome with `--remote-debugging-port=9222`, it connects directly (with all their sessions). Otherwise, it launches an isolated Chrome with `--user-data-dir=~/.superbot2/chrome-profile`. Either way, the user does NOT need to quit their main browser. Sessions persist across restarts in both modes.
+### 3. Superbot2 Chrome profile
+The skill expects the superbot2 Chrome profile to be running on port 9222. If nothing is on port 9222, it auto-launches the superbot2 profile with CDP enabled. The superbot2 profile has its own logins, cookies, and sessions for automation.
 
 ### 4. `--auto-connect` and `connect` fail
 These fail because no page targets exist until you create one via the HTTP API.
@@ -167,7 +163,7 @@ After clicking a button that navigates, opens a modal, or loads new content, all
 Google Cloud Console and similar SPAs have continuous background requests. Use `wait 3000` or `wait 5000` instead of `wait --load networkidle`.
 
 ### 7. Don't close the last tab
-`tab close` fails if it's the last tab in the user's Chrome. Leave it open or let the user close it.
+`tab close` fails if it's the last tab in Chrome. Leave it open or let the user close it.
 
 ### 8. Overlays block clicks
 Notification toasts, cookie banners, and modal overlays can block clicks on underlying elements. Dismiss them first, or navigate directly via URL as a workaround:
@@ -209,28 +205,11 @@ async function withPage(fn) {
 ```
 
 - Each operation gets a fresh tab — zero conflict with other workers or user tabs
-- Inherits the user's authenticated Chrome session (cookies/sessions from existing context)
+- Inherits the superbot2 profile's authenticated sessions (cookies/sessions from existing context)
 - Install once: `npm install playwright` in the space's `app/` directory
 - **One Chrome worker at a time** — never run multiple CDP workers concurrently, they override each other
 
 See [references/social-media.md](references/social-media.md) for Facebook, Instagram, and X-specific tips.
-
-## Switching Browser Modes
-
-Use `switch-browser-mode.sh` to switch between the user's authenticated Chrome and the isolated profile:
-
-```bash
-# Switch to isolated profile (default — no user sessions, clean slate)
-bash templates/switch-browser-mode.sh isolated
-
-# Switch to user's authenticated Chrome (has all logins and sessions)
-bash templates/switch-browser-mode.sh authenticated
-```
-
-- **`isolated`** — Kills any Chrome on port 9222, launches the isolated profile
-- **`authenticated`** — Kills the isolated Chrome, relaunches the user's main Chrome with CDP enabled
-
-After switching, all `agent-browser --cdp 9222` commands automatically use whichever Chrome is active.
 
 ## Deep-Dive Documentation
 
