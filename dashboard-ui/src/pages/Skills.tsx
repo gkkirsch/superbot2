@@ -747,7 +747,7 @@ function BrowsePlugins() {
             className="flex items-center gap-1.5 text-xs text-stone/60 hover:text-parchment transition-colors"
           >
             <Store className="h-3.5 w-3.5" />
-            <span>Sources</span>
+            <span>Marketplace</span>
             {marketplaceCount > 0 && (
               <span className="text-[10px] bg-surface text-stone px-1.5 py-0.5 rounded-full">{marketplaceCount}</span>
             )}
