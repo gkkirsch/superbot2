@@ -744,7 +744,7 @@ function BrowsePlugins() {
           )}
           <button
             onClick={() => setShowMarketplaceModal(true)}
-            className="flex items-center gap-1.5 text-xs text-stone/60 hover:text-parchment transition-colors"
+            className="flex items-center gap-1.5 text-xs text-stone hover:text-parchment transition-colors"
           >
             <Store className="h-3.5 w-3.5" />
             <span>Marketplace</span>
