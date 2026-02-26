@@ -102,7 +102,8 @@ cat > "$PROFILE_DIR/Preferences" << EOF
     }
   },
   "session": {
-    "restore_on_startup": 5
+    "restore_on_startup": 4,
+    "startup_urls": ["https://superbot2.com"]
   },
   "spellcheck": {
     "dictionaries": ["en-US"]
