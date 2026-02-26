@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Send } from 'lucide-react'
+import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
 import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, getTelegramStatus, saveTelegramConfig, startTelegramWatcher, stopTelegramWatcher, testTelegram } from '@/lib/api'

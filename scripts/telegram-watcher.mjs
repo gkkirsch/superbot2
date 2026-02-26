@@ -165,6 +165,32 @@ function stopTyping() {
 
 // --- PID file ---
 
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function checkPidFile() {
+  if (!existsSync(PID_FILE)) return
+  try {
+    const content = await readFile(PID_FILE, 'utf-8')
+    const pid = parseInt(content.trim(), 10)
+    if (isNaN(pid)) return
+    if (pid === process.pid) return
+    if (isProcessRunning(pid)) {
+      logError(`Another instance is already running (pid=${pid}). Exiting.`)
+      process.exit(1)
+    }
+    log(`Stale PID file found (pid=${pid} not running). Overwriting.`)
+  } catch {
+    // Can't read PID file — proceed
+  }
+}
+
 async function writePidFile() {
   await writeFile(PID_FILE, String(process.pid), 'utf-8')
 }
@@ -997,7 +1023,8 @@ async function main() {
   lastSentReplyCount = await loadLastSentCount()
   sentEscalationIds = await loadSentEscalations()
 
-  // Write PID file
+  // Check for already-running instance, then write PID file
+  await checkPidFile()
   await writePidFile()
   log(`PID file written: ${PID_FILE} (pid=${process.pid})`)
 
