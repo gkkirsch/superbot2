@@ -101,10 +101,6 @@ cat > "$PROFILE_DIR/Preferences" << EOF
       "popups": 2
     }
   },
-  "session": {
-    "restore_on_startup": 4,
-    "startup_urls": ["https://superbot2.com/"]
-  },
   "spellcheck": {
     "dictionaries": ["en-US"]
   },
@@ -117,32 +113,6 @@ cat > "$PROFILE_DIR/Preferences" << EOF
 }
 EOF
 echo "✅ Profile Preferences written."
-
-# --- Write Secure Preferences with pre-computed HMACs ---
-# Chrome protects startup_urls with a per-installation HMAC key stored in macOS Keychain.
-# Scripts can't generate these HMACs. But the HMACs Chrome computed on this machine
-# (captured from a manually-set session) are valid for the lifetime of this Chrome install
-# because the Keychain key persists even after profile deletion.
-# Writing values + their HMACs together makes Chrome accept them without resetting.
-cat > "$PROFILE_DIR/Secure Preferences" << 'SECPREF'
-{
-  "session": {
-    "restore_on_startup": 4,
-    "startup_urls": ["https://superbot2.com/"]
-  },
-  "protection": {
-    "macs": {
-      "session": {
-        "restore_on_startup": "70944F762AAB1136787BDC48C1DBC4DBE282BCEC878AD3EE33BAC0820ACF354C",
-        "restore_on_startup_encrypted_hash": "djEwvikwG3tr01PrkBS2UZSQo3nqRK83uJ2ZRewyxksISQs4wo+Rqf95m3A+TDdJZ32n",
-        "startup_urls": "B9CB8780F4C1ECE4A7DB3F59D95AC1C0EC7EE47F2DF71FFEAC99A03C68193AA2",
-        "startup_urls_encrypted_hash": "djEwVkwgkZ9NiBeRiGLOAsaNO7+QoqPZ5hmDE0BB7mlocYNMBP6fKXWxIIiw/jUZ+Rer"
-      }
-    }
-  }
-}
-SECPREF
-echo "✅ Secure Preferences written with startup URL + HMACs."
 
 # --- Update Local State (adds profile to Chrome's known profiles) ---
 python3 << PYEOF
