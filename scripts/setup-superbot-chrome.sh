@@ -118,30 +118,31 @@ cat > "$PROFILE_DIR/Preferences" << EOF
 EOF
 echo "✅ Profile Preferences written."
 
-# --- Write Chrome policy to set startup URL ---
-# Chrome ignores startup URLs written to Preferences/Secure Preferences by scripts
-# because it validates them with a per-profile HMAC (super_mac). Policy files bypass
-# this entirely and are read before any HMAC checks.
-# NOTE: This applies to the superbot2 profile only via profile-dir-scoped policy.
-# macOS user-level policy location (no admin required):
-POLICY_DIR="$HOME/Library/Managed Preferences"
-mkdir -p "$POLICY_DIR"
-python3 << PYEOF
-import subprocess, os
-
-plist_path = os.path.expanduser("$POLICY_DIR/com.google.Chrome.plist")
-
-# Write Chrome policy plist
-subprocess.run([
-    "defaults", "write", plist_path.replace(".plist", ""),
-    "RestoreOnStartup", "-int", "4"
-], check=True)
-subprocess.run([
-    "defaults", "write", plist_path.replace(".plist", ""),
-    "RestoreOnStartupURLs", "-array", "https://superbot2.com/"
-], check=True)
-print("✅ Chrome policy written (startup URL: https://superbot2.com/).")
-PYEOF
+# --- Write Secure Preferences with pre-computed HMACs ---
+# Chrome protects startup_urls with a per-installation HMAC key stored in macOS Keychain.
+# Scripts can't generate these HMACs. But the HMACs Chrome computed on this machine
+# (captured from a manually-set session) are valid for the lifetime of this Chrome install
+# because the Keychain key persists even after profile deletion.
+# Writing values + their HMACs together makes Chrome accept them without resetting.
+cat > "$PROFILE_DIR/Secure Preferences" << 'SECPREF'
+{
+  "session": {
+    "restore_on_startup": 4,
+    "startup_urls": ["https://superbot2.com/"]
+  },
+  "protection": {
+    "macs": {
+      "session": {
+        "restore_on_startup": "70944F762AAB1136787BDC48C1DBC4DBE282BCEC878AD3EE33BAC0820ACF354C",
+        "restore_on_startup_encrypted_hash": "djEwvikwG3tr01PrkBS2UZSQo3nqRK83uJ2ZRewyxksISQs4wo+Rqf95m3A+TDdJZ32n",
+        "startup_urls": "B9CB8780F4C1ECE4A7DB3F59D95AC1C0EC7EE47F2DF71FFEAC99A03C68193AA2",
+        "startup_urls_encrypted_hash": "djEwVkwgkZ9NiBeRiGLOAsaNO7+QoqPZ5hmDE0BB7mlocYNMBP6fKXWxIIiw/jUZ+Rer"
+      }
+    }
+  }
+}
+SECPREF
+echo "✅ Secure Preferences written with startup URL + HMACs."
 
 # --- Update Local State (adds profile to Chrome's known profiles) ---
 python3 << PYEOF
