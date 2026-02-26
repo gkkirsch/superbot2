@@ -34,6 +34,23 @@ else
   echo "   Expected: ~/.superbot2-app/assets/logo.png"
 fi
 
+# --- Replace tamagotchi avatar (index 46) with SB logo ---
+# Chrome caches downloaded avatars in ~/Library/.../Chrome/Avatars/.
+# Profile uses avatar_index 46 (tamagotchi). Replacing its cached file
+# makes Chrome show the SB logo without needing GAIA picture setup.
+AVATARS_DIR="$HOME/Library/Application Support/Google/Chrome/Avatars"
+TAMAGOTCHI="$AVATARS_DIR/avatar_illustration_tamagotchi.png"
+mkdir -p "$AVATARS_DIR"
+if [ -f "$AVATAR_SRC" ]; then
+  # Back up original only if .bak doesn't exist yet
+  if [ -f "$TAMAGOTCHI" ] && [ ! -f "$TAMAGOTCHI.bak" ]; then
+    cp "$TAMAGOTCHI" "$TAMAGOTCHI.bak"
+    echo "✅ Tamagotchi avatar backed up"
+  fi
+  cp "$AVATAR_SRC" "$TAMAGOTCHI"
+  echo "✅ Tamagotchi avatar (index 46) replaced with SB logo"
+fi
+
 # --- Ensure downloads directory exists ---
 DOWNLOADS_DIR="$HOME/.superbot2/downloads"
 mkdir -p "$DOWNLOADS_DIR"
