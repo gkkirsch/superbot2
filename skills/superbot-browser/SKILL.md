@@ -112,17 +112,7 @@ agent-browser --cdp 9222 screenshot --full ~/.superbot2/uploads/shot.png
 
 ## Gotchas
 
-### 1. Chrome must be quit before launching with CDP
-If Chrome is already running, `--remote-debugging-port` is ignored (single-instance). Quit Chrome first:
-```bash
-osascript -e 'quit app "Google Chrome"'
-sleep 2
-```
-
-### 2. Must use temp --user-data-dir
-Chrome blocks CDP on its default data directory. Copy the profile to `/tmp/chrome-superbot2` first (see Standard Startup above).
-
-### 3. Create a tab via curl before using agent-browser
+### 1. Create a tab via curl before using agent-browser
 CDP starts with no page targets. You MUST create a tab first:
 ```bash
 curl -s -X PUT "http://localhost:9222/json/new?https://your-url.com" > /dev/null

@@ -13,13 +13,6 @@ CDP_PORT=9222
 
 echo "🤖 Setting up superbot2 browser profile..."
 
-# Quit Chrome if running
-if pgrep -x "Google Chrome" > /dev/null 2>&1; then
-  echo "🔄 Quitting Chrome first..."
-  osascript -e 'quit app "Google Chrome"'
-  sleep 3
-fi
-
 # Create directories
 mkdir -p "$PROFILE_DIR" "$DOWNLOADS_DIR"
 echo "✅ Profile: $BROWSER_DIR"
