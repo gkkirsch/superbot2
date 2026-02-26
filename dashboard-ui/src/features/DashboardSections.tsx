@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -21,17 +21,30 @@ import type { DashboardConfig } from '@/lib/types'
 // Each wraps a section with its SectionHeader to be self-contained
 
 function EscalationsDashboardSection() {
-  const [filters, setFilters] = useState<Set<Filter>>(new Set(['needs_review', 'orchestrator']))
+  const [filter, setFilter] = useState<'all' | 'needs_review' | 'orchestrator'>('all')
   const [showRulesModal, setShowRulesModal] = useState(false)
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  const toggle = (f: Filter) => {
-    setFilters(prev => {
-      const next = new Set(prev)
-      if (next.has(f) && next.size > 1) next.delete(f)
-      else next.add(f)
-      return next
-    })
-  }
+  const filters: Set<Filter> = filter === 'all'
+    ? new Set(['needs_review', 'orchestrator'])
+    : new Set([filter])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowFilterMenu(false)
+      }
+    }
+    if (showFilterMenu) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showFilterMenu])
+
+  const filterOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'needs_review', label: 'Needs Review' },
+    { value: 'orchestrator', label: 'Auto-resolved' },
+  ] as const
 
   return (
     <section className="group" data-section="escalations">
@@ -39,29 +52,36 @@ function EscalationsDashboardSection() {
         title="Escalations"
         icon={MessageCircleQuestion}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={e => { e.stopPropagation(); setShowRulesModal(true) }}
-              className="text-[10px] text-stone/50 hover:text-sand transition-colors flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-sand/10"
-              title="View and edit auto-triage rules"
+              className="p-1 text-stone/50 hover:text-sand transition-colors rounded hover:bg-sand/10"
+              title="Auto-triage rules"
             >
-              <Zap className="h-3 w-3" />
-              Auto-rules
+              <Zap className="h-3.5 w-3.5" />
             </button>
-            <div className="flex items-center gap-1">
-              {(['needs_review', 'orchestrator'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={e => { e.stopPropagation(); toggle(f) }}
-                  className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                    filters.has(f)
-                      ? 'bg-sand/15 text-sand'
-                      : 'text-stone/40 hover:text-stone border border-stone/20'
-                  }`}
-                >
-                  {f === 'needs_review' ? 'Review' : 'Auto'}
-                </button>
-              ))}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={e => { e.stopPropagation(); setShowFilterMenu(v => !v) }}
+                className={`p-1 rounded transition-colors ${showFilterMenu || filter !== 'all' ? 'text-sand bg-sand/10' : 'text-stone/50 hover:text-stone hover:bg-surface'}`}
+                title="Filter escalations"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+              {showFilterMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-lg py-1 min-w-[140px]">
+                  {filterOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={e => { e.stopPropagation(); setFilter(opt.value); setShowFilterMenu(false) }}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-surface transition-colors text-left"
+                    >
+                      <span className={filter === opt.value ? 'text-sand' : 'text-stone'}>{opt.label}</span>
+                      {filter === opt.value && <Check className="h-3 w-3 text-sand" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         }
