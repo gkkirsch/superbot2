@@ -727,7 +727,6 @@ export function ChatSection() {
           <Send className="h-4 w-4" />
         </button>
       </form>
-      {sent && <span className="text-[10px] text-moss/70 mt-1 ml-1">Sent</span>}
       {mutation.isError && <span className="text-[10px] text-ember/70 mt-1 ml-1">Failed</span>}
     </div>
   )

@@ -40,9 +40,6 @@ export function MessageInput() {
       >
         <Send className="h-4 w-4" />
       </button>
-      {sent && (
-        <span className="text-xs text-moss shrink-0">Sent</span>
-      )}
       {mutation.isError && (
         <span className="text-xs text-ember shrink-0">Failed</span>
       )}
