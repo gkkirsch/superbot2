@@ -19,14 +19,13 @@ The superbot2 Chrome profile lives inside the real Chrome app and has all sessio
 ## Standard Startup
 
 ```bash
-# Step 1: Copy superbot2 profile to temp dir (Chrome requires non-default --user-data-dir for CDP)
-rm -rf /tmp/chrome-superbot2
-mkdir -p /tmp/chrome-superbot2/Default
-cp -r "$HOME/Library/Application Support/Google/Chrome/superbot2/." /tmp/chrome-superbot2/Default/
+# Step 1: Quit Chrome if running (single-instance blocks CDP)
+osascript -e 'quit app "Google Chrome"' 2>/dev/null; sleep 3
 
-# Step 2: Launch real Chrome with CDP (must not be running already)
+# Step 2: Launch Chrome with the superbot2 profile + CDP
+# Profile lives at ~/.superbot2/browser/Default/ (not Chrome's default dir, so CDP works)
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --user-data-dir="/tmp/chrome-superbot2" \
+  --user-data-dir="$HOME/.superbot2/browser" \
   --remote-debugging-port=9222 \
   --no-first-run \
   --no-default-browser-check \
@@ -40,6 +39,8 @@ curl -s http://localhost:9222/json/version | python3 -c "import json,sys; print(
 curl -s -X PUT "http://localhost:9222/json/new?https://your-target-url.com" > /dev/null
 sleep 3
 ```
+
+> Or just run: `bash ~/.superbot2/scripts/open-superbot-chrome.sh`
 
 ## Core Workflow
 
@@ -104,9 +105,9 @@ agent-browser --cdp 9222 screenshot --full ~/.superbot2/uploads/shot.png
 
 | Item | Value |
 |------|-------|
-| Profile location | `~/Library/Application Support/Google/Chrome/superbot2` |
-| Setup script | `~/.superbot2/scripts/setup-superbot-chrome.sh` |
-| Open script | `~/.superbot2/scripts/open-superbot-chrome.sh` |
+| Profile location | `~/.superbot2/browser/Default/` |
+| First-time setup | `bash templates/init.sh` |
+| Session startup | `bash templates/setup.sh` |
 | CDP port | `9222` |
 
 ## Gotchas
@@ -158,7 +159,6 @@ Facebook: ~6-8 comments per session before profile-switch modals appear.
 
 | Template | Description |
 |----------|-------------|
-| [templates/setup.sh](templates/setup.sh) | Launch Chrome with superbot2 profile + CDP (run before any automation session) |
+| [templates/init.sh](templates/init.sh) | **One-time setup** — creates the browser profile at `~/.superbot2/browser/` |
+| [templates/setup.sh](templates/setup.sh) | **Session startup** — launches Chrome with CDP (run before each automation session) |
 | [templates/google-oauth.sh](templates/google-oauth.sh) | Navigate to Google services |
-
-> **First-time setup**: Run `~/.superbot2/scripts/setup-superbot-chrome.sh` once to create the Chrome profile. After that, use `templates/setup.sh` or `~/.superbot2/scripts/open-superbot-chrome.sh` to launch Chrome with CDP before each automation session.
