@@ -21,13 +21,15 @@ Read and write Apple Notes from the command line. Used by superbot2 agents to in
 
 ## Setup
 
-The CLI is ready to use. No setup needed.
+**Requirements**: macOS only. `osascript` is built into macOS — no additional binary installation needed.
 
-```
-Tool location: /Users/jeff/.superbot2/spaces/apple-notes/app/notes-cli
+The CLI tool must be installed at `~/.superbot2/spaces/apple-notes/app/notes-cli`. Check that it exists before use:
+
+```bash
+ls ~/.superbot2/spaces/apple-notes/app/notes-cli
 ```
 
-- Embedded Python venv at `/Users/jeff/.superbot2/spaces/apple-notes/app/.venv/`
+- Embedded Python venv at `~/.superbot2/spaces/apple-notes/app/.venv/`
 - Auto-activates on run — just call the binary directly
 - All output is JSON by default (for agent consumption)
 - Errors go to stderr as `{"error": "message"}`
@@ -35,7 +37,7 @@ Tool location: /Users/jeff/.superbot2/spaces/apple-notes/app/notes-cli
 For all examples below, use the full path:
 
 ```bash
-NOTES=/Users/jeff/.superbot2/spaces/apple-notes/app/notes-cli
+NOTES=~/.superbot2/spaces/apple-notes/app/notes-cli
 ```
 
 ## Command Reference
@@ -104,7 +106,7 @@ Returns each item's text and done/not-done state. Items are grouped by checklist
 
 ### Writing Commands
 
-All write commands use AppleScript and require macOS Automation permission for Notes.app (already granted).
+All write commands use AppleScript and require macOS Automation permission for Notes.app. Grant access when prompted by macOS on first use.
 
 #### `create` — Create a new note
 
@@ -243,5 +245,5 @@ APPLESCRIPT
 3. **Note IDs** — Both integer Z_PK (e.g., `42`) and UUID strings (e.g., `"ABC-DEF-123"`) work everywhere. The CLI auto-detects which format you're using.
 4. **JSON output** — All read commands output JSON by default. Use `--human` on `list` for terminal-friendly tables. Use `--format text` on `read` for plain text.
 5. **Deleted notes excluded** — By default, deleted notes are filtered out. Pass `--include-deleted` to include them.
-6. **Automation permission** — Write commands require macOS Automation permission for Notes.app. Already granted on this machine.
+6. **Automation permission** — Write commands require macOS Automation permission for Notes.app. Grant access when prompted by macOS on first use.
 7. **AppleScript timeout** — Set to 120 seconds. Very large operations may still time out.
