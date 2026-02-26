@@ -1125,7 +1125,6 @@ function BrowserCard() {
     try {
       const result = await openBrowser()
       if (result.success) {
-        setFeedback({ type: 'success', message: 'Browser opened' })
         // Re-check status after a short delay for port 9222 to come up
         setTimeout(() => fetchStatus(), 3000)
       } else {
@@ -1151,13 +1150,13 @@ function BrowserCard() {
           <h3 className="text-sm font-medium text-parchment">Browser</h3>
           {!loading && (
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
-              isRunning
+              isConfigured && isRunning
                 ? 'text-emerald-600 bg-emerald-600/15'
                 : isConfigured
                   ? 'text-stone bg-stone/10'
                   : 'text-stone/50 bg-stone/5'
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'bg-emerald-600' : 'bg-stone/40'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${isConfigured && isRunning ? 'bg-emerald-600' : 'bg-stone/40'}`} />
               {!isConfigured ? 'Not set up' : isRunning ? 'Connected' : 'Ready'}
             </span>
           )}

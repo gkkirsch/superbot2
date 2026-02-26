@@ -1269,6 +1269,9 @@ app.post('/api/browser/open', async (_req, res) => {
       })
     })
 
+    // Bring Chrome to front
+    execFile('open', ['-a', 'Google Chrome'], { timeout: 5000 }, () => {})
+
     res.json({ success: true })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
