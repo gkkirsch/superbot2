@@ -4597,6 +4597,29 @@ try {
   imessageLastSentCount = 0
 }
 
+const IMESSAGE_IMAGE_RE = /((?:~\/|\/)[^\s]+\.(?:png|jpe?g|gif|webp))/gi
+
+function imessageExtractImagePaths(text) {
+  IMESSAGE_IMAGE_RE.lastIndex = 0
+  const paths = []
+  let match
+  while ((match = IMESSAGE_IMAGE_RE.exec(text)) !== null) {
+    paths.push(match[1])
+  }
+  IMESSAGE_IMAGE_RE.lastIndex = 0
+  return paths
+}
+
+function imessageStripImagePaths(text) {
+  IMESSAGE_IMAGE_RE.lastIndex = 0
+  return text.replace(IMESSAGE_IMAGE_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function imessageResolveImagePath(p) {
+  if (p.startsWith('~/')) return join(homedir(), p.slice(2))
+  return p
+}
+
 async function mirrorRepliesToImessage() {
   try {
     // Read config fresh each time
@@ -4619,15 +4642,48 @@ async function mirrorRepliesToImessage() {
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
-      // Truncate very long messages for iMessage (keep under 2000 chars)
-      const truncated = text.length > 2000 ? text.slice(0, 1997) + '...' : text
-
       // Send to user's phone number (not appleId — that would loop back internally)
       const recipient = config.imessage.phoneNumber || config.imessage.appleId
-      spawn('bash', [join(scriptsDir, 'send-imessage.sh'), recipient, truncated], {
-        stdio: 'ignore',
-        detached: true
-      }).unref()
+
+      // Check for image paths
+      const imagePaths = imessageExtractImagePaths(text)
+      const existingImages = []
+      for (const p of imagePaths) {
+        const resolved = imessageResolveImagePath(p)
+        try {
+          const s = await stat(resolved)
+          if (s.isFile()) existingImages.push(resolved)
+        } catch {
+          // file doesn't exist, skip
+        }
+      }
+
+      if (existingImages.length > 0) {
+        // Send text portion first (if any), then images as attachments
+        const textWithoutImages = imessageStripImagePaths(text)
+        if (textWithoutImages) {
+          const truncated = textWithoutImages.length > 2000 ? textWithoutImages.slice(0, 1997) + '...' : textWithoutImages
+          spawn('bash', [join(scriptsDir, 'send-imessage.sh'), recipient, truncated], {
+            stdio: 'ignore',
+            detached: true
+          }).unref()
+        }
+
+        // Send each image as a separate attachment
+        for (const imgPath of existingImages) {
+          spawn('bash', [join(scriptsDir, 'send-imessage-image.sh'), recipient, imgPath], {
+            stdio: 'ignore',
+            detached: true
+          }).unref()
+        }
+      } else {
+        // No images — send as text (original behavior)
+        const truncated = text.length > 2000 ? text.slice(0, 1997) + '...' : text
+        spawn('bash', [join(scriptsDir, 'send-imessage.sh'), recipient, truncated], {
+          stdio: 'ignore',
+          detached: true
+        }).unref()
+      }
     }
 
     imessageLastSentCount = orchestratorReplies.length

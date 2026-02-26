@@ -10,9 +10,9 @@
 // Handles /status, /escalations, /recent, /schedule, /todo, /help commands
 // Typing indicator while waiting for orchestrator reply
 
-import { readFile, writeFile, readdir, unlink } from 'node:fs/promises'
+import { readFile, writeFile, readdir, unlink, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 
@@ -87,6 +87,45 @@ async function saveConfigField(field, value) {
   await writeJsonFile(CONFIG_PATH, config)
 }
 
+// --- Image path detection ---
+
+const IMAGE_PATH_RE = /((?:~\/|\/)[^\s]+\.(?:png|jpe?g|gif|webp))/gi
+
+function extractImagePaths(text) {
+  IMAGE_PATH_RE.lastIndex = 0
+  const paths = []
+  let match
+  while ((match = IMAGE_PATH_RE.exec(text)) !== null) {
+    paths.push(match[1])
+  }
+  IMAGE_PATH_RE.lastIndex = 0
+  return paths
+}
+
+function stripImagePaths(text) {
+  IMAGE_PATH_RE.lastIndex = 0
+  return text.replace(IMAGE_PATH_RE, '').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+function resolveImagePath(p) {
+  if (p.startsWith('~/')) return join(homedir(), p.slice(2))
+  return p
+}
+
+async function filterExistingImages(paths) {
+  const existing = []
+  for (const p of paths) {
+    const resolved = resolveImagePath(p)
+    try {
+      const s = await stat(resolved)
+      if (s.isFile()) existing.push(resolved)
+    } catch {
+      // file doesn't exist, skip
+    }
+  }
+  return existing
+}
+
 // --- Telegram API ---
 
 async function tg(method, body) {
@@ -102,6 +141,79 @@ async function tg(method, body) {
     throw new Error(`Telegram API ${method} failed: ${json.description || 'unknown error'}`)
   }
   return json.result
+}
+
+async function tgMultipart(method, fields, files) {
+  const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`
+  const CRLF = Buffer.from('\r\n')
+  const buffers = []
+
+  // Add text fields
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null) continue
+    buffers.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+    ))
+  }
+
+  // Add file fields
+  for (const { field, filePath, filename } of files) {
+    const fileData = await readFile(filePath)
+    const name = filename || basename(filePath)
+    buffers.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+    ))
+    buffers.push(fileData)
+    buffers.push(CRLF)
+  }
+
+  // Closing boundary
+  buffers.push(Buffer.from(`--${boundary}--\r\n`))
+  const body = Buffer.concat(buffers)
+
+  const url = `${TELEGRAM_API}${botToken}/${method}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      'Content-Length': String(body.length),
+    },
+    body,
+  })
+  const json = await res.json()
+  if (!json.ok) {
+    throw new Error(`Telegram API ${method} (multipart) failed: ${json.description || 'unknown error'}`)
+  }
+  return json.result
+}
+
+async function sendPhoto(filePath, caption) {
+  if (!chatId) return null
+  const fields = {
+    chat_id: chatId,
+    ...(caption ? { caption, parse_mode: 'HTML' } : {}),
+  }
+  return tgMultipart('sendPhoto', fields, [{ field: 'photo', filePath }])
+}
+
+async function sendMediaGroup(filePaths, caption) {
+  if (!chatId) return null
+  // sendMediaGroup requires media as JSON array with attach:// references
+  // and the actual files as multipart fields
+  const media = filePaths.map((_, i) => ({
+    type: 'photo',
+    media: `attach://photo${i}`,
+    ...(i === 0 && caption ? { caption, parse_mode: 'HTML' } : {}),
+  }))
+  const fields = {
+    chat_id: chatId,
+    media: JSON.stringify(media),
+  }
+  const files = filePaths.map((filePath, i) => ({
+    field: `photo${i}`,
+    filePath,
+  }))
+  return tgMultipart('sendMediaGroup', fields, files)
 }
 
 async function sendMessage(text, opts = {}) {
@@ -775,30 +887,74 @@ async function checkForReplies() {
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
-      // Truncate very long messages for Telegram (4096 char limit)
-      const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
+      // Check for image paths in the message
+      const imagePaths = extractImagePaths(text)
+      const existingImages = imagePaths.length > 0 ? await filterExistingImages(imagePaths) : []
 
-      // Convert orchestrator markdown to Telegram-safe HTML
-      const html = markdownToTelegramHtml(truncated)
+      if (existingImages.length > 0) {
+        // Send images with text as caption
+        const textWithoutImages = stripImagePaths(text)
+        const truncatedCaption = textWithoutImages.length > 1024
+          ? textWithoutImages.slice(0, 1021) + '...'
+          : textWithoutImages
+        const captionHtml = truncatedCaption ? markdownToTelegramHtml(truncatedCaption) : ''
 
-      try {
-        await tg('sendMessage', {
-          chat_id: chatId,
-          text: html,
-          parse_mode: 'HTML',
-        })
-        log(`Sent reply to Telegram: ${truncated.slice(0, 60)}...`)
-      } catch (err) {
-        logError(`Failed to send reply to Telegram: ${err.message}`)
-        // Fallback: send as plain text if HTML parsing fails
+        try {
+          if (existingImages.length === 1) {
+            await sendPhoto(existingImages[0], captionHtml)
+            log(`Sent photo to Telegram: ${basename(existingImages[0])}`)
+          } else {
+            // sendMediaGroup for 2-10 images (Telegram limit)
+            const batch = existingImages.slice(0, 10)
+            await sendMediaGroup(batch, captionHtml)
+            log(`Sent ${batch.length} photos as album to Telegram`)
+          }
+
+          // If caption was truncated and there's significant remaining text, send the rest as a message
+          if (textWithoutImages.length > 1024) {
+            const remaining = textWithoutImages.slice(1024)
+            const truncated = remaining.length > 4000 ? remaining.slice(0, 3997) + '...' : remaining
+            const html = markdownToTelegramHtml(truncated)
+            try {
+              await tg('sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML' })
+            } catch {
+              await tg('sendMessage', { chat_id: chatId, text: truncated }).catch(() => {})
+            }
+          }
+        } catch (err) {
+          logError(`Failed to send photo(s) to Telegram: ${err.message}`)
+          // Fallback: send as text with paths
+          const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
+          try {
+            await tg('sendMessage', { chat_id: chatId, text: markdownToTelegramHtml(truncated), parse_mode: 'HTML' })
+          } catch {
+            await tg('sendMessage', { chat_id: chatId, text: truncated }).catch(() => {})
+          }
+        }
+      } else {
+        // No images — send as text (original behavior)
+        const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
+        const html = markdownToTelegramHtml(truncated)
+
         try {
           await tg('sendMessage', {
             chat_id: chatId,
-            text: truncated,
+            text: html,
+            parse_mode: 'HTML',
           })
-          log(`Sent reply as plain text fallback`)
-        } catch (fallbackErr) {
-          logError(`Fallback send also failed: ${fallbackErr.message}`)
+          log(`Sent reply to Telegram: ${truncated.slice(0, 60)}...`)
+        } catch (err) {
+          logError(`Failed to send reply to Telegram: ${err.message}`)
+          // Fallback: send as plain text if HTML parsing fails
+          try {
+            await tg('sendMessage', {
+              chat_id: chatId,
+              text: truncated,
+            })
+            log(`Sent reply as plain text fallback`)
+          } catch (fallbackErr) {
+            logError(`Fallback send also failed: ${fallbackErr.message}`)
+          }
         }
       }
     }
