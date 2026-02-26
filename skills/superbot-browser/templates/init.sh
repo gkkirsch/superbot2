@@ -29,6 +29,8 @@ cat > "$PROFILE_DIR/Preferences" << EOF
   "intl": { "selected_languages": "en-US,en" },
   "profile": {
     "name": "superbot2",
+    "avatar_index": 19,
+    "profile_highlight_color": -8635667,
     "default_content_setting_values": {
       "notifications": 2,
       "geolocation": 2,
@@ -37,7 +39,18 @@ cat > "$PROFILE_DIR/Preferences" << EOF
       "popups": 2
     }
   },
-  "translate": { "enabled": false }
+  "translate": { "enabled": false },
+  "browser": {
+    "theme": {
+      "user_color2": -7558172,
+      "color_variant2": 1
+    }
+  },
+  "extensions": {
+    "theme": {
+      "id": "user_color_theme_id"
+    }
+  }
 }
 EOF
 echo "✅ Preferences written."

@@ -1216,7 +1216,7 @@ app.post('/api/telegram/test', async (_req, res) => {
 
 app.get('/api/browser/status', async (_req, res) => {
   try {
-    const profileDir = join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome', 'superbot2')
+    const profileDir = join(homedir(), '.superbot2', 'browser', 'Default')
     const configured = existsSync(profileDir)
 
     let running = false
@@ -1239,30 +1239,16 @@ app.get('/api/browser/status', async (_req, res) => {
 
 app.post('/api/browser/setup', async (_req, res) => {
   try {
-    // Run setup script
-    const setupScript = join(SUPERBOT_DIR, 'scripts', 'setup-superbot-chrome.sh')
+    // Run init.sh from the superbot-browser skill templates
+    const initScript = join(SUPERBOT_DIR, '.claude', 'skills', 'superbot-browser', 'templates', 'init.sh')
     const setupOutput = await new Promise((resolve, reject) => {
-      execFile('bash', [setupScript], { timeout: 30000 }, (err, stdout, stderr) => {
+      execFile('bash', [initScript], { timeout: 30000 }, (err, stdout, stderr) => {
         if (err) reject(new Error(stderr || err.message))
         else resolve(stdout)
       })
     })
 
-    // Install agent-browser for CDP automation
-    let agentBrowserOutput = ''
-    try {
-      agentBrowserOutput = await new Promise((resolve, reject) => {
-        execFile('npm', ['install', '-g', 'agent-browser'], { timeout: 60000 }, (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || err.message))
-          else resolve(stdout)
-        })
-      })
-    } catch (abErr) {
-      // Non-fatal — agent-browser can still be used via npx
-      agentBrowserOutput = `Warning: agent-browser install failed (${abErr.message}). It will be downloaded on first use via npx.`
-    }
-
-    res.json({ success: true, output: setupOutput + '\n' + agentBrowserOutput })
+    res.json({ success: true, output: setupOutput })
   } catch (err) {
     res.status(500).json({ success: false, error: err.message })
   }
@@ -1270,9 +1256,10 @@ app.post('/api/browser/setup', async (_req, res) => {
 
 app.post('/api/browser/open', async (_req, res) => {
   try {
-    const openScript = join(SUPERBOT_DIR, 'scripts', 'open-superbot-chrome.sh')
+    // Run setup.sh from the superbot-browser skill templates (starts Chrome with CDP if not already running)
+    const openScript = join(SUPERBOT_DIR, '.claude', 'skills', 'superbot-browser', 'templates', 'setup.sh')
     if (!existsSync(openScript)) {
-      return res.status(404).json({ success: false, error: 'open-superbot-chrome.sh not found. Run setup first.' })
+      return res.status(404).json({ success: false, error: 'setup.sh not found. Run setup first.' })
     }
 
     await new Promise((resolve, reject) => {

@@ -1158,13 +1158,13 @@ function BrowserCard() {
                   : 'text-stone/50 bg-stone/5'
             }`}>
               <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'bg-emerald-600' : 'bg-stone/40'}`} />
-              {!isConfigured ? 'Not set up' : isRunning ? 'Running' : 'Ready'}
+              {!isConfigured ? 'Not set up' : isRunning ? 'Connected' : 'Ready'}
             </span>
           )}
         </div>
         <p className="text-xs text-stone leading-relaxed mb-3">
           {isConfigured
-            ? 'Dedicated Chrome profile for browser automation via CDP.'
+            ? 'Dedicated Chrome profile for browser automation.'
             : 'Set up a dedicated Chrome profile for automated browsing.'}
         </p>
         {feedback && (
@@ -1178,19 +1178,15 @@ function BrowserCard() {
           <button
             onClick={handleSetup}
             disabled={actionLoading !== null}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600/15 border border-emerald-600/25 text-emerald-600 hover:bg-emerald-600/25 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sand/15 border border-sand/25 text-sand hover:bg-sand/25 transition-colors disabled:opacity-50"
           >
-            {actionLoading === 'setup' ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Setup <ArrowRight className="h-3 w-3" /></>}
+            {actionLoading === 'setup' ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Configure <ArrowRight className="h-3 w-3" /></>}
           </button>
-        ) : isRunning ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600/70">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" /> CDP on port 9222
-          </span>
         ) : (
           <button
             onClick={handleOpen}
             disabled={actionLoading !== null}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600/15 border border-emerald-600/25 text-emerald-600 hover:bg-emerald-600/25 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-moss/15 border border-moss/25 text-moss hover:bg-moss/25 transition-colors disabled:opacity-50"
           >
             {actionLoading === 'open' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open Browser'}
           </button>
