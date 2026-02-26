@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
-import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare, Send, Globe } from 'lucide-react'
+import { Blocks, Sparkles, Bot, Webhook, Puzzle, Download, Trash2, Loader2, X, Terminal, BookOpen, Cpu, FileText, ChevronRight, Search, Plus, Store, RefreshCw, Key, Check, AlertTriangle, Wrench, ArrowRight, Cable, MessageSquare, Send, Chrome } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { usePlugins, useMarketplaces, usePluginCredentials } from '@/hooks/useSpaces'
 import { installPlugin, uninstallPlugin, fetchPluginDetail, fetchPluginFile, addMarketplace, removeMarketplace, refreshMarketplaces, savePluginCredential, deletePluginCredential, installPluginBin, getIMessageStatus, startIMessageWatcher, stopIMessageWatcher, getTelegramStatus, startTelegramWatcher, stopTelegramWatcher, getBrowserStatus, setupBrowser, openBrowser } from '@/lib/api'
@@ -1162,8 +1162,8 @@ function BrowserCard() {
 
   return (
     <div className="rounded-xl border border-border-custom bg-surface/50 p-5 flex items-start gap-4 hover:border-sand/20 transition-colors">
-      <div className={`rounded-lg p-2.5 shrink-0 ${isRunning ? 'bg-sky-400/10' : 'bg-surface'}`}>
-        <Globe className={`h-5 w-5 ${isRunning ? 'text-sky-400' : 'text-stone/60'}`} />
+      <div className={`rounded-lg p-2.5 shrink-0 ${isRunning ? 'bg-emerald-600/10' : 'bg-surface'}`}>
+        <Chrome className={`h-5 w-5 ${isRunning ? 'text-emerald-600' : 'text-stone/60'}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
@@ -1171,12 +1171,12 @@ function BrowserCard() {
           {!loading && (
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
               isRunning
-                ? 'text-sky-400 bg-sky-400/15'
+                ? 'text-emerald-600 bg-emerald-600/15'
                 : isConfigured
                   ? 'text-stone bg-stone/10'
                   : 'text-stone/50 bg-stone/5'
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'bg-sky-400' : 'bg-stone/40'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${isRunning ? 'bg-emerald-600' : 'bg-stone/40'}`} />
               {!isConfigured ? 'Not set up' : isRunning ? 'Running' : 'Ready'}
             </span>
           )}
@@ -1197,19 +1197,19 @@ function BrowserCard() {
           <button
             onClick={handleSetup}
             disabled={actionLoading !== null}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sky-400/15 border border-sky-400/25 text-sky-400 hover:bg-sky-400/25 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600/15 border border-emerald-600/25 text-emerald-600 hover:bg-emerald-600/25 transition-colors disabled:opacity-50"
           >
             {actionLoading === 'setup' ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Setup <ArrowRight className="h-3 w-3" /></>}
           </button>
         ) : isRunning ? (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-sky-400/70">
-            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" /> CDP on port 9222
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600/70">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" /> CDP on port 9222
           </span>
         ) : (
           <button
             onClick={handleOpen}
             disabled={actionLoading !== null}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-sky-400/15 border border-sky-400/25 text-sky-400 hover:bg-sky-400/25 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-emerald-600/15 border border-emerald-600/25 text-emerald-600 hover:bg-emerald-600/25 transition-colors disabled:opacity-50"
           >
             {actionLoading === 'open' ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Open Browser'}
           </button>
