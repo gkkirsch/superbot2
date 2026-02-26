@@ -34,10 +34,13 @@ else
   echo "   Generate it first with nano-banana-pro, or set picture manually later."
 fi
 
+# --- Ensure downloads directory exists ---
+DOWNLOADS_DIR="$HOME/.superbot2/downloads"
+mkdir -p "$DOWNLOADS_DIR"
+echo "✅ Downloads directory ready: $DOWNLOADS_DIR"
+
 # --- Write profile Preferences ---
-# Snapshots the key settings from the live superbot2 profile so they survive
-# a profile reset: theme color, devtools dock, language, spellcheck, avatar.
-cat > "$PROFILE_DIR/Preferences" << 'EOF'
+cat > "$PROFILE_DIR/Preferences" << EOF
 {
   "browser": {
     "theme": {
@@ -52,23 +55,45 @@ cat > "$PROFILE_DIR/Preferences" << 'EOF'
       "top": 55
     }
   },
+  "credentials_enable_service": false,
+  "credentials_enable_autosignin": false,
   "devtools": {
     "preferences": {
       "currentDockState": "\"right\"",
       "releaseNoteVersionSeen": "145"
     }
   },
+  "download": {
+    "prompt_for_download": false,
+    "default_directory": "$DOWNLOADS_DIR"
+  },
   "intl": {
     "selected_languages": "en-US,en"
-  },
-  "spellcheck": {
-    "dictionaries": ["en-US"]
   },
   "profile": {
     "name": "superbot2",
     "avatar_index": 46,
     "using_default_avatar": false,
-    "using_gaia_avatar": false
+    "using_gaia_avatar": false,
+    "default_content_setting_values": {
+      "notifications": 2,
+      "geolocation": 2,
+      "media_stream_camera": 2,
+      "media_stream_mic": 2,
+      "popups": 2
+    }
+  },
+  "session": {
+    "restore_on_startup": 5
+  },
+  "spellcheck": {
+    "dictionaries": ["en-US"]
+  },
+  "translate": {
+    "enabled": false
+  },
+  "user_experience_metrics": {
+    "reporting_enabled": false
   }
 }
 EOF
