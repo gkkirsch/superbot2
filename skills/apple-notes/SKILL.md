@@ -8,16 +8,17 @@ description: >
   Triggers: "apple notes", "create a note", "read my notes", "search notes", "add to note",
   "list notes", "note attachments", "checklists", "move note", "delete note".
   NOT for: iCloud web API, third-party note apps, iOS-only features.
+allowed-tools: Bash(osascript:*), Bash(~/.superbot2/.claude/skills/apple-notes/bin/notes-cli:*)
 metadata:
   superbot:
     emoji: "🍎"
     requires:
       bins: ["notes-cli"]
     install:
-      - id: script
+      - id: npm-install
         kind: script
-        script: "templates/install.sh"
-        label: "Install notes-cli (requires Python 3.9+)"
+        script: "setup.sh"
+        label: "Install notes-cli (requires Node.js)"
 ---
 
 # Apple Notes CLI
@@ -27,44 +28,31 @@ Read and write Apple Notes from the command line. Used by superbot2 agents to in
 ## Architecture
 
 - **Read layer**: Direct SQLite + protobuf parsing. Opens `NoteStore.sqlite` in read-only mode, decompresses gzipped protobuf blobs, extracts text, formatting, checklists, and attachment metadata. Fast and reliable.
-- **Write layer**: AppleScript via `osascript`. Creates/modifies notes through Notes.app for CloudKit-safe syncing. Slower but required — never write directly to SQLite.
+- **Write layer**: AppleScript via `osascript`. Creates/modifies notes through Notes.app for CloudKit-safe syncing. Slower but required -- never write directly to SQLite.
 
 ## Setup
 
-**Requirements**: macOS only. Python 3.9+. `osascript` is built into macOS.
-
-### Install
-
-Run the bundled install script:
+Run setup once to install Node.js dependencies:
 
 ```bash
-bash skills/apple-notes/templates/install.sh
+cd ~/.superbot2/.claude/skills/apple-notes && npm install
 ```
-
-This creates a Python venv at `~/.superbot2/spaces/apple-notes/app/.venv/`, installs dependencies (`click`), and sets up the `notes-cli` executable wrapper.
-
-### Verify
-
-```bash
-~/.superbot2/spaces/apple-notes/app/notes-cli folders
-```
-
-The CLI tool is installed at `~/.superbot2/spaces/apple-notes/app/notes-cli`. Auto-activates its venv on run — just call the binary directly.
-
-- All output is JSON by default (for agent consumption)
-- Errors go to stderr as `{"error": "message"}`
 
 For all examples below, use the full path:
 
 ```bash
-NOTES=~/.superbot2/spaces/apple-notes/app/notes-cli
+NOTES=~/.superbot2/.claude/skills/apple-notes/bin/notes-cli
 ```
+
+- Node.js CLI with better-sqlite3, protobufjs, and commander
+- All output is JSON by default (for agent consumption)
+- Errors go to stderr as `{"error": "message"}`
 
 ## Command Reference
 
 ### Reading Commands
 
-#### `list` — List notes
+#### `list` -- List notes
 
 ```bash
 $NOTES list                          # All notes (JSON)
@@ -75,7 +63,7 @@ $NOTES list --pinned                 # Pinned notes only
 $NOTES list --include-deleted        # Include Recently Deleted
 ```
 
-#### `read` — Read a note's content
+#### `read` -- Read a note's content
 
 Accepts both integer Z_PK and UUID identifiers (auto-detected).
 
@@ -87,7 +75,7 @@ $NOTES read 42 --format markdown     # Markdown
 $NOTES read 42 --format html         # HTML
 ```
 
-#### `search` — Search notes by text
+#### `search` -- Search notes by text
 
 ```bash
 $NOTES search "meeting agenda"                    # Search all notes
@@ -95,13 +83,13 @@ $NOTES search "project" --folder "Work"           # Search within folder
 $NOTES search "old stuff" --include-deleted        # Include deleted notes
 ```
 
-#### `folders` — List all folders
+#### `folders` -- List all folders
 
 ```bash
 $NOTES folders
 ```
 
-#### `attachments` — List attachments for a note
+#### `attachments` -- List attachments for a note
 
 ```bash
 $NOTES attachments 42               # List all attachments on note 42
@@ -109,14 +97,14 @@ $NOTES attachments 42               # List all attachments on note 42
 
 Returns type (image, audio, PDF, etc.), filename, and identifier for each attachment.
 
-#### `extract` — Extract an attachment to disk
+#### `extract` -- Extract an attachment to disk
 
 ```bash
 $NOTES extract "ATTACHMENT-UUID"                      # Extract to current directory
 $NOTES extract "ATTACHMENT-UUID" --output /tmp/photo.jpg   # Extract to specific path
 ```
 
-#### `checklists` — Show checklist items with completion status
+#### `checklists` -- Show checklist items with completion status
 
 ```bash
 $NOTES checklists 42                # Show all checklist items for note 42
@@ -126,9 +114,9 @@ Returns each item's text and done/not-done state. Items are grouped by checklist
 
 ### Writing Commands
 
-All write commands use AppleScript and require macOS Automation permission for Notes.app. Grant access when prompted by macOS on first use.
+All write commands use AppleScript and require macOS Automation permission for Notes.app. If you get a permission error, open System Settings > Privacy & Security > Automation and enable Notes for your terminal app.
 
-#### `create` — Create a new note
+#### `create` -- Create a new note
 
 ```bash
 $NOTES create --folder "Work" --title "Meeting Notes" --body "Discussion points for Monday"
@@ -138,26 +126,26 @@ $NOTES create --folder "Personal" --title "Ideas" --body "# Big Idea\n\n- Point 
 
 The `--format` flag controls how the body is interpreted: `text` (default), `html`, or `markdown`.
 
-#### `append` — Append content to an existing note
+#### `append` -- Append content to an existing note
 
 ```bash
 $NOTES append 42 --body "New paragraph added at the bottom"
 $NOTES append 42 --body "<p><b>Important update</b></p>" --format html
 ```
 
-#### `move` — Move a note to a different folder
+#### `move` -- Move a note to a different folder
 
 ```bash
 $NOTES move 42 --folder "Archive"
 ```
 
-#### `delete` — Delete a note (moves to Recently Deleted)
+#### `delete` -- Delete a note (moves to Recently Deleted)
 
 ```bash
 $NOTES delete 42
 ```
 
-The note is not permanently destroyed — it moves to Recently Deleted where Apple auto-purges it after 30 days.
+The note is not permanently destroyed -- it moves to Recently Deleted where Apple auto-purges it after 30 days.
 
 ## Rich Text via HTML Body
 
@@ -187,14 +175,14 @@ Mixed inline formatting works: `<p><b>Bold</b> and <i>italic</i> in one line</p>
 
 ### What Does NOT Work
 
-- **Checklists** — `<input type="checkbox">` does NOT create native checklists. Renders as text without checkbox functionality. Native checklists require protobuf-level checklist UUIDs and cannot be created via HTML.
-- **Block quotes** — `<blockquote>` renders as plain text with no indentation.
-- **Background highlights** — `background-color` style has no visible effect.
-- **Small font sizes** — `font-size: 12px` and below are not visibly different from default.
-- **Images/attachments** — Cannot be added programmatically. Read/extract only.
-- **Audio recordings** — Read-only.
-- **Note links** — Inter-note links (links from one note to another) are not supported via HTML.
-- **Drawings** — Read-only.
+- **Checklists** -- `<input type="checkbox">` does NOT create native checklists. Renders as text without checkbox functionality. Native checklists require protobuf-level checklist UUIDs and cannot be created via HTML.
+- **Block quotes** -- `<blockquote>` renders as plain text with no indentation.
+- **Background highlights** -- `background-color` style has no visible effect.
+- **Small font sizes** -- `font-size: 12px` and below are not visibly different from default.
+- **Images/attachments** -- Cannot be added programmatically. Read/extract only.
+- **Audio recordings** -- Read-only.
+- **Note links** -- Inter-note links (links from one note to another) are not supported via HTML.
+- **Drawings** -- Read-only.
 
 ## Common Patterns
 
@@ -205,8 +193,8 @@ $NOTES create --folder "Work" --title "Sprint Review" --format html --body "$(ca
 <h1>Sprint Review</h1>
 <h2>Completed</h2>
 <ul>
-  <li><b>Auth module</b> — OAuth2 flow working</li>
-  <li><i>Database migration</i> — schema v3 deployed</li>
+  <li><b>Auth module</b> -- OAuth2 flow working</li>
+  <li><i>Database migration</i> -- schema v3 deployed</li>
 </ul>
 <h2>Metrics</h2>
 <table>
@@ -224,7 +212,7 @@ HTML
 # Find a note by content
 RESULT=$($NOTES search "grocery list")
 # Parse the ID from JSON, then read it
-NOTE_ID=$(echo "$RESULT" | python3 -c "import json,sys; notes=json.load(sys.stdin); print(notes[0]['id'])")
+NOTE_ID=$(echo "$RESULT" | node -e "process.stdin.resume(); let d=''; process.stdin.on('data',c=>d+=c); process.stdin.on('end',()=>console.log(JSON.parse(d)[0].id))")
 $NOTES read "$NOTE_ID" --format text
 ```
 
@@ -251,7 +239,7 @@ When the CLI's create/append isn't flexible enough (e.g., replacing the entire b
 osascript <<'APPLESCRIPT'
 tell application "Notes"
     set theNote to first note of folder "Work" whose name is "Status Dashboard"
-    set body of theNote to "<h1>Status Dashboard</h1><p><b>Last updated:</b> 2025-01-15</p><table><tr><td>Service</td><td>Status</td></tr><tr><td>API</td><td><span style=\"color: green;\">UP</span></td></tr><tr><td>DB</td><td><span style=\"color: green;\">UP</span></td></tr></table>"
+    set body of theNote to "<h1>Status Dashboard</h1><p><b>Last updated:</b> " & (current date as string) & "</p><table><tr><td>Service</td><td>Status</td></tr><tr><td>API</td><td><span style=\"color: green;\">UP</span></td></tr><tr><td>DB</td><td><span style=\"color: green;\">UP</span></td></tr></table>"
 end tell
 APPLESCRIPT
 ```
@@ -260,10 +248,10 @@ APPLESCRIPT
 
 ## Gotchas
 
-1. **AppleScript is slow** — Write operations can take 30+ seconds. This is inherent to Notes.app automation. Only use AppleScript for writes, never for reads.
-2. **First `<h1>` becomes the title** — When creating via HTML, the first `<h1>` tag sets the note's `ZTITLE1`.
-3. **Note IDs** — Both integer Z_PK (e.g., `42`) and UUID strings (e.g., `"ABC-DEF-123"`) work everywhere. The CLI auto-detects which format you're using.
-4. **JSON output** — All read commands output JSON by default. Use `--human` on `list` for terminal-friendly tables. Use `--format text` on `read` for plain text.
-5. **Deleted notes excluded** — By default, deleted notes are filtered out. Pass `--include-deleted` to include them.
-6. **Automation permission** — Write commands require macOS Automation permission for Notes.app. Grant access when prompted by macOS on first use.
-7. **AppleScript timeout** — Set to 120 seconds. Very large operations may still time out.
+1. **AppleScript is slow** -- Write operations can take 30+ seconds. This is inherent to Notes.app automation. Only use AppleScript for writes, never for reads.
+2. **First `<h1>` becomes the title** -- When creating via HTML, the first `<h1>` tag sets the note's `ZTITLE1`.
+3. **Note IDs** -- Both integer Z_PK (e.g., `42`) and UUID strings (e.g., `"ABC-DEF-123"`) work everywhere. The CLI auto-detects which format you're using.
+4. **JSON output** -- All read commands output JSON by default. Use `--human` on `list` for terminal-friendly tables. Use `--format text` on `read` for plain text.
+5. **Deleted notes excluded** -- By default, deleted notes are filtered out. Pass `--include-deleted` to include them.
+6. **Automation permission** -- Write commands require macOS Automation permission for Notes.app. If you get a permission error, open System Settings > Privacy & Security > Automation and enable Notes for your terminal app.
+7. **AppleScript timeout** -- Set to 120 seconds. Very large operations may still time out.
