@@ -2,7 +2,7 @@
 name: superbot-browser
 description: >
   Browser automation using the superbot2 Chrome profile via CDP.
-  The superbot2 profile is a real Chrome profile with persistent logins (Cloudflare, Facebook, Instagram, X, Google, etc.).
+  The superbot2 profile is a real Chrome profile with persistent authenticated sessions.
   Use when you need to automate web interactions that require authenticated sessions.
   Triggers: "automate browser", "navigate to", "fill out form on", "click button on",
   "extract data from website", "take screenshot of page", "browser", "agent-browser".
@@ -108,7 +108,6 @@ agent-browser --cdp 9222 screenshot --full ~/.superbot2/uploads/shot.png
 | Setup script | `~/.superbot2/scripts/setup-superbot-chrome.sh` |
 | Open script | `~/.superbot2/scripts/open-superbot-chrome.sh` |
 | CDP port | `9222` |
-| Accounts logged in | Cloudflare (ibekidkirsch@gmail.com), Facebook (Tami Browning), Instagram (Tami Browning), X |
 
 ## Gotchas
 
