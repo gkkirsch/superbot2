@@ -1,80 +1,53 @@
 # Troubleshooting
 
-## "No page found. Make sure the app has loaded content."
+## Profile not persisting sessions
 
-**Symptom**: Any agent-browser command fails with this error.
+**Symptom**: You log in with `--headed`, but next time you run a command the sessions are gone.
 
-**Cause**: Chrome's CDP endpoint only exposes extension service workers by default — no page targets exist. Agent-browser requires at least one page target.
+**Cause**: The `AGENT_BROWSER_PROFILE` env var is not set, so agent-browser is using a temporary profile.
 
-**Fix**: Create a tab first via the CDP HTTP API:
+**Fix**: Ensure the env var is set in your shell:
 ```bash
-curl -s -X PUT "http://localhost:9222/json/new?https://example.com"
-sleep 3
-npx agent-browser --cdp 9222 snapshot -i
-```
-
-**Diagnostic**: Check what targets exist:
-```bash
-curl -s http://localhost:9222/json/list | python3 -c "import json,sys; [print(f'{t[\"type\"]}: {t[\"title\"][:80]}') for t in json.load(sys.stdin)]"
-```
-
-If you only see `service_worker` entries and no `page` entries, you need to create a tab.
-
----
-
-## "Using unsafe HTTP verb GET to invoke /json/new"
-
-**Symptom**: `curl "http://localhost:9222/json/new?URL"` returns this error.
-
-**Cause**: The `/json/new` endpoint requires the PUT HTTP method.
-
-**Fix**: Add `-X PUT`:
-```bash
-curl -s -X PUT "http://localhost:9222/json/new?https://example.com"
-```
-
----
-
-## Chrome not listening on port 9222
-
-**Symptom**: `lsof -i :9222` returns nothing. Commands fail to connect.
-
-**Cause**: Chrome was not launched with `--remote-debugging-port=9222`.
-
-**Fix**: Launch the superbot2 Chrome profile (it includes `--remote-debugging-port=9222`):
-```bash
-# Launch superbot2 profile with CDP
-bash ~/.superbot2/scripts/open-superbot-chrome.sh
-sleep 3
+echo 'export AGENT_BROWSER_PROFILE="$HOME/.superbot2/browser/profile"' >> ~/.zshrc
+source ~/.zshrc
 
 # Verify
-lsof -i :9222
+echo $AGENT_BROWSER_PROFILE
 ```
 
-**Note**: The superbot2 profile automatically enables CDP on port 9222. If the user has Chrome running without CDP, they don't need to quit it — the superbot2 profile opens alongside it.
+Or pass `--profile` explicitly on every command:
+```bash
+agent-browser --profile ~/.superbot2/browser/profile open "https://example.com"
+```
 
 ---
 
-## "Element @eN is blocked by another element (likely a modal or overlay)"
+## Browser fails to launch
 
-**Symptom**: `click @eN` fails because a notification toast, cookie banner, or modal is covering the target element.
+**Symptom**: Commands hang or error with "browser failed to launch" or similar.
 
-**Cause**: An overlay element sits on top of the element you're trying to click.
+**Possible causes**:
+1. Chromium not installed (first run)
+2. Profile directory corrupted
+3. Another agent-browser process has the profile locked
 
-**Fix (option 1)**: Dismiss the overlay:
+**Fix (install Chromium)**:
 ```bash
-npx agent-browser --cdp 9222 snapshot -i
-# Find the dismiss/close button in the snapshot
-npx agent-browser --cdp 9222 click @e30  # Close/Dismiss button
-npx agent-browser --cdp 9222 wait 1000
-npx agent-browser --cdp 9222 snapshot -i  # Must re-snapshot — refs are stale
+agent-browser install
 ```
 
-**Fix (option 2)**: Navigate directly via URL to bypass the overlay:
+**Fix (corrupted profile)**: Reset the profile:
 ```bash
-npx agent-browser --cdp 9222 open "https://app.example.com/target-page"
-npx agent-browser --cdp 9222 wait 3000
-npx agent-browser --cdp 9222 snapshot -i
+rm -rf ~/.superbot2/browser/profile
+# Next command will create a fresh profile
+agent-browser --headed open "https://accounts.google.com"
+# Log in again — sessions will persist in the new profile
+```
+
+**Fix (locked profile)**: Check for running processes:
+```bash
+pgrep -f "chromium|chrome" | head -5
+# Kill orphaned browser processes if needed
 ```
 
 ---
@@ -87,13 +60,34 @@ npx agent-browser --cdp 9222 snapshot -i
 
 **Fix**: Always re-snapshot after any action that changes the page:
 ```bash
-npx agent-browser --cdp 9222 click @e5       # This navigates
-npx agent-browser --cdp 9222 wait 3000
-npx agent-browser --cdp 9222 snapshot -i      # Get fresh refs
-npx agent-browser --cdp 9222 click @e1        # Use new refs
+agent-browser click @e5       # This navigates
+agent-browser wait 3000
+agent-browser snapshot -i      # Get fresh refs
+agent-browser click @e1        # Use new refs
 ```
 
 **Rule of thumb**: If in doubt, snapshot again.
+
+---
+
+## "Element is blocked by another element"
+
+**Symptom**: `click @eN` fails because a notification toast, cookie banner, or modal is covering the target element.
+
+**Fix (option 1)**: Dismiss the overlay:
+```bash
+agent-browser snapshot -i
+agent-browser click @e30  # Close/Dismiss button
+agent-browser wait 1000
+agent-browser snapshot -i  # Must re-snapshot — refs are stale
+```
+
+**Fix (option 2)**: Navigate directly via URL to bypass the overlay:
+```bash
+agent-browser open "https://app.example.com/target-page"
+agent-browser wait 3000
+agent-browser snapshot -i
+```
 
 ---
 
@@ -105,12 +99,12 @@ npx agent-browser --cdp 9222 click @e1        # Use new refs
 
 **Fix**: Use a fixed duration wait instead:
 ```bash
-# Instead of this (times out on GCP, Gmail, etc.)
-npx agent-browser --cdp 9222 wait --load networkidle
+# Instead of this (times out on GCP, Gmail, Facebook, etc.)
+agent-browser wait --load networkidle
 
 # Use this
-npx agent-browser --cdp 9222 wait 3000   # 3 seconds for most pages
-npx agent-browser --cdp 9222 wait 5000   # 5 seconds for heavy pages (GCP project creation, API enabling)
+agent-browser wait 3000   # 3 seconds for most pages
+agent-browser wait 5000   # 5 seconds for heavy pages
 ```
 
 ---
@@ -119,83 +113,88 @@ npx agent-browser --cdp 9222 wait 5000   # 5 seconds for heavy pages (GCP projec
 
 **Symptom**: `tab close` errors because it's the last tab.
 
-**Cause**: Chrome doesn't allow closing the last tab via CDP.
-
-**Fix**: Don't close the last tab. Leave it open or let the user close it manually. If you created a tab via `curl -X PUT`, you can close it by ID only if other tabs exist:
+**Fix**: Open a new tab first if you need to close the current one:
 ```bash
-# Close by tab ID (only if not the last tab)
-curl -s -X PUT "http://localhost:9222/json/close/TAB_ID"
+agent-browser tab new
+agent-browser tab 1
+agent-browser tab close    # Now safe — tab 2 still exists
 ```
 
 ---
 
-## Agent-browser launches a separate browser
+## Commands are slow on first run
 
-**Symptom**: A new browser window opens instead of connecting to the superbot2 Chrome profile. The cookies and sessions are not available.
+**Symptom**: The first `agent-browser` command takes a long time.
 
-**Cause**: You forgot the `--cdp 9222` flag. Without it, agent-browser launches its own Playwright-managed browser.
+**Cause**: npx is downloading agent-browser for the first time, or Chromium is being downloaded for the profile.
 
-**Fix**: Add `--cdp 9222` to every command:
+**Fix**: This is normal for the first run. To pre-install:
 ```bash
-# Wrong — launches separate browser
-npx agent-browser snapshot -i
-
-# Correct — connects to superbot2 Chrome profile
-npx agent-browser --cdp 9222 snapshot -i
+npm install -g agent-browser
+agent-browser install
 ```
 
 ---
 
-## Port 9222 shows "teamcoherence" in lsof
+## Screenshot is blank or shows wrong page
 
-**Symptom**: `lsof -i :9222` shows the service name as "teamcoherence" instead of something Chrome-related.
-
-**Cause**: Port 9222 is registered as "teamcoherence" in the IANA service name registry. This is normal — it's still Chrome's remote debugging port.
-
-**Not a problem**: This is expected. The connection will work fine.
-
----
-
-## Connection refused / timeout
-
-**Symptom**: `curl http://localhost:9222/json/list` fails with connection refused.
-
-**Possible causes**:
-1. Chrome is not running
-2. Chrome was launched without `--remote-debugging-port=9222`
-3. Another process is using port 9222
-
-**Diagnostic**:
-```bash
-# Check what's on port 9222
-lsof -i :9222
-
-# Check if Chrome is running at all
-pgrep -l "Google Chrome"
-
-# Check Chrome's launch arguments
-ps aux | grep "Google Chrome" | grep remote-debugging
-```
-
----
-
-## npx agent-browser hangs or is slow
-
-**Symptom**: Commands take a long time or hang indefinitely.
-
-**Possible causes**:
-1. npx downloading agent-browser for the first time
-2. Page is still loading
-3. Chrome is unresponsive
+**Symptom**: Screenshot shows a blank page or unexpected content.
 
 **Fix**:
 ```bash
-# First run: npx downloads the package — this is normal, wait for it
-# Subsequent runs should be fast
+# Wait for content to load
+agent-browser wait 3000
+agent-browser screenshot ~/.superbot2/uploads/debug.png
 
-# If hanging, try with a timeout
-timeout 30 npx agent-browser --cdp 9222 snapshot -i
+# Check which tab you're on
+agent-browser tab list
+agent-browser get url
+agent-browser get title
+```
 
-# Check if Chrome is responsive
-curl -s http://localhost:9222/json/version
+---
+
+## JavaScript eval returns undefined
+
+**Symptom**: `agent-browser eval '...'` returns nothing.
+
+**Cause**: Shell quoting mangled the JavaScript.
+
+**Fix**: Use `--stdin` for anything beyond simple expressions:
+```bash
+agent-browser eval --stdin <<'EVALEOF'
+JSON.stringify({
+  title: document.title,
+  url: window.location.href,
+  links: document.querySelectorAll("a").length
+})
+EVALEOF
+```
+
+---
+
+## Debugging tips
+
+When automation isn't working as expected:
+
+```bash
+# 1. Use --headed to see what's happening
+agent-browser --headed open "https://example.com"
+
+# 2. Take a screenshot
+agent-browser screenshot /tmp/debug.png
+
+# 3. Check console for errors
+agent-browser errors
+
+# 4. Get current URL and title
+agent-browser get url
+agent-browser get title
+
+# 5. Full page text dump
+agent-browser get text body > /tmp/page-dump.txt
+
+# 6. Highlight an element to verify it's the right one
+agent-browser highlight @e1
+agent-browser screenshot /tmp/highlighted.png
 ```
