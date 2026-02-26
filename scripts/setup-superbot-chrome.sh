@@ -103,7 +103,7 @@ cat > "$PROFILE_DIR/Preferences" << EOF
   },
   "session": {
     "restore_on_startup": 4,
-    "startup_urls": ["https://superbot2.com"]
+    "startup_urls": ["https://superbot2.com/"]
   },
   "spellcheck": {
     "dictionaries": ["en-US"]
@@ -117,6 +117,19 @@ cat > "$PROFILE_DIR/Preferences" << EOF
 }
 EOF
 echo "✅ Profile Preferences written."
+
+# --- Write Secure Preferences (startup URLs must go here to survive Chrome's reset) ---
+# Chrome resets session.restore_on_startup/startup_urls in Preferences as a
+# malware protection measure. The authoritative copy lives in Secure Preferences.
+cat > "$PROFILE_DIR/Secure Preferences" << EOF
+{
+  "session": {
+    "restore_on_startup": 4,
+    "startup_urls": ["https://superbot2.com/"]
+  }
+}
+EOF
+echo "✅ Secure Preferences written (startup URL: superbot2.com)."
 
 # --- Update Local State (adds profile to Chrome's known profiles) ---
 python3 << PYEOF
