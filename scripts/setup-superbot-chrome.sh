@@ -91,7 +91,8 @@ cat > "$PROFILE_DIR/Preferences" << EOF
     "name": "superbot2",
     "avatar_index": 46,
     "using_default_avatar": false,
-    "using_gaia_avatar": false,
+    "using_gaia_avatar": true,
+    "gaia_picture_file_name": "Google Profile Picture.png",
     "default_content_setting_values": {
       "notifications": 2,
       "geolocation": 2,
@@ -134,16 +135,17 @@ if 'info_cache' not in state['profile']:
 # Add or update the superbot2 entry
 state['profile']['info_cache']['$PROFILE_NAME'] = {
     "name": "superbot2",
-    "avatar_icon": "chrome://theme/IDR_PROFILE_AVATAR_26",
-    "default_avatar_fill_color": -14277082,
-    "default_avatar_stroke_color": -1,
+    "avatar_icon": "chrome://theme/IDR_PROFILE_AVATAR_46",
+    "default_avatar_fill_color": -13559528,
+    "default_avatar_stroke_color": -1655365,
     "gaia_picture_file_name": "Google Profile Picture.png",
     "is_consented_primary_account": False,
     "is_ephemeral": False,
     "is_managed": 0,
     "is_using_default_avatar": False,
     "is_using_default_name": False,
-    "is_using_new_placeholder_avatar_icon": False
+    "is_using_new_placeholder_avatar_icon": False,
+    "use_gaia_picture": True
 }
 
 with open(local_state_path, 'w') as f:
