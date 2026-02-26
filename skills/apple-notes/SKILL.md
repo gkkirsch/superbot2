@@ -8,6 +8,16 @@ description: >
   Triggers: "apple notes", "create a note", "read my notes", "search notes", "add to note",
   "list notes", "note attachments", "checklists", "move note", "delete note".
   NOT for: iCloud web API, third-party note apps, iOS-only features.
+metadata:
+  superbot:
+    emoji: "🍎"
+    requires:
+      bins: ["notes-cli"]
+    install:
+      - id: script
+        kind: script
+        script: "templates/install.sh"
+        label: "Install notes-cli (requires Python 3.9+)"
 ---
 
 # Apple Notes CLI
@@ -21,16 +31,26 @@ Read and write Apple Notes from the command line. Used by superbot2 agents to in
 
 ## Setup
 
-**Requirements**: macOS only. `osascript` is built into macOS — no additional binary installation needed.
+**Requirements**: macOS only. Python 3.9+. `osascript` is built into macOS.
 
-The CLI tool must be installed at `~/.superbot2/spaces/apple-notes/app/notes-cli`. Check that it exists before use:
+### Install
+
+Run the bundled install script:
 
 ```bash
-ls ~/.superbot2/spaces/apple-notes/app/notes-cli
+bash skills/apple-notes/templates/install.sh
 ```
 
-- Embedded Python venv at `~/.superbot2/spaces/apple-notes/app/.venv/`
-- Auto-activates on run — just call the binary directly
+This creates a Python venv at `~/.superbot2/spaces/apple-notes/app/.venv/`, installs dependencies (`click`), and sets up the `notes-cli` executable wrapper.
+
+### Verify
+
+```bash
+~/.superbot2/spaces/apple-notes/app/notes-cli folders
+```
+
+The CLI tool is installed at `~/.superbot2/spaces/apple-notes/app/notes-cli`. Auto-activates its venv on run — just call the binary directly.
+
 - All output is JSON by default (for agent consumption)
 - Errors go to stderr as `{"error": "message"}`
 
