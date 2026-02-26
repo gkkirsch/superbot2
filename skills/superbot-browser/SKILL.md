@@ -12,18 +12,15 @@ allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*)
 
 # Browser Automation with agent-browser + superbot2 Chrome Profile
 
-The superbot2 Chrome profile lives inside the real Chrome app and has all sessions (Cloudflare, Facebook, Tami Browning Instagram, etc.) already logged in.
-
-**Always use CDP mode** — connect to real Chrome running with the superbot2 profile. This is the only reliable way to access the saved sessions.
+The superbot2 browser profile lives at `~/.superbot2/browser/` with all authenticated sessions persisted. Run `setup.sh` once to start Chrome with CDP, then use `agent-browser --cdp 9222` for all automation.
 
 ## Standard Startup
 
 ```bash
-# Step 1: Quit Chrome if running (single-instance blocks CDP)
-osascript -e 'quit app "Google Chrome"' 2>/dev/null; sleep 3
+# If CDP isn't already running, launch Chrome with the superbot2 profile
+bash ~/.superbot2/.claude/skills/superbot-browser/templates/setup.sh
 
-# Step 2: Launch Chrome with the superbot2 profile + CDP
-# Profile lives at ~/.superbot2/browser/Default/ (not Chrome's default dir, so CDP works)
+# Or manually:
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   --user-data-dir="$HOME/.superbot2/browser" \
   --remote-debugging-port=9222 \
@@ -31,16 +28,13 @@ osascript -e 'quit app "Google Chrome"' 2>/dev/null; sleep 3
   --no-default-browser-check \
   "about:blank" &
 
-# Step 3: Wait for CDP to be ready
 sleep 5
 curl -s http://localhost:9222/json/version | python3 -c "import json,sys; print('✅ CDP ready:', json.load(sys.stdin)['Browser'])"
 
-# Step 4: Create a tab and navigate
+# Open a tab and navigate
 curl -s -X PUT "http://localhost:9222/json/new?https://your-target-url.com" > /dev/null
 sleep 3
 ```
-
-> Or just run: `bash ~/.superbot2/scripts/open-superbot-chrome.sh`
 
 ## Core Workflow
 
@@ -107,7 +101,7 @@ agent-browser --cdp 9222 screenshot --full ~/.superbot2/uploads/shot.png
 |------|-------|
 | Profile location | `~/.superbot2/browser/Default/` |
 | First-time setup | `bash templates/init.sh` |
-| Session startup | `bash templates/setup.sh` |
+| Session startup | `bash templates/setup.sh` (idempotent — no-op if CDP already running) |
 | CDP port | `9222` |
 
 ## Gotchas
@@ -119,22 +113,22 @@ curl -s -X PUT "http://localhost:9222/json/new?https://your-url.com" > /dev/null
 sleep 3
 ```
 
-### 4. Snapshot refs go stale after DOM changes
+### 2. Snapshot refs go stale after DOM changes
 Always re-snapshot after clicking, navigating, or opening modals.
 
-### 5. Combobox dropdowns need to be opened first
-Cloudflare and similar SPAs use custom dropdowns. Click the element to open it, then snapshot to find refs inside, then select:
+### 3. Combobox dropdowns need to be opened first
+SPAs use custom dropdowns. Click to open, re-snapshot to get option refs, then click the option:
 ```bash
 agent-browser --cdp 9222 click @e_dropdown   # opens dropdown
 agent-browser --cdp 9222 snapshot -i          # get refs for options
 agent-browser --cdp 9222 click @e_option      # click the option
 ```
 
-### 6. `wait --load networkidle` times out on SPAs
+### 4. `wait --load networkidle` times out on SPAs
 Use `wait 3000` or `wait 5000` instead.
 
-### 7. Social media session limits
-Facebook: ~6-8 comments per session before profile-switch modals appear.
+### 5. Social media session limits
+Facebook: ~6-8 comments per session before throttling kicks in.
 
 ## Deep-Dive Documentation
 
@@ -150,5 +144,5 @@ Facebook: ~6-8 comments per session before profile-switch modals appear.
 | Template | Description |
 |----------|-------------|
 | [templates/init.sh](templates/init.sh) | **One-time setup** — creates the browser profile at `~/.superbot2/browser/` |
-| [templates/setup.sh](templates/setup.sh) | **Session startup** — launches Chrome with CDP (run before each automation session) |
+| [templates/setup.sh](templates/setup.sh) | **Session startup** — launches Chrome with CDP if not already running |
 | [templates/google-oauth.sh](templates/google-oauth.sh) | Navigate to Google services |
