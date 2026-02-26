@@ -1167,7 +1167,7 @@ function BrowserCard() {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="text-sm font-medium text-parchment">superbot2 Browser</h3>
+          <h3 className="text-sm font-medium text-parchment">Browser</h3>
           {!loading && (
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
               isRunning
