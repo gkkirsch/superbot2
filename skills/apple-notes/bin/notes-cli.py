@@ -10,8 +10,6 @@ import shutil
 import sqlite3
 import subprocess
 import sys
-import tempfile
-
 import click
 
 # CoreData epoch offset (seconds between 1970-01-01 and 2001-01-01)
@@ -51,12 +49,27 @@ def coredata_to_iso(ts):
         return None
 
 
+def _read_varint(buf, pos):
+    """Read a protobuf varint starting at pos. Returns (value, new_pos)."""
+    value = 0
+    shift = 0
+    while pos < len(buf):
+        b = buf[pos]
+        value |= (b & 0x7F) << shift
+        shift += 7
+        pos += 1
+        if not (b & 0x80):
+            break
+    return value, pos
+
+
 def extract_text_from_protobuf(data):
     """Extract readable text from a gzipped protobuf blob.
 
-    The note body is stored as a gzipped protobuf. We decompress it and then
-    extract UTF-8 strings using a simple protobuf wire-format scanner:
-    look for length-delimited fields (wire type 2) and collect printable strings.
+    Apple Notes stores the note body as a gzipped protobuf (CRDT merge format).
+    The text content is typically at: root → field 2 → field 3 → field 2 (the
+    longest UTF-8 string). We recursively scan all length-delimited fields and
+    return the longest printable text found.
     """
     if data is None:
         return ""
@@ -65,53 +78,47 @@ def extract_text_from_protobuf(data):
     except Exception:
         return ""
 
-    # Simple approach: scan for length-prefixed UTF-8 strings in protobuf wire format.
-    # Protobuf wire type 2 (length-delimited) has tag byte where low 3 bits = 2.
-    # We look for readable text runs.
-    texts = []
-    i = 0
-    buf = decompressed
-    while i < len(buf):
-        # Read varint tag
-        tag_byte = buf[i]
-        wire_type = tag_byte & 0x07
-        field_number = tag_byte >> 3
-
-        if wire_type == 2 and i + 1 < len(buf):
-            # Length-delimited field — read varint length
-            i += 1
-            length = 0
-            shift = 0
-            while i < len(buf):
-                b = buf[i]
-                length |= (b & 0x7F) << shift
-                shift += 7
-                i += 1
-                if not (b & 0x80):
+    def scan_strings(buf):
+        """Recursively scan protobuf for UTF-8 strings."""
+        found = []
+        i = 0
+        while i < len(buf):
+            if i >= len(buf):
+                break
+            tag, i = _read_varint(buf, i)
+            wire_type = tag & 0x07
+            if wire_type == 0:  # varint
+                _, i = _read_varint(buf, i)
+            elif wire_type == 1:  # 64-bit
+                i += 8
+            elif wire_type == 5:  # 32-bit
+                i += 4
+            elif wire_type == 2:  # length-delimited
+                length, i = _read_varint(buf, i)
+                if length < 0 or i + length > len(buf):
                     break
-
-            if 0 < length <= len(buf) - i:
                 chunk = buf[i : i + length]
+                i += length
+                # Try as UTF-8 text
                 try:
                     text = chunk.decode("utf-8")
-                    # Only keep chunks that look like real text (has letters/digits)
-                    if len(text) > 0 and any(c.isprintable() and not c.isspace() for c in text):
-                        # Filter out binary-looking strings
-                        printable_ratio = sum(1 for c in text if c.isprintable()) / len(text)
-                        if printable_ratio > 0.8:
-                            texts.append(text)
+                    printable = sum(1 for c in text if c.isprintable() or c in "\n\r\t")
+                    if len(text) > 0 and printable / len(text) > 0.9:
+                        found.append(text)
                 except UnicodeDecodeError:
                     pass
-                i += length
+                # Also recurse into sub-messages
+                if len(chunk) > 2:
+                    found.extend(scan_strings(chunk))
             else:
-                i += 1
-        else:
-            i += 1
+                break
+        return found
 
-    # The first significant text chunk is usually the note body
-    # Join with newlines, skip tiny fragments
-    result_parts = [t for t in texts if len(t) > 1]
-    return "\n".join(result_parts) if result_parts else ""
+    strings = scan_strings(decompressed)
+    if not strings:
+        return ""
+    # The note body text is the longest string found
+    return max(strings, key=len)
 
 
 def is_uuid(identifier):
@@ -147,7 +154,7 @@ def get_note_body(db, note_pk):
     """Get the text body of a note by its Z_PK."""
     row = db.execute(
         """SELECT nd.ZDATA FROM ZICCLOUDSYNCINGOBJECT n
-           JOIN ZICCLOUDSYNCINGOBJECT nd ON nd.Z_PK = n.ZNOTEDATA
+           JOIN ZICNOTEDATA nd ON nd.Z_PK = n.ZNOTEDATA
            WHERE n.Z_PK = ?""",
         (note_pk,),
     ).fetchone()
@@ -249,15 +256,15 @@ def list_notes(folder, limit, pinned, include_deleted, human):
     """List all notes as JSON."""
     db = get_db()
     query = """
-        SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE1,
-               n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZTRASHEDSTATE
+        SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE3,
+               n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZMARKEDFORDELETION
         FROM ZICCLOUDSYNCINGOBJECT n
         WHERE n.ZTITLE1 IS NOT NULL
     """
     params = []
 
     if not include_deleted:
-        query += " AND (n.ZTRASHEDSTATE = 0 OR n.ZTRASHEDSTATE IS NULL)"
+        query += " AND (n.ZMARKEDFORDELETION = 0 OR n.ZMARKEDFORDELETION IS NULL)"
 
     if pinned:
         query += " AND n.ZISPINNED = 1"
@@ -283,10 +290,10 @@ def list_notes(folder, limit, pinned, include_deleted, human):
             "uuid": row["ZIDENTIFIER"],
             "title": row["ZTITLE1"],
             "folder": get_folder_name(db, row["ZFOLDER"]),
-            "created": coredata_to_iso(row["ZCREATIONDATE1"]),
+            "created": coredata_to_iso(row["ZCREATIONDATE3"]),
             "modified": coredata_to_iso(row["ZMODIFICATIONDATE1"]),
             "pinned": bool(row["ZISPINNED"]),
-            "deleted": bool(row["ZTRASHEDSTATE"]),
+            "deleted": bool(row["ZMARKEDFORDELETION"]),
         })
 
     db.close()
@@ -318,8 +325,8 @@ def read_note(identifier, fmt):
     pk = resolve_note_id(db, identifier)
 
     row = db.execute(
-        """SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE1,
-                  n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZTRASHEDSTATE
+        """SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE3,
+                  n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZMARKEDFORDELETION
            FROM ZICCLOUDSYNCINGOBJECT n WHERE n.Z_PK = ?""",
         (pk,),
     ).fetchone()
@@ -340,10 +347,10 @@ def read_note(identifier, fmt):
             "uuid": row["ZIDENTIFIER"],
             "title": row["ZTITLE1"],
             "folder": get_folder_name(get_db(), row["ZFOLDER"]),
-            "created": coredata_to_iso(row["ZCREATIONDATE1"]),
+            "created": coredata_to_iso(row["ZCREATIONDATE3"]),
             "modified": coredata_to_iso(row["ZMODIFICATIONDATE1"]),
             "pinned": bool(row["ZISPINNED"]),
-            "deleted": bool(row["ZTRASHEDSTATE"]),
+            "deleted": bool(row["ZMARKEDFORDELETION"]),
             "body": body,
         }
         print(json.dumps(note, indent=2))
@@ -358,17 +365,17 @@ def search_notes(query, folder, include_deleted):
     db = get_db()
 
     sql = """
-        SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE1,
-               n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZTRASHEDSTATE,
+        SELECT n.Z_PK, n.ZIDENTIFIER, n.ZTITLE1, n.ZCREATIONDATE3,
+               n.ZMODIFICATIONDATE1, n.ZFOLDER, n.ZISPINNED, n.ZMARKEDFORDELETION,
                nd.ZDATA
         FROM ZICCLOUDSYNCINGOBJECT n
-        LEFT JOIN ZICCLOUDSYNCINGOBJECT nd ON nd.Z_PK = n.ZNOTEDATA
+        LEFT JOIN ZICNOTEDATA nd ON nd.Z_PK = n.ZNOTEDATA
         WHERE n.ZTITLE1 IS NOT NULL
     """
     params = []
 
     if not include_deleted:
-        sql += " AND (n.ZTRASHEDSTATE = 0 OR n.ZTRASHEDSTATE IS NULL)"
+        sql += " AND (n.ZMARKEDFORDELETION = 0 OR n.ZMARKEDFORDELETION IS NULL)"
 
     if folder:
         sql += """ AND n.ZFOLDER IN (
