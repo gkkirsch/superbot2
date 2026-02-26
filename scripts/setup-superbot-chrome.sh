@@ -13,10 +13,11 @@ LOCAL_STATE="$CHROME_DIR/Local State"
 AVATAR_SRC="${SUPERBOT2_APP_DIR:-$HOME/.superbot2-app}/assets/logo.png"
 AVATAR_DEST="$PROFILE_DIR/Google Profile Picture.png"
 
-# --- Check Chrome is not running ---
+# --- Check if Chrome is running (for best-effort Local State update) ---
+CHROME_RUNNING=false
 if pgrep -x "Google Chrome" > /dev/null 2>&1; then
-  echo "❌ Chrome is currently running. Please quit Chrome first (⌘Q), then re-run this script."
-  exit 1
+  CHROME_RUNNING=true
+  echo "ℹ️  Chrome is running. Profile setup will proceed, but the profile may not appear in Chrome's profile picker until Chrome is restarted."
 fi
 
 echo "🤖 Setting up Chrome profile: $PROFILE_NAME"
@@ -115,6 +116,11 @@ EOF
 echo "✅ Profile Preferences written."
 
 # --- Update Local State (adds profile to Chrome's known profiles) ---
+# Skip if Chrome is running — it would overwrite Local State on exit anyway.
+# The profile still works via --profile-directory; it just won't appear in the picker until Chrome restarts.
+if [ "$CHROME_RUNNING" = "true" ]; then
+  echo "⏭️  Skipping Local State update (Chrome is running). Profile will appear in picker after Chrome restart."
+else
 python3 << PYEOF
 import json, sys
 
@@ -150,6 +156,7 @@ with open(local_state_path, 'w') as f:
 
 print("✅ Local State updated — superbot2 profile registered.")
 PYEOF
+fi
 
 # --- Launch Chrome ---
 echo ""

@@ -1239,20 +1239,6 @@ app.get('/api/browser/status', async (_req, res) => {
 
 app.post('/api/browser/setup', async (_req, res) => {
   try {
-    // Check if Chrome is running (setup requires Chrome to be quit)
-    let chromeRunning = false
-    try {
-      execFileSync('pgrep', ['-x', 'Google Chrome'], { stdio: 'pipe' })
-      chromeRunning = true
-    } catch {}
-
-    if (chromeRunning) {
-      return res.status(409).json({
-        success: false,
-        error: 'Chrome is currently running. Please quit Chrome first (Cmd+Q), then try again.'
-      })
-    }
-
     // Run setup script
     const setupScript = join(SUPERBOT_DIR, 'scripts', 'setup-superbot-chrome.sh')
     const setupOutput = await new Promise((resolve, reject) => {
