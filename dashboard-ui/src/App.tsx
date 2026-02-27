@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { UpdateBanner } from './components/UpdateBanner'
 import { UpdateCheckButton } from './components/UpdateCheckButton'
+import { TelegramMiniApp } from './components/TelegramMiniApp'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -10,8 +11,15 @@ import { Knowledge } from './pages/Knowledge'
 import { Skills } from './pages/Skills'
 import { SkillCreator } from './pages/SkillCreator'
 import { Learn } from './pages/Learn'
+import { useTelegram } from './hooks/useTelegram'
 
 function AppContent() {
+  const { isTelegram } = useTelegram()
+
+  if (isTelegram) {
+    return <TelegramMiniApp />
+  }
+
   return (
     <>
       <UpdateBanner />

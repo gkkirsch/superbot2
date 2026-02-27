@@ -4,6 +4,7 @@ import { join, extname, resolve } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
+import { createHmac } from 'node:crypto'
 import yaml from 'js-yaml'
 import multer from 'multer'
 
@@ -19,6 +20,75 @@ const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 
 app.use(express.json({ limit: '50mb' }))
+
+// --- Telegram Mini App auth middleware ---
+// Validates initData HMAC-SHA256 when X-Telegram-Init-Data header is present.
+// Local requests without the header are allowed through (non-breaking).
+
+function validateTelegramInitData(initData, botToken) {
+  try {
+    const params = new URLSearchParams(initData)
+    const hash = params.get('hash')
+    if (!hash) return null
+    params.delete('hash')
+
+    // Sort params alphabetically and join with \n
+    const dataCheckString = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n')
+
+    // HMAC: secret_key = HMAC-SHA256("WebAppData", botToken)
+    // hash = HMAC-SHA256(secret_key, dataCheckString)
+    const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest()
+    const computedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex')
+
+    if (computedHash !== hash) return null
+
+    // Check auth_date is not too old (allow 24h window)
+    const authDate = parseInt(params.get('auth_date') || '0', 10)
+    const now = Math.floor(Date.now() / 1000)
+    if (now - authDate > 86400) return null
+
+    // Extract user info
+    const userStr = params.get('user')
+    const user = userStr ? JSON.parse(userStr) : null
+    return { valid: true, user }
+  } catch {
+    return null
+  }
+}
+
+app.use((req, res, next) => {
+  const initData = req.headers['x-telegram-init-data']
+  if (!initData) {
+    // No Telegram header — local dashboard access, allow through
+    return next()
+  }
+
+  // Load bot token from config
+  let botToken = ''
+  try {
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+      botToken = config?.telegram?.botToken || ''
+    }
+  } catch { /* ignore */ }
+
+  if (!botToken) {
+    return res.status(500).json({ error: 'Bot token not configured' })
+  }
+
+  const result = validateTelegramInitData(initData, botToken)
+  if (!result) {
+    return res.status(401).json({ error: 'Invalid Telegram auth' })
+  }
+
+  // Attach validated user to request
+  req.telegramUser = result.user
+  next()
+})
 
 // --- Helpers ---
 

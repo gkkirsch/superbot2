@@ -12,6 +12,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     port: parseInt(process.env.SUPERBOT2_UI_PORT || '47474', 10),
     proxy: {
       '/api': {
