@@ -80,9 +80,16 @@ Select your bot and send the new URL. The `/dashboard` command in the bot reads 
 
 ## Architecture
 
+Single codebase, conditional rendering -- no separate mini app. `useTelegram().isTelegram` adapts behavior:
+
 - `dashboard-ui/index.html` loads the Telegram WebApp SDK
-- `dashboard-ui/src/hooks/useTelegram.ts` detects Telegram, calls `ready()` and `expand()`
-- `dashboard-ui/src/components/TelegramMiniApp.tsx` renders the mobile-optimized UI
+- `dashboard-ui/src/hooks/useTelegram.ts` detects Telegram, calls `ready()` and `expand()`, maps theme
+- `dashboard-ui/src/components/TelegramProvider.tsx` wraps the app with Telegram context
+- `dashboard-ui/src/App.tsx` same routes for both modes, hides UpdateBanner in Telegram
+- `dashboard-ui/src/components/Nav.tsx` compact header in Telegram, always-visible hamburger
+- `dashboard-ui/src/pages/Dashboard.tsx` flattens to single column with Chat first in Telegram
 - `dashboard-ui/src/lib/api.ts` sends `X-Telegram-Init-Data` header with all API calls
 - `dashboard/server.js` validates the initData HMAC-SHA256 signature
 - `scripts/telegram-watcher.mjs` handles the `/dashboard` command
+
+When a dashboard section is updated, the Mini App automatically gets the update.
