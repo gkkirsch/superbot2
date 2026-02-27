@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Nav } from './components/Nav'
 import { UpdateBanner } from './components/UpdateBanner'
 import { UpdateCheckButton } from './components/UpdateCheckButton'
-import { TelegramMiniApp } from './components/TelegramMiniApp'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -16,13 +15,9 @@ import { useTelegram } from './hooks/useTelegram'
 function AppContent() {
   const { isTelegram } = useTelegram()
 
-  if (isTelegram) {
-    return <TelegramMiniApp />
-  }
-
   return (
     <>
-      <UpdateBanner />
+      {!isTelegram && <UpdateBanner />}
       <Nav />
       <Routes>
         <Route path="/" element={<Dashboard />} />
@@ -34,7 +29,7 @@ function AppContent() {
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/learn" element={<Learn />} />
       </Routes>
-      <UpdateCheckButton />
+      {!isTelegram && <UpdateCheckButton />}
     </>
   )
 }
