@@ -800,6 +800,28 @@ export async function testTelegram(): Promise<{ sent: boolean; error?: string }>
   return response.json()
 }
 
+// --- Telegram tunnel (Mini App) ---
+
+export interface TunnelStatus {
+  running: boolean
+  url: string
+}
+
+export async function getTunnelStatus(): Promise<TunnelStatus> {
+  return fetchJson<TunnelStatus>('/telegram/tunnel-status')
+}
+
+export async function startTunnel(): Promise<{ url: string; alreadyRunning?: boolean }> {
+  const response = await apiFetch(`${API_BASE}/telegram/start-tunnel`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function stopTunnel(): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/telegram/stop-tunnel`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
 // --- Browser (superbot2 Chrome profile) ---
 
 export interface BrowserStatus {

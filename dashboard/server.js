@@ -1282,6 +1282,88 @@ app.post('/api/telegram/test', async (_req, res) => {
   }
 })
 
+// --- Telegram tunnel (for Mini App) ---
+
+app.get('/api/telegram/tunnel-status', async (_req, res) => {
+  try {
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const webAppUrl = config?.telegram?.webAppUrl || ''
+    const pidFile = join(SUPERBOT_DIR, 'tunnel.pid')
+    let running = false
+    if (existsSync(pidFile)) {
+      try {
+        const pid = readFileSync(pidFile, 'utf-8').trim()
+        process.kill(Number(pid), 0)
+        running = true
+      } catch {}
+    }
+    res.json({ running, url: running ? webAppUrl : '' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/start-tunnel', async (_req, res) => {
+  try {
+    const pidFile = join(SUPERBOT_DIR, 'tunnel.pid')
+    // Check if already running
+    if (existsSync(pidFile)) {
+      try {
+        const pid = readFileSync(pidFile, 'utf-8').trim()
+        process.kill(Number(pid), 0)
+        // Already running — return current URL
+        const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+        return res.json({ url: config?.telegram?.webAppUrl || '', alreadyRunning: true })
+      } catch {}
+    }
+
+    const tunnelScript = join(import.meta.dirname, '..', 'scripts', 'start-tunnel.sh')
+    const child = spawn('bash', [tunnelScript], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, SUPERBOT2_HOME: SUPERBOT_DIR },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', d => { stdout += d.toString() })
+    child.stderr.on('data', d => { stderr += d.toString() })
+
+    const exitCode = await new Promise(resolve => child.on('close', resolve))
+
+    if (exitCode !== 0) {
+      return res.status(500).json({ error: stderr || stdout || 'Tunnel failed to start' })
+    }
+
+    // Extract URL from stdout
+    const urlMatch = stdout.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
+    const url = urlMatch ? urlMatch[0] : ''
+
+    if (!url) {
+      // Fallback: read from config (the script saves it there)
+      const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+      return res.json({ url: config?.telegram?.webAppUrl || '' })
+    }
+
+    res.json({ url })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/stop-tunnel', async (_req, res) => {
+  try {
+    const tunnelScript = join(import.meta.dirname, '..', 'scripts', 'stop-tunnel.sh')
+    const child = spawn('bash', [tunnelScript], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, SUPERBOT2_HOME: SUPERBOT_DIR },
+    })
+    await new Promise(resolve => child.on('close', resolve))
+    res.json({ stopped: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Browser (superbot2 Chrome profile) ---
 
 app.get('/api/browser/status', async (_req, res) => {
