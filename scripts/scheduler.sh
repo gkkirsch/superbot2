@@ -44,6 +44,16 @@ const schedule = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
 const lastRun = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const [nowHour, nowMin, nowDay, nowDate] = [process.argv[3], process.argv[4], process.argv[5], process.argv[6]];
 
+// Migrate old-format lastRun keys (keyed by job.name) to new format (keyed by composite key)
+for (const job of schedule) {
+  const oldVal = lastRun[job.name];
+  if (oldVal && oldVal.includes(':' + nowDate + 'T')) {
+    const oldTime = oldVal.split('T').pop();
+    if (oldTime) lastRun[job.name + ':' + nowDate + 'T' + oldTime] = oldVal;
+    delete lastRun[job.name];
+  }
+}
+
 const due = [];
 for (const job of schedule) {
   // Support both time (string) and times (string[])

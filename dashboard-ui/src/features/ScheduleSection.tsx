@@ -46,9 +46,16 @@ interface TimelineItem {
   isNext: boolean
 }
 
+const DAY_MAP = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+/** Deduplicate and sort time strings */
+function dedupTimes(times: string[]): string[] {
+  return [...new Set(times)].sort()
+}
+
 function buildTimeline(schedule: ScheduledJob[]): TimelineItem[] {
   const now = new Date()
-  const nowDay = now.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase()
+  const nowDay = DAY_MAP[now.getDay()]
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
 
   const items: TimelineItem[] = []
@@ -137,11 +144,12 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
       if (form.space) toSave.space = form.space
       if (form.days && form.days.length > 0 && form.days.length < 7) toSave.days = form.days
 
-      // Use times array if multiple, single time for backward compat
-      if (form._times.length === 1) {
-        toSave.time = form._times[0]
+      // Deduplicate and use times array if multiple, single time for backward compat
+      const deduped = dedupTimes(form._times)
+      if (deduped.length === 1) {
+        toSave.time = deduped[0]
       } else {
-        toSave.times = [...form._times].sort()
+        toSave.times = deduped
       }
 
       await updateScheduleJob(originalName, toSave)
@@ -292,7 +300,15 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
   const queryClient = useQueryClient()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [addingSaving, setAddingSaving] = useState(false)
+  const [, setTick] = useState(0)
   const [newTimes, setNewTimes] = useState<string[]>(['09:00'])
+
+  // Re-render every 60s so timeline "up next" and "past" states stay current
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(interval)
+  }, [])
   const [newJob, setNewJob] = useState<Omit<ScheduledJob, 'time' | 'times'> & { name: string; days: string[]; task: string; space: string }>({
     name: '', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '',
   })
@@ -309,24 +325,30 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
 
   const handleAdd = async () => {
     if (!newJob.name || newTimes.length === 0 || !newJob.task) return
-    const job: ScheduledJob = {
-      name: newJob.name,
-      task: newJob.task,
-    }
-    if (newJob.space) job.space = newJob.space
-    if (newJob.days.length > 0 && newJob.days.length < 7) job.days = newJob.days
+    setAddingSaving(true)
+    try {
+      const job: ScheduledJob = {
+        name: newJob.name,
+        task: newJob.task,
+      }
+      if (newJob.space) job.space = newJob.space
+      if (newJob.days.length > 0 && newJob.days.length < 7) job.days = newJob.days
 
-    if (newTimes.length === 1) {
-      job.time = newTimes[0]
-    } else {
-      job.times = [...newTimes].sort()
-    }
+      const deduped = dedupTimes(newTimes)
+      if (deduped.length === 1) {
+        job.time = deduped[0]
+      } else {
+        job.times = deduped
+      }
 
-    await addScheduleJob(job)
-    queryClient.invalidateQueries({ queryKey: ['schedule'] })
-    setNewJob({ name: '', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
-    setNewTimes(['09:00'])
-    setAdding(false)
+      await addScheduleJob(job)
+      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      setNewJob({ name: '', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
+      setNewTimes(['09:00'])
+      setAdding(false)
+    } finally {
+      setAddingSaving(false)
+    }
   }
 
   const toggleDay = (day: string) => {
@@ -498,10 +520,10 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newJob.name || !newJob.task || newTimes.length === 0}
+              disabled={addingSaving || !newJob.name || !newJob.task || newTimes.length === 0}
               className="text-xs text-sand hover:text-sand/80 transition-colors inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <Check className="h-3 w-3" /> Add job
+              <Check className="h-3 w-3" /> {addingSaving ? 'Adding...' : 'Add job'}
             </button>
           </div>
         </div>
