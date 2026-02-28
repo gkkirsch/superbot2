@@ -47,6 +47,12 @@ export function useTelegramInit(): TelegramState {
     // Apply Telegram theme as CSS custom properties
     applyTelegramTheme(themeParams)
 
+    // Increase base font size for Telegram Mini App readability
+    // Tailwind utilities (text-sm, text-xs, etc.) use rem, so scaling the root
+    // font-size makes everything proportionally larger.
+    document.documentElement.style.fontSize = '20px'
+    document.body.classList.add('telegram')
+
     setState({
       isTelegram: true,
       initData: tg.initData,
