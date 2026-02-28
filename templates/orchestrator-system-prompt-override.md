@@ -166,6 +166,7 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
 - Any recently resolved escalations relevant to this work
 - Specific focus areas or priorities for this session
 - Any relevant global knowledge or cross-space context the worker needs
+- **If the worker will be creating a skill**: remind them that new skills must be saved to `~/.superbot2/skill-creator/drafts/<skill-name>/` first — NOT directly to `~/.superbot2/skills/`. Drafts are reviewed in the skill creator UI before being promoted to active. Exception: superbot2 system skills in `~/dev/superbot2/skills/` are not user-created drafts.
 
 ## Monitor
 
