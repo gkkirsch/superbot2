@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -482,6 +482,236 @@ function SkillFileViewer({ skill }: { skill: TesterSkill }) {
   )
 }
 
+// --- Skill Chat (AI assistant via claude -p) ---
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+}
+
+function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  const [streamText, setStreamText] = useState('')
+  const [showRefresh, setShowRefresh] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-scroll on new messages / streaming
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, streamText])
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || streaming) return
+
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text }
+    setMessages(prev => [...prev, userMsg])
+    setInput('')
+    setStreaming(true)
+    setStreamText('')
+    setShowRefresh(false)
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    // Build history (last 20 messages for context window)
+    const historyMsgs = [...messages, userMsg].slice(-20).map(m => ({ role: m.role, content: m.content }))
+
+    try {
+      const response = await fetch('/api/skill-creator/chat-simple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          skillName: selectedSkill?.id,
+          source: selectedSkill?.source,
+          history: historyMsgs.slice(0, -1), // exclude current message (it's the `message` param)
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok || !response.body) {
+        setStreaming(false)
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: 'Failed to connect to chat backend.' }])
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let accumulated = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'chunk') {
+              accumulated += data.text
+              setStreamText(accumulated)
+            } else if (data.type === 'done') {
+              // Finalize
+            } else if (data.type === 'error') {
+              accumulated += '\n\n---\nError: ' + data.message
+              setStreamText(accumulated)
+            }
+          } catch {}
+        }
+      }
+
+      // Finalize the assistant message
+      if (accumulated.trim()) {
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: accumulated }])
+        // Check if assistant likely created/modified files
+        const lower = accumulated.toLowerCase()
+        if (lower.includes('created') || lower.includes('wrote') || lower.includes('saved') || lower.includes('updated') || lower.includes('modified') || lower.includes('skill.md')) {
+          setShowRefresh(true)
+        }
+      }
+      setStreamText('')
+      setStreaming(false)
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error.' }])
+      }
+      setStreamText('')
+      setStreaming(false)
+    }
+  }, [input, streaming, messages, selectedSkill])
+
+  const handleStop = () => {
+    if (abortRef.current) abortRef.current.abort()
+    if (streamText.trim()) {
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: streamText + '\n\n*(stopped)*' }])
+    }
+    setStreamText('')
+    setStreaming(false)
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Messages area */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {messages.length === 0 && !streaming ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center max-w-sm">
+              <MessageSquare className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+              <p className="text-sm text-stone/50 mb-1">Chat with AI to create skills</p>
+              <p className="text-xs text-stone/35">
+                {selectedSkill
+                  ? `Context: ${selectedSkill.name} (${selectedSkill.source})`
+                  : 'Select a skill for context, or start fresh'}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map(msg => (
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 overflow-hidden ${
+                  msg.role === 'user'
+                    ? 'rounded-br-md bg-[rgba(180,160,120,0.15)]'
+                    : 'rounded-bl-md bg-[rgba(120,140,160,0.12)]'
+                }`}>
+                  {msg.role === 'user' ? (
+                    <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
+                  ) : (
+                    <MarkdownContent content={msg.content} className="text-parchment/80" />
+                  )}
+                </div>
+              </div>
+            ))}
+            {streaming && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden">
+                  {streamText ? (
+                    <>
+                      <MarkdownContent content={streamText} className="text-parchment/80" />
+                      <span className="inline-block w-1.5 h-4 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
+                    </>
+                  ) : (
+                    <div className="flex gap-1.5 items-center py-1">
+                      <span className="text-xs text-stone/50">Thinking...</span>
+                      <Loader2 className="h-3 w-3 text-stone/40 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {showRefresh && !streaming && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => { setShowRefresh(false); window.dispatchEvent(new CustomEvent('skill-files-refresh')) }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh files
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Input area */}
+      <div className="shrink-0 px-4 pb-4 pt-2 border-t border-border-custom">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Ask about skill creation..."
+            rows={2}
+            className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                handleSend()
+              }
+            }}
+            onInput={e => {
+              const target = e.currentTarget
+              target.style.height = 'auto'
+              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+            }}
+          />
+          {streaming ? (
+            <button
+              onClick={handleStop}
+              className="shrink-0 p-2.5 rounded-xl text-ember hover:bg-ember/10 transition-colors"
+              title="Stop"
+            >
+              <Square className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim()}
+              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
+              title="Send (Cmd+Enter)"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Cmd+Enter to send</p>
+      </div>
+    </div>
+  )
+}
+
 function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [prompt, setPrompt] = useState('')
   const [output, setOutput] = useState('')
@@ -701,7 +931,7 @@ export function SkillCreator() {
   const [validating, setValidating] = useState(false)
   const [validationExpanded, setValidationExpanded] = useState(false)
   const [selectedDraftType, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
-  const [activePanel, setActivePanel] = useState<'editor' | 'tester'>('editor')
+  const [activePanel, setActivePanel] = useState<'chat' | 'files' | 'test'>('chat')
   const [pluginMeta, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
   const [pluginMetaSaving, setPluginMetaSaving] = useState(false)
 
@@ -1401,436 +1631,86 @@ export function SkillCreator() {
         </div>
       </div>
 
-      {/* Accordion layout */}
+      {/* Accordion layout — 3 panels: Chat, Files, Test */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
         <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedSkill={selectedSkill} onSelectSkill={handleSelectSkill} />
 
-        {/* Editor panel */}
-        <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'editor' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
-        {activePanel === 'editor' ? (<>
-        {selectedSkill ? (
-          <SkillFileViewer skill={selectedSkill} />
-        ) : (<>
-        {/* Center column — Chat */}
-        <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          {/* Chat messages */}
-          <div className="flex-1 min-h-0 flex flex-col p-4">
-            <div
-              ref={chatContainerRef}
-              className="flex-1 overflow-y-auto rounded-xl bg-ink/60 p-4 space-y-4 min-h-0"
+        {/* Chat panel */}
+        <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'chat' ? 'flex-1 flex flex-col min-w-0' : 'w-12 shrink-0'}`}>
+          {activePanel === 'chat' ? (
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
+                <MessageSquare className="h-4 w-4 text-sand" />
+                <h2 className="text-sm font-medium text-parchment">Chat</h2>
+                {selectedSkill && (
+                  <span className="text-xs text-stone/50 ml-1">
+                    — {selectedSkill.name}
+                  </span>
+                )}
+              </div>
+              <SkillChat selectedSkill={selectedSkill} />
+            </div>
+          ) : (
+            <button
+              onClick={() => setActivePanel('chat')}
+              className="w-12 h-full border-r border-border-custom bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
             >
-              {isEmpty ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
-                    <Wand2 className="h-10 w-10 text-stone/25 mx-auto mb-3" />
-                    <p className="text-sm text-stone/50 mb-1">Describe the plugin you want to create</p>
-                    <p className="text-xs text-stone/35">
-                      Upload reference files, paste examples, or just describe what you need.
-                      The agent will scaffold, write, and validate the complete plugin.
-                    </p>
+              <MessageSquare className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
+              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Chat</span>
+              <ChevronRight className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
+            </button>
+          )}
+        </div>
+
+        {/* Files panel */}
+        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'files' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
+          {activePanel === 'files' ? (
+            <div className="flex-1 flex flex-col min-h-0 min-w-0">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
+                <FileText className="h-4 w-4 text-sand" />
+                <h2 className="text-sm font-medium text-parchment">Files</h2>
+              </div>
+              {selectedSkill ? (
+                <SkillFileViewer skill={selectedSkill} />
+              ) : (
+                <div className="flex-1 flex items-center justify-center px-4">
+                  <div className="text-center">
+                    <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                    <p className="text-xs text-stone/40">Select a skill from the sidebar to view its files</p>
                   </div>
                 </div>
-              ) : (
-                <>
-                  {messages.map(msg => (
-                    msg.role === 'user'
-                      ? <UserBubble key={msg.id} msg={msg} />
-                      : <AssistantBubble key={msg.id} msg={msg} />
-                  ))}
-                  {streamingText && <StreamingBubble text={streamingText} />}
-                  {isProcessing && !streamingText && <TypingIndicator />}
-                </>
               )}
             </div>
-          </div>
-
-          {/* Error banner */}
-          {error && (
-            <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-ember/10 border border-ember/20 flex items-center justify-between">
-              <span className="text-xs text-ember/80">{error}</span>
-              <button onClick={() => setError(null)} className="text-ember/50 hover:text-ember/70">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Attached files indicator */}
-          {attachedFiles.length > 0 && (
-            <div className="mx-4 mb-2 flex flex-wrap gap-1.5">
-              {attachedFiles.map((f, i) => (
-                <div key={i} className="relative group inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface/50 border border-border-custom">
-                  {f.preview ? (
-                    <img src={f.preview} alt={f.file.name} className="h-5 w-5 object-cover rounded" />
-                  ) : (
-                    <FileText className="h-3.5 w-3.5 text-stone/50" />
-                  )}
-                  <span className="text-[11px] text-parchment/70 truncate max-w-[120px]">{f.file.name}</span>
-                  <button
-                    onClick={() => {
-                      setAttachedFiles(prev => {
-                        if (prev[i].preview) URL.revokeObjectURL(prev[i].preview)
-                        return prev.filter((_, idx) => idx !== i)
-                      })
-                    }}
-                    className="p-0.5 rounded text-stone/40 hover:text-parchment hover:bg-surface/80 transition-colors"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Input area */}
-          <form onSubmit={handleSubmit} className="px-4 pb-4 flex items-end gap-2 shrink-0">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_EXTENSIONS}
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-            />
+          ) : (
             <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
-              title="Attach files"
+              onClick={() => setActivePanel('files')}
+              className="w-12 h-full bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
             >
-              <Paperclip className="h-4 w-4" />
+              <FileText className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
+              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Files</span>
+              <ChevronLeft className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
             </button>
-            <textarea
-              ref={inputRef}
-              rows={3}
-              placeholder="Describe a plugin to create..."
-              className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  e.currentTarget.form?.requestSubmit()
-                }
-              }}
-              onInput={(e) => {
-                const target = e.currentTarget
-                target.style.height = 'auto'
-                target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-              }}
-            />
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-              title={isProcessing ? 'Agent is working...' : 'Send message'}
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
-          </form>
+          )}
         </div>
 
-        {/* Right column — Draft browser */}
-        <div className="w-80 shrink-0 border-l border-border-custom bg-ink/40 flex flex-col">
-          {/* Draft browser section */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            <div className="px-3 pt-3 pb-1.5">
-              <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">
-                {selectedDraft ? selectedDraft : 'Draft Files'}
-              </h2>
-            </div>
-
-            {!selectedDraft ? (
-              <div className="flex-1 flex items-center justify-center px-4">
-                <p className="text-xs text-stone/40 text-center">Select a draft from the sidebar to browse its files</p>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {/* Plugin.json metadata card (plugin type only) */}
-                {selectedDraftType === 'plugin' && pluginMeta && (
-                  <div className="mx-3 mb-2 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Package className="h-3.5 w-3.5 text-blue-400" />
-                      <span className="text-[10px] font-medium text-blue-400 uppercase tracking-wider">plugin.json</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div>
-                        <label className="text-[10px] text-stone/50 block mb-0.5">Name</label>
-                        <p className="text-xs text-parchment/60 font-mono bg-surface/20 rounded px-1.5 py-1">{pluginMeta.name}</p>
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-stone/50 block mb-0.5">Version</label>
-                        <input
-                          type="text"
-                          value={pluginMeta.version}
-                          onChange={e => setPluginMeta(prev => prev ? { ...prev, version: e.target.value } : prev)}
-                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-stone/50 block mb-0.5">Description</label>
-                        <textarea
-                          value={pluginMeta.description}
-                          onChange={e => setPluginMeta(prev => prev ? { ...prev, description: e.target.value } : prev)}
-                          rows={2}
-                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40 resize-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-stone/50 block mb-0.5">Author <span className="text-stone/30">(optional)</span></label>
-                        <input
-                          type="text"
-                          value={pluginMeta.author}
-                          onChange={e => setPluginMeta(prev => prev ? { ...prev, author: e.target.value } : prev)}
-                          className="w-full text-xs text-parchment font-mono bg-surface/20 rounded px-1.5 py-1 border border-border-custom focus:outline-none focus:border-blue-500/40"
-                        />
-                      </div>
-                      <button
-                        onClick={handlePluginMetaSave}
-                        disabled={pluginMetaSaving}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/20 text-blue-300 rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
-                      >
-                        <Save className="h-3 w-3" /> {pluginMetaSaving ? 'Saving...' : 'Save'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Frontmatter card (skill type only) */}
-                {selectedDraftType !== 'plugin' && frontmatter && (
-                  <div className="mx-3 mb-2 p-2.5 rounded-lg bg-surface/30 border border-border-custom">
-                    {!!frontmatter.name && (
-                      <p className="text-sm font-medium text-parchment mb-1">{String(frontmatter.name)}</p>
-                    )}
-                    {!!frontmatter.description && (
-                      <p className="text-xs text-stone/60 mb-1.5 line-clamp-3">{String(frontmatter.description).trim()}</p>
-                    )}
-                    <div className="flex flex-wrap gap-1">
-                      {!!frontmatter.model && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-mono">{String(frontmatter.model)}</span>
-                      )}
-                      {Array.isArray(frontmatter.tools) && frontmatter.tools.map((t: string) => (
-                        <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 font-mono">{t}</span>
-                      ))}
-                    </div>
-                    {Object.entries(frontmatter).filter(([k]) => !['name', 'description', 'model', 'tools'].includes(k)).map(([key, val]) => (
-                      <div key={key} className="mt-1 flex items-baseline gap-1.5">
-                        <span className="text-[10px] text-stone/50 font-mono shrink-0">{key}:</span>
-                        <span className="text-[10px] text-parchment/70 font-mono truncate">
-                          {Array.isArray(val)
-                            ? val.some(v => typeof v === 'object' && v !== null)
-                              ? <span className="text-stone/40">[...]</span>
-                              : val.join(', ')
-                            : typeof val === 'object' && val !== null
-                              ? <span className="text-stone/40">{'{...'+'}'}</span>
-                              : String(val)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Validation status */}
-                <div className="mx-3 mb-2">
-                  {validating ? (
-                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface/30 border border-border-custom">
-                      <Loader2 className="h-3.5 w-3.5 text-stone/50 animate-spin" />
-                      <span className="text-xs text-stone/50">Validating...</span>
-                    </div>
-                  ) : validation ? (
-                    <div className={`rounded-lg border ${validation.valid ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
-                      <div className="flex items-center justify-between px-2.5 py-1.5">
-                        <div className="flex items-center gap-1.5">
-                          {validation.valid ? (
-                            <>
-                              <CheckCircle className="h-3.5 w-3.5 text-emerald-400" />
-                              <span className="text-xs font-medium text-emerald-400">Valid {selectedDraftType || 'plugin'}</span>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setValidationExpanded(prev => !prev)}
-                              className="flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <XCircle className="h-3.5 w-3.5 text-red-400" />
-                              <span className="text-xs font-medium text-red-400">
-                                {validation.errors.length} error{validation.errors.length !== 1 ? 's' : ''}
-                              </span>
-                              {validation.warnings.length > 0 && (
-                                <span className="text-xs text-amber-400">
-                                  {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => selectedDraft && runValidation(selectedDraft)}
-                          className="p-1 rounded text-stone/40 hover:text-parchment hover:bg-surface/40 transition-colors"
-                          title="Re-validate"
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                        </button>
-                      </div>
-                      {!validation.valid && validationExpanded && (
-                        <div className="px-2.5 pb-2 space-y-1">
-                          {validation.errors.map((err, i) => (
-                            <div key={`e-${i}`} className="flex items-start gap-1.5 text-[11px]">
-                              <XCircle className="h-3 w-3 text-red-400 mt-0.5 shrink-0" />
-                              <span className="text-red-300/80">
-                                <span className="text-red-400/60 font-mono">{err.file}{err.field ? `: ${err.field}` : ''}</span>
-                                {' — '}{err.message}
-                              </span>
-                            </div>
-                          ))}
-                          {validation.warnings.map((warn, i) => (
-                            <div key={`w-${i}`} className="flex items-start gap-1.5 text-[11px]">
-                              <AlertTriangle className="h-3 w-3 text-amber-400 mt-0.5 shrink-0" />
-                              <span className="text-amber-300/80">
-                                <span className="text-amber-400/60 font-mono">{warn.file}{warn.field ? `: ${warn.field}` : ''}</span>
-                                {' — '}{warn.message}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {validation.valid && validation.warnings.length > 0 && (
-                        <div className="px-2.5 pb-2 space-y-1">
-                          {validation.warnings.map((warn, i) => (
-                            <div key={`w-${i}`} className="flex items-start gap-1.5 text-[11px]">
-                              <AlertTriangle className="h-3 w-3 text-amber-400 mt-0.5 shrink-0" />
-                              <span className="text-amber-300/80">
-                                <span className="text-amber-400/60 font-mono">{warn.file}{warn.field ? `: ${warn.field}` : ''}</span>
-                                {' — '}{warn.message}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* File list */}
-                <div className="flex-1 overflow-y-auto px-3 min-h-0">
-                  {selectedDraftFiles.length === 0 ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {selectedDraftFiles.map(f => {
-                        const depth = f.path.split('/').length - 1
-                        const name = f.path.split('/').pop() || f.path
-                        const isDir = f.type === 'directory'
-                        const isSelected = selectedFile === f.path
-                        const IconComponent = isDir ? FolderOpen : name.endsWith('.json') ? Package : name.endsWith('.md') ? FileText : File
-                        return (
-                          <button
-                            key={f.path}
-                            onClick={() => !isDir && handleFileClick(f.path)}
-                            disabled={isDir}
-                            className={`w-full text-left flex items-center gap-1.5 py-1 px-1.5 rounded transition-colors ${
-                              isSelected
-                                ? 'bg-blue-500/15 text-blue-300'
-                                : isDir
-                                  ? 'text-stone/50 cursor-default'
-                                  : 'text-parchment/70 hover:bg-surface/40 cursor-pointer'
-                            }`}
-                            style={{ paddingLeft: `${depth * 12 + 6}px` }}
-                          >
-                            <IconComponent className={`h-3.5 w-3.5 shrink-0 ${isDir ? 'text-sand/50' : isSelected ? 'text-blue-300' : 'text-stone/50'}`} />
-                            <span className="text-xs truncate">{name}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upload zone for draft */}
-                <div className="shrink-0 px-3 pb-2 pt-1">
-                  <input
-                    ref={draftFileInputRef}
-                    type="file"
-                    accept={ACCEPTED_EXTENSIONS}
-                    multiple
-                    onChange={handleDraftFileSelect}
-                    className="hidden"
-                  />
-                  <div
-                    onDragEnter={(e) => { e.preventDefault(); setIsDraftDragging(true) }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDraftDragging(false) }}
-                    onDrop={handleDraftDrop}
-                    onClick={() => draftFileInputRef.current?.click()}
-                    className={`p-2 border-2 border-dashed rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
-                      isDraftDragging ? 'border-blue-500/50 bg-blue-500/5' : 'border-border-custom hover:border-stone/30'
-                    }`}
-                  >
-                    {draftUploading ? (
-                      <Loader2 className="h-3 w-3 text-stone/40 animate-spin" />
-                    ) : (
-                      <Upload className="h-3 w-3 text-stone/40" />
-                    )}
-                    <span className="text-[11px] text-stone/50">
-                      {draftUploading ? 'Uploading...' : 'Drop files here or click to upload'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Promote button */}
-            <div className="px-3 pb-3 pt-1 shrink-0">
-              <button
-                onClick={handlePromote}
-                disabled={!selectedDraft || selectedDraftFiles.length === 0 || isPromoting || promoteStatus === 'success'}
-                className={`w-full px-3 py-2.5 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                  promoteStatus === 'success'
-                    ? 'bg-moss/20 text-moss border border-moss/30'
-                    : 'bg-surface/60 text-parchment hover:bg-surface/80 border border-border-custom disabled:opacity-30 disabled:cursor-not-allowed'
-                }`}
-              >
-                {isPromoting ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Promoting...</>
-                ) : promoteStatus === 'success' ? (
-                  <><Check className="h-3.5 w-3.5" /> Promoted!</>
-                ) : (
-                  'Promote to Installed'
-                )}
-              </button>
-            </div>
-          </div>
-
-        </div>
-        </>)}
-        </>) : (
-          <button
-            onClick={() => setActivePanel('editor')}
-            className="w-12 h-full border-r border-border-custom bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
-          >
-            <ChevronRight className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
-            <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Editor</span>
-            <Wand2 className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
-          </button>
-        )}
-        </div>
-
-        {/* Tester panel */}
-        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'tester' ? 'flex-1' : 'w-12 shrink-0'}`}>
-          {activePanel === 'tester' ? (
+        {/* Test panel */}
+        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'test' ? 'flex-1' : 'w-12 shrink-0'}`}>
+          {activePanel === 'test' ? (
             <div className="flex flex-col h-full min-w-0">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
-                <FlaskConical className="h-4 w-4 text-sand" />
-                <h2 className="text-sm font-medium text-parchment">Test a Skill</h2>
+                <Play className="h-4 w-4 text-sand" />
+                <h2 className="text-sm font-medium text-parchment">Test</h2>
               </div>
               <SkillTester selectedSkill={selectedSkill} />
             </div>
           ) : (
             <button
-              onClick={() => setActivePanel('tester')}
+              onClick={() => setActivePanel('test')}
               className="w-12 h-full bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
             >
-              <FlaskConical className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
-              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Tester</span>
+              <Play className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
+              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Test</span>
               <ChevronLeft className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
             </button>
           )}

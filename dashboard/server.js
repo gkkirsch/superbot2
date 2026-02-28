@@ -4910,6 +4910,135 @@ app.get('/api/skill-tester/skills', async (req, res) => {
   }
 })
 
+// Lightweight chat endpoint for the Chat panel — SSE streaming from claude -p
+// Unlike the full skill-creator/chat which uses persistent sessions + stream-json,
+// this is a simpler per-request SSE endpoint (same pattern as skill-tester/run)
+app.post('/api/skill-creator/chat-simple', (req, res) => {
+  const { message, skillName, source, history } = req.body
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'message required' })
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  const env = { ...process.env }
+  delete env.CLAUDECODE
+
+  // Build the system prompt
+  let systemSuffix = `You are a skill creation assistant for superbot2 Claude Code skills. Help the user create, modify, and test Claude Code skills and plugins. Skills are saved as SKILL.md files with YAML frontmatter plus a markdown body. When creating or modifying a skill, write the complete files to disk at ~/.superbot2/skill-creator/drafts/<skill-name>/. Reference the skill authoring patterns and conventions the user has established.`
+
+  // If a skill is selected, add context about it
+  let skillContext = ''
+  if (skillName) {
+    const baseDir = source === 'drafts' ? SKILL_CREATOR_DRAFTS_DIR : join(SUPERBOT_DIR, 'skills')
+    const skillDir = join(baseDir, skillName)
+    try {
+      const TEXT_EXTENSIONS = new Set(['.md', '.sh', '.js', '.ts', '.json', '.yaml', '.yml', '.txt', '.jsx', '.tsx', '.css', '.html'])
+      const SKIP_DIRS = new Set(['node_modules', '.git', '__pycache__', '.DS_Store'])
+      const fileContents = []
+
+      function walkSync(dir, prefix) {
+        let entries
+        try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+        for (const entry of entries) {
+          if (SKIP_DIRS.has(entry.name)) continue
+          const fullPath = join(dir, entry.name)
+          const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+          if (entry.isDirectory()) {
+            walkSync(fullPath, relPath)
+          } else {
+            const ext = extname(entry.name).toLowerCase()
+            if (!TEXT_EXTENSIONS.has(ext)) continue
+            try {
+              const content = readFileSync(fullPath, 'utf-8')
+              fileContents.push(`--- ${relPath} ---\n${content}`)
+            } catch {}
+          }
+        }
+      }
+      walkSync(skillDir, '')
+      if (fileContents.length > 0) {
+        skillContext = `\n\nCurrently selected skill: "${skillName}" (source: ${source || 'drafts'})\nSkill files:\n${fileContents.join('\n\n')}`
+      }
+    } catch {}
+  }
+
+  // Build input: history + current message
+  let inputText = ''
+  if (Array.isArray(history) && history.length > 0) {
+    // Format as conversation turns for context
+    for (const msg of history) {
+      const role = msg.role === 'user' ? 'Human' : 'Assistant'
+      inputText += `${role}: ${msg.content}\n\n`
+    }
+    inputText += `Human: ${message.trim()}`
+  } else {
+    inputText = message.trim()
+  }
+
+  if (skillContext) {
+    systemSuffix += skillContext
+  }
+
+  const child = spawn(CLAUDE_BIN, [
+    '-p',
+    '--dangerously-skip-permissions',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--append-system-prompt', systemSuffix
+  ], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env
+  })
+
+  child.stdin.write(inputText)
+  child.stdin.end()
+
+  const rl = createInterface({ input: child.stdout })
+
+  rl.on('line', (line) => {
+    if (!line.trim()) return
+    try {
+      const event = JSON.parse(line)
+      if (event.type === 'stream_event') {
+        const inner = event.event
+        if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text: inner.delta.text })}\n\n`)
+        }
+      } else if (event.type === 'assistant') {
+        const content = event.message?.content || []
+        const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
+        if (text) {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`)
+        }
+      }
+    } catch {
+      // Skip unparseable lines
+    }
+  })
+
+  const stderrChunks = []
+  child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
+
+  child.on('exit', (code) => {
+    if (code !== 0) {
+      const stderr = stderrChunks.join('')
+      res.write(`data: ${JSON.stringify({ type: 'error', message: `Process exited with code ${code}`, stderr })}\n\n`)
+    }
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+    res.end()
+  })
+
+  res.on('close', () => {
+    try { child.kill() } catch {}
+  })
+})
+
 // Run a skill test via claude -p with SSE streaming response
 app.post('/api/skill-tester/run', (req, res) => {
   const { skillName, prompt, source } = req.body
