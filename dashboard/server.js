@@ -5100,6 +5100,10 @@ app.post('/api/skill-tester/run', async (req, res) => {
 
   const rl = createInterface({ input: child.stdout })
 
+  // Track in-flight tool_use content blocks by index
+  const toolUseBlocks = {}
+  const emittedToolCalls = new Set() // track tool IDs already emitted via stream_event
+
   rl.on('line', (line) => {
     if (!line.trim()) return
     try {
@@ -5119,14 +5123,61 @@ app.post('/api/skill-tester/run', async (req, res) => {
 
       if (event.type === 'stream_event') {
         const inner = event.event
+
+        // Text streaming
         if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
           res.write(`data: ${JSON.stringify({ type: 'chunk', text: inner.delta.text })}\n\n`)
         }
+
+        // Tool use: track content_block_start with type tool_use
+        if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use') {
+          toolUseBlocks[inner.index] = {
+            id: inner.content_block.id,
+            name: inner.content_block.name,
+            inputJson: ''
+          }
+        }
+
+        // Tool use: accumulate input JSON deltas
+        if (inner?.type === 'content_block_delta' && inner.delta?.type === 'input_json_delta') {
+          if (toolUseBlocks[inner.index]) {
+            toolUseBlocks[inner.index].inputJson += inner.delta.partial_json
+          }
+        }
+
+        // Tool use: emit tool_call on content_block_stop
+        if (inner?.type === 'content_block_stop' && toolUseBlocks[inner.index]) {
+          const block = toolUseBlocks[inner.index]
+          let input = {}
+          try { input = JSON.parse(block.inputJson) } catch {}
+          let inputStr = JSON.stringify(input)
+          if (inputStr.length > 200) inputStr = inputStr.slice(0, 197) + '...'
+          res.write(`data: ${JSON.stringify({ type: 'tool_call', tool: block.name, input: inputStr })}\n\n`)
+          emittedToolCalls.add(block.id)
+          delete toolUseBlocks[inner.index]
+        }
       } else if (event.type === 'assistant') {
         const content = event.message?.content || []
+
+        // Emit tool_call for tool_use blocks not already emitted via stream_event
+        for (const block of content) {
+          if (block.type === 'tool_use' && !emittedToolCalls.has(block.id)) {
+            let inputStr = JSON.stringify(block.input || {})
+            if (inputStr.length > 200) inputStr = inputStr.slice(0, 197) + '...'
+            res.write(`data: ${JSON.stringify({ type: 'tool_call', tool: block.name, input: inputStr })}\n\n`)
+            emittedToolCalls.add(block.id)
+          }
+        }
+
         const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
         if (text) {
           res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`)
+        }
+      } else if (event.type === 'result') {
+        // Tool result event — tool execution completed
+        const toolName = event.tool_name || event.tool || ''
+        if (toolName) {
+          res.write(`data: ${JSON.stringify({ type: 'tool_result', tool: toolName, success: !event.is_error })}\n\n`)
         }
       }
     } catch {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Wrench } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -712,9 +712,14 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   )
 }
 
+type OutputSegment =
+  | { type: 'text'; text: string }
+  | { type: 'tool_call'; tool: string; input: string }
+  | { type: 'tool_result'; tool: string; success: boolean }
+
 function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [prompt, setPrompt] = useState('')
-  const [output, setOutput] = useState('')
+  const [segments, setSegments] = useState<OutputSegment[]>([])
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const [skillStatus, setSkillStatus] = useState<{ status: string; skillName?: string; message?: string; path?: string } | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
@@ -725,12 +730,12 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
-  }, [output])
+  }, [segments])
 
   const handleRun = async () => {
     if (!selectedSkill || !prompt.trim() || status === 'running') return
 
-    setOutput('')
+    setSegments([])
     setStatus('running')
     setSkillStatus(null)
 
@@ -747,7 +752,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
 
       if (!response.ok || !response.body) {
         setStatus('error')
-        setOutput('Failed to connect to skill tester')
+        setSegments([{ type: 'text', text: 'Failed to connect to skill tester' }])
         return
       }
 
@@ -770,12 +775,23 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             if (data.type === 'skill_status') {
               setSkillStatus(data)
             } else if (data.type === 'chunk') {
-              setOutput(prev => prev + data.text)
+              // Append text to last text segment, or create new one
+              setSegments(prev => {
+                const last = prev[prev.length - 1]
+                if (last && last.type === 'text') {
+                  return [...prev.slice(0, -1), { type: 'text', text: last.text + data.text }]
+                }
+                return [...prev, { type: 'text', text: data.text }]
+              })
+            } else if (data.type === 'tool_call') {
+              setSegments(prev => [...prev, { type: 'tool_call', tool: data.tool, input: data.input }])
+            } else if (data.type === 'tool_result') {
+              setSegments(prev => [...prev, { type: 'tool_result', tool: data.tool, success: data.success }])
             } else if (data.type === 'done') {
               setStatus('done')
             } else if (data.type === 'error') {
               setStatus('error')
-              setOutput(prev => prev + '\n\n--- Error ---\n' + data.message)
+              setSegments(prev => [...prev, { type: 'text', text: '\n\n--- Error ---\n' + data.message }])
             }
           } catch {}
         }
@@ -786,7 +802,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setStatus('error')
-        setOutput(prev => prev + '\n\nConnection error')
+        setSegments(prev => [...prev, { type: 'text', text: '\n\nConnection error' }])
       }
     }
   }
@@ -798,10 +814,12 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
 
   const handleClear = () => {
     if (abortRef.current) abortRef.current.abort()
-    setOutput('')
+    setSegments([])
     setSkillStatus(null)
     setStatus('idle')
   }
+
+  const hasOutput = segments.length > 0
 
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
@@ -847,7 +865,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             <Play className="h-3 w-3" /> Run
           </button>
         )}
-        {output && (
+        {hasOutput && (
           <button
             onClick={handleClear}
             className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-stone/50 hover:text-parchment transition-colors"
@@ -873,40 +891,65 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
         ref={outputRef}
         className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-3 text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words"
       >
-        {output || skillStatus || status === 'running' ? (
+        {hasOutput || skillStatus || status === 'running' ? (
           <>
-            {/* Skill load status line */}
+            {/* Skill load status — compact line at top */}
             {status === 'running' && !skillStatus && (
-              <div className="text-[11px] text-stone/50 mb-2 flex items-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Loading skill...</span>
+              <div className="text-[10px] text-stone/40 mb-1.5 flex items-center gap-1">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                <span>loading...</span>
               </div>
             )}
             {skillStatus?.status === 'loaded' && (
-              <div className="text-[11px] text-moss/70 mb-2 flex items-center gap-1.5">
-                <Check className="h-3 w-3" />
+              <div className="text-[10px] text-moss/50 mb-1.5 flex items-center gap-1">
+                <Check className="h-2.5 w-2.5" />
                 <span>{skillStatus.skillName} loaded</span>
               </div>
             )}
             {skillStatus?.status === 'not_found' && (
-              <div className="text-[11px] text-ember/70 mb-2 flex items-center gap-1.5">
-                <XCircle className="h-3 w-3" />
-                <span>Skill not found at {skillStatus.message?.split(': ')[1]}</span>
+              <div className="text-[10px] text-ember/60 mb-1.5 flex items-center gap-1">
+                <XCircle className="h-2.5 w-2.5" />
+                <span>not found: {skillStatus.message?.split(': ')[1]}</span>
               </div>
             )}
             {skillStatus?.status === 'no_skill_md' && (
-              <div className="text-[11px] text-sand/70 mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="h-3 w-3" />
-                <span>SKILL.md missing — skill may not work correctly</span>
+              <div className="text-[10px] text-sand/50 mb-1.5 flex items-center gap-1">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                <span>SKILL.md missing</span>
               </div>
             )}
             {skillStatus?.status === 'not_loaded' && (
-              <div className="text-[11px] text-ember/70 mb-2 flex items-center gap-1.5">
-                <XCircle className="h-3 w-3" />
-                <span>Skill not loaded by Claude</span>
+              <div className="text-[10px] text-ember/60 mb-1.5 flex items-center gap-1">
+                <XCircle className="h-2.5 w-2.5" />
+                <span>skill not loaded</span>
               </div>
             )}
-            {output}
+            {/* Output segments — text chunks interleaved with tool call annotations */}
+            {segments.map((seg, i) => {
+              if (seg.type === 'text') {
+                return <span key={i}>{seg.text}</span>
+              }
+              if (seg.type === 'tool_call') {
+                return (
+                  <div key={i} className="my-1.5 pl-2 border-l-2 border-sand/20 text-[11px] text-sand/60 font-mono flex items-start gap-1.5">
+                    <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span>{seg.tool}(<span className="text-sand/40">{seg.input}</span>)</span>
+                  </div>
+                )
+              }
+              if (seg.type === 'tool_result') {
+                return (
+                  <div key={i} className="my-1 pl-2 border-l-2 border-sand/20 text-[10px] font-mono flex items-center gap-1.5">
+                    {seg.success ? (
+                      <span className="text-moss/50"><Check className="h-2.5 w-2.5 inline mr-0.5" />{seg.tool} done</span>
+                    ) : (
+                      <span className="text-ember/50"><XCircle className="h-2.5 w-2.5 inline mr-0.5" />{seg.tool} failed</span>
+                    )}
+                  </div>
+                )
+              }
+              return null
+            })}
             {status === 'running' && (
               <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
             )}
