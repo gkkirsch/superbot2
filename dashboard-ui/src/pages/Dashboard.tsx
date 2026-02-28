@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Check, X, Plus, RotateCcw } from 'lucide-react'
 import { useDashboardConfig } from '@/hooks/useSpaces'
 import { SECTION_REGISTRY, DEFAULT_DASHBOARD_CONFIG } from '@/features/DashboardSections'
+import { useTelegram } from '@/hooks/useTelegram'
 import type { DashboardConfig } from '@/lib/types'
 
 type ColumnId = 'leftColumn' | 'centerColumn' | 'rightColumn'
@@ -139,10 +140,34 @@ function DroppableColumn({ id, sectionIds, isEditing, onHide }: {
 
 // --- Main Dashboard ---
 
+// Telegram single-column layout: renders all visible sections in one column,
+// Chat first. Uses the same SECTION_REGISTRY components as the desktop layout.
+function TelegramDashboardLayout({ layout }: { layout: DashboardConfig }) {
+  // Flatten all columns into one list, prioritizing Chat at the top
+  const allSections = [...layout.centerColumn, ...layout.leftColumn, ...layout.rightColumn]
+  // Move 'chat' to front if present
+  const ordered = allSections.includes('chat')
+    ? ['chat', ...allSections.filter(id => id !== 'chat')]
+    : allSections
+
+  return (
+    <div className="min-h-screen bg-ink">
+      <div className="px-3 py-4 space-y-6">
+        {ordered.map((id) => {
+          const def = SECTION_REGISTRY[id]
+          if (!def) return null
+          return <def.Component key={id} />
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function Dashboard() {
   const { config, saveConfig, saveError } = useDashboardConfig()
   const [isEditing, setIsEditing] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  const { isTelegram } = useTelegram()
 
   // Local layout state for drag operations (committed to server on drag end)
   const [localLayout, setLocalLayout] = useState<DashboardConfig | null>(null)
@@ -338,6 +363,11 @@ export function Dashboard() {
     setIsEditing((prev) => !prev)
     setLocalLayout(null)
   }, [])
+
+  // Telegram: single-column layout, no editing, same sections
+  if (isTelegram) {
+    return <TelegramDashboardLayout layout={layout} />
+  }
 
   return (
     <div className="min-h-screen bg-ink">

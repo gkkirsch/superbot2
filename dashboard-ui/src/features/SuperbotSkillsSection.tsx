@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft } from 'lucide-react'
+import { X, Loader2, Trash2, Webhook, Bot, Puzzle, ChevronRight, ChevronDown, Cable, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Copy, Check, Globe } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSuperbotSkills, useHooks, useAgents, useSkills, usePlugins } from '@/hooks/useSpaces'
-import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, getTelegramStatus, saveTelegramConfig, startTelegramWatcher, stopTelegramWatcher, testTelegram } from '@/lib/api'
+import { fetchSuperbotSkillDetail, fetchSuperbotSkillFile, deleteSuperbotSkill, toggleSuperbotSkill, fetchSkillDetail, fetchSkillFile, toggleHook, toggleAgent, testHook, getIMessageStatus, saveIMessageConfig, startIMessageWatcher, stopIMessageWatcher, testIMessage, getTelegramStatus, saveTelegramConfig, startTelegramWatcher, stopTelegramWatcher, testTelegram, startTunnel, getTunnelStatus } from '@/lib/api'
 import type { HookTestResult, IMessageStatus, TelegramStatus } from '@/lib/api'
 import { SkillDetailModal } from '@/components/SkillDetailModal'
 import type { SuperbotSkill, SkillInfo, HookInfo, AgentInfo } from '@/lib/types'
@@ -609,6 +609,11 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
   const [testResult, setTestResult] = useState<{ sent: boolean; error?: string } | null>(null)
   const [testing, setTesting] = useState(false)
   const [status, setStatus] = useState<TelegramStatus | null>(null)
+  const [tunnelUrl, setTunnelUrl] = useState('')
+  const [tunnelStarting, setTunnelStarting] = useState(false)
+  const [tunnelError, setTunnelError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [menuButtonUpdated, setMenuButtonUpdated] = useState(false)
 
   async function handleSave() {
     setSaving(true)
@@ -637,6 +642,43 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
     }
   }
 
+  async function handleStartTunnel() {
+    setTunnelStarting(true)
+    setTunnelError('')
+    try {
+      const result = await startTunnel()
+      if (result.url) {
+        setTunnelUrl(result.url)
+        if (result.menuButtonUpdated) setMenuButtonUpdated(true)
+      } else {
+        setTunnelError('Tunnel started but no URL was returned')
+      }
+    } catch (err) {
+      setTunnelError((err as Error).message)
+    } finally {
+      setTunnelStarting(false)
+    }
+  }
+
+  async function handleCopyUrl() {
+    await navigator.clipboard.writeText(tunnelUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // Check if tunnel is already running when entering step 4
+  useEffect(() => {
+    if (step === 4 && !tunnelUrl) {
+      getTunnelStatus().then(s => {
+        if (s.running && s.url) setTunnelUrl(s.url)
+      }).catch(() => {})
+    }
+  }, [step, tunnelUrl])
+
+  const stepLabel = step <= 3
+    ? `Step ${step} of 3`
+    : `Bonus: Mini App Setup (${step - 3} of 2)`
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
@@ -646,15 +688,17 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
       >
         <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
           <div className="min-w-0 flex-1">
-            <h2 className="font-heading text-xl text-parchment">Set Up Telegram Bot</h2>
-            <p className="text-sm text-stone mt-1">Step {step} of 3</p>
+            <h2 className="font-heading text-xl text-parchment">
+              {step <= 3 ? 'Set Up Telegram Bot' : 'Mini App Setup'}
+            </h2>
+            <p className="text-sm text-stone mt-1">{stepLabel}</p>
           </div>
           <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           {step === 1 && (
             <>
               <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
@@ -753,10 +797,148 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
                 </div>
               )}
 
-              <div className="flex justify-end">
+              <div className="border-t border-border-custom pt-4 mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-sand" />
+                  <span className="text-sm text-parchment font-medium">Set up Mini App?</span>
+                  <span className="text-[10px] bg-sand/15 text-sand px-1.5 py-0.5 rounded">Recommended</span>
+                </div>
+                <p className="text-xs text-stone/60">
+                  Add a mobile dashboard experience inside Telegram. Opens your superbot2 dashboard as a Mini App with a menu button.
+                </p>
+                <div className="flex justify-between">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                  >
+                    Skip
+                  </button>
+                  <button
+                    onClick={() => setStep(4)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                  >
+                    Continue <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 4 && (
+            <>
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
+                <p className="text-sm text-parchment font-medium">Start HTTPS Tunnel</p>
+                <p className="text-xs text-stone/60">
+                  Telegram requires HTTPS. This starts a Cloudflare tunnel and automatically registers the menu button with Telegram.
+                </p>
+
+                {!tunnelUrl ? (
+                  <button
+                    onClick={handleStartTunnel}
+                    disabled={tunnelStarting}
+                    className="w-full text-xs text-parchment bg-surface border border-border-custom hover:border-sand/30 rounded-lg px-4 py-2.5 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {tunnelStarting ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Starting tunnel (up to 30s)...</>
+                    ) : (
+                      <>Start Tunnel</>
+                    )}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-moss shrink-0" />
+                      <span className="text-xs text-moss">Tunnel running</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <code className="flex-1 text-xs text-sand font-mono bg-surface rounded px-2 py-1.5 truncate border border-border-custom">
+                        {tunnelUrl}
+                      </code>
+                      <button
+                        onClick={handleCopyUrl}
+                        className="p-1.5 text-stone hover:text-parchment transition-colors shrink-0"
+                        title="Copy URL"
+                      >
+                        {copied ? <Check className="h-3.5 w-3.5 text-moss" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    {menuButtonUpdated ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-moss shrink-0" />
+                        <span className="text-xs text-moss">Telegram menu button updated automatically</span>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg px-3 py-2 text-xs bg-sand/10 border border-sand/20 text-sand">
+                        Menu button could not be updated automatically. You can set it manually in @BotFather with <span className="font-mono">/setmenubutton</span>.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {tunnelError && (
+                  <div className="rounded-lg px-3 py-2 text-xs bg-ember/10 border border-ember/20 text-ember">
+                    {tunnelError}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
+                <p className="text-xs text-stone/60">
+                  <span className="text-parchment font-medium">Optional:</span> Create a direct link with <span className="text-sand font-mono">/newapp</span> in @BotFather. Choose a short name like <span className="text-sand">dashboard</span> to get a link: <span className="text-parchment">t.me/YourBot/dashboard</span>
+                </p>
+              </div>
+
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(3)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+                <button
+                  onClick={() => setStep(5)}
+                  disabled={!tunnelUrl}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-50"
+                >
+                  Next <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </>
+          )}
+
+          {step === 5 && (
+            <>
+              <div className="flex items-center gap-2 text-moss">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Almost there!</span>
+              </div>
+
+              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
+                <p className="text-sm text-parchment font-medium">Verify Mini App</p>
+                <ol className="text-xs text-stone space-y-2 list-decimal list-inside">
+                  <li>Open <span className="text-parchment">Telegram</span> on your phone or desktop</li>
+                  <li>Go to your bot chat</li>
+                  <li>Tap the <span className="text-sand">menu button</span> (bottom-left, next to the text input)</li>
+                  <li>The superbot2 dashboard should load inside Telegram</li>
+                </ol>
+              </div>
+
+              <div className="rounded-lg bg-ink/50 border border-border-custom p-3">
+                <p className="text-xs text-stone/60">
+                  <span className="text-parchment">Note:</span> Quick tunnel URLs change each restart. The menu button is updated automatically when you start a new tunnel.
+                </p>
+              </div>
+
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setStep(4)}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md text-stone hover:text-parchment transition-colors"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                  className="px-4 py-2 text-sm rounded-md bg-moss/20 text-moss hover:bg-moss/30 transition-colors"
                 >
                   Done
                 </button>

@@ -4,8 +4,10 @@ import { join, extname, resolve } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
+import { createHmac } from 'node:crypto'
 import yaml from 'js-yaml'
 import multer from 'multer'
+import cookieParser from 'cookie-parser'
 
 const app = express()
 const PORT = parseInt(process.env.SUPERBOT2_API_PORT || '3274', 10)
@@ -19,6 +21,129 @@ const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 
 app.use(express.json({ limit: '50mb' }))
+app.use(cookieParser())
+
+// --- Tunnel access token middleware ---
+// Gates tunnel access with a rotating UUID token. Localhost is always allowed.
+// Valid token sets a session cookie so subsequent requests don't need the token in URL.
+
+app.use((req, res, next) => {
+  // Skip for localhost / private network requests (direct access, not through tunnel)
+  const host = req.hostname || req.headers.host || ''
+  if (host === 'localhost' || host === '127.0.0.1' || host.startsWith('192.168.') || host.startsWith('10.')) {
+    return next()
+  }
+
+  // Check for valid Telegram initData header (already authenticated)
+  if (req.headers['x-telegram-init-data']) {
+    return next()
+  }
+
+  // Read the current access token from config
+  let validToken = ''
+  try {
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+      validToken = config?.telegram?.accessToken || ''
+    }
+  } catch { /* ignore */ }
+
+  // No token configured — allow through (backwards compatible before tunnel setup)
+  if (!validToken) {
+    return next()
+  }
+
+  // Check for token in query string
+  const token = req.query.token
+  if (token && token === validToken) {
+    res.cookie('sb2_access', validToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    })
+    return next()
+  }
+
+  // Check for session cookie
+  const cookieToken = req.cookies?.sb2_access
+  if (cookieToken && cookieToken === validToken) {
+    return next()
+  }
+
+  // No valid auth — return 403
+  res.status(403).json({ error: 'Access denied. Invalid or missing access token.' })
+})
+
+// --- Telegram Mini App auth middleware ---
+// Validates initData HMAC-SHA256 when X-Telegram-Init-Data header is present.
+// Local requests without the header are allowed through (non-breaking).
+
+function validateTelegramInitData(initData, botToken) {
+  try {
+    const params = new URLSearchParams(initData)
+    const hash = params.get('hash')
+    if (!hash) return null
+    params.delete('hash')
+
+    // Sort params alphabetically and join with \n
+    const dataCheckString = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n')
+
+    // HMAC: secret_key = HMAC-SHA256("WebAppData", botToken)
+    // hash = HMAC-SHA256(secret_key, dataCheckString)
+    const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest()
+    const computedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex')
+
+    if (computedHash !== hash) return null
+
+    // Check auth_date is not too old (allow 24h window)
+    const authDate = parseInt(params.get('auth_date') || '0', 10)
+    const now = Math.floor(Date.now() / 1000)
+    if (now - authDate > 86400) return null
+
+    // Extract user info
+    const userStr = params.get('user')
+    const user = userStr ? JSON.parse(userStr) : null
+    return { valid: true, user }
+  } catch {
+    return null
+  }
+}
+
+app.use((req, res, next) => {
+  const initData = req.headers['x-telegram-init-data']
+  if (!initData) {
+    // No Telegram header — local dashboard access, allow through
+    return next()
+  }
+
+  // Load bot token from config
+  let botToken = ''
+  try {
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    if (existsSync(configPath)) {
+      const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+      botToken = config?.telegram?.botToken || ''
+    }
+  } catch { /* ignore */ }
+
+  if (!botToken) {
+    return res.status(500).json({ error: 'Bot token not configured' })
+  }
+
+  const result = validateTelegramInitData(initData, botToken)
+  if (!result) {
+    return res.status(401).json({ error: 'Invalid Telegram auth' })
+  }
+
+  // Attach validated user to request
+  req.telegramUser = result.user
+  next()
+})
 
 // --- Helpers ---
 
@@ -1209,6 +1334,125 @@ app.post('/api/telegram/test', async (_req, res) => {
     }
   } catch (err) {
     res.status(500).json({ sent: false, error: err.message })
+  }
+})
+
+// --- Telegram tunnel (for Mini App) ---
+
+async function updateTelegramMenuButton(botToken, url) {
+  if (!botToken || !url) return false
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ menu_button: { type: 'web_app', text: 'Dashboard', web_app: { url } } }),
+    })
+    const data = await resp.json()
+
+    // Also register bot command menu
+    fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands: [
+        { command: 'dashboard', description: 'Open the superbot2 dashboard' },
+        { command: 'status', description: 'Portfolio status summary' },
+        { command: 'escalations', description: 'Show pending escalations' },
+        { command: 'spaces', description: 'Spaces and project details' },
+        { command: 'recent', description: 'Recent session summaries' },
+        { command: 'schedule', description: 'Scheduled jobs' },
+        { command: 'todo', description: 'Your todos' },
+        { command: 'help', description: 'List available commands' },
+      ] }),
+    }).catch(() => {}) // non-critical
+
+    return data.ok === true
+  } catch {
+    return false
+  }
+}
+
+app.get('/api/telegram/tunnel-status', async (_req, res) => {
+  try {
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    const webAppUrl = config?.telegram?.webAppUrl || ''
+    const pidFile = join(SUPERBOT_DIR, 'tunnel.pid')
+    let running = false
+    if (existsSync(pidFile)) {
+      try {
+        const pid = readFileSync(pidFile, 'utf-8').trim()
+        process.kill(Number(pid), 0)
+        running = true
+      } catch {}
+    }
+    res.json({ running, url: running ? webAppUrl : '' })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/start-tunnel', async (_req, res) => {
+  try {
+    const pidFile = join(SUPERBOT_DIR, 'tunnel.pid')
+    // Check if already running
+    if (existsSync(pidFile)) {
+      try {
+        const pid = readFileSync(pidFile, 'utf-8').trim()
+        process.kill(Number(pid), 0)
+        // Already running — update menu button and return current URL
+        const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+        const url = config?.telegram?.webAppUrl || ''
+        const menuButtonUpdated = await updateTelegramMenuButton(config?.telegram?.botToken, url)
+        return res.json({ url, alreadyRunning: true, menuButtonUpdated })
+      } catch {}
+    }
+
+    const tunnelScript = join(import.meta.dirname, '..', 'scripts', 'start-tunnel.sh')
+    const child = spawn('bash', [tunnelScript], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, SUPERBOT2_HOME: SUPERBOT_DIR },
+    })
+
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', d => { stdout += d.toString() })
+    child.stderr.on('data', d => { stderr += d.toString() })
+
+    const exitCode = await new Promise(resolve => child.on('close', resolve))
+
+    if (exitCode !== 0) {
+      return res.status(500).json({ error: stderr || stdout || 'Tunnel failed to start' })
+    }
+
+    // Extract URL from stdout
+    const urlMatch = stdout.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
+    let url = urlMatch ? urlMatch[0] : ''
+
+    if (!url) {
+      // Fallback: read from config (the script saves it there)
+      const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+      url = config?.telegram?.webAppUrl || ''
+    }
+
+    // Check if menu button was updated by the script
+    const menuButtonUpdated = stdout.includes('Updated Telegram menu button')
+
+    res.json({ url, menuButtonUpdated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/telegram/stop-tunnel', async (_req, res) => {
+  try {
+    const tunnelScript = join(import.meta.dirname, '..', 'scripts', 'stop-tunnel.sh')
+    const child = spawn('bash', [tunnelScript], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, SUPERBOT2_HOME: SUPERBOT_DIR },
+    })
+    await new Promise(resolve => child.on('close', resolve))
+    res.json({ stopped: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 

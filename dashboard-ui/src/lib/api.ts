@@ -4,12 +4,31 @@ export type { PluginDetail }
 
 const API_BASE = '/api'
 
+function getTelegramHeaders(): Record<string, string> {
+  const tg = (window as any).Telegram?.WebApp
+  if (tg?.initData) {
+    return { 'X-Telegram-Init-Data': tg.initData }
+  }
+  return {}
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${url}`)
+  const response = await apiFetch(`${API_BASE}${url}`)
   if (!response.ok) {
     throw new Error(`API error: ${response.status} ${response.statusText}`)
   }
   return response.json()
+}
+
+function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const tgHeaders = getTelegramHeaders()
+  const mergedHeaders = {
+    ...tgHeaders,
+    ...(init?.headers instanceof Headers
+      ? Object.fromEntries(init.headers.entries())
+      : init?.headers as Record<string, string> || {}),
+  }
+  return fetch(url, { ...init, headers: mergedHeaders })
 }
 
 // --- Context files ---
@@ -83,7 +102,7 @@ export async function fetchEscalations(status?: string, space?: string, type?: s
 }
 
 export async function resolveEscalation(id: string, resolution: string): Promise<Escalation> {
-  const response = await fetch(`${API_BASE}/escalations/${id}`, {
+  const response = await apiFetch(`${API_BASE}/escalations/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'resolved', resolution }),
@@ -93,7 +112,7 @@ export async function resolveEscalation(id: string, resolution: string): Promise
 }
 
 export async function dismissEscalation(id: string): Promise<Escalation> {
-  const response = await fetch(`${API_BASE}/escalations/${id}/dismiss`, {
+  const response = await apiFetch(`${API_BASE}/escalations/${id}/dismiss`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -101,7 +120,7 @@ export async function dismissEscalation(id: string): Promise<Escalation> {
 }
 
 export async function deleteEscalation(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/escalations/${id}`, {
+  const response = await apiFetch(`${API_BASE}/escalations/${id}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -130,19 +149,19 @@ export async function fetchServerStatus(slug: string): Promise<ServerStatus> {
 }
 
 export async function startServer(slug: string): Promise<{ status: string; pid?: number; command?: string; cwd?: string }> {
-  const response = await fetch(`${API_BASE}/spaces/${slug}/start`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/spaces/${slug}/start`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
 
 export async function stopServer(slug: string): Promise<{ status: string }> {
-  const response = await fetch(`${API_BASE}/spaces/${slug}/stop`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/spaces/${slug}/stop`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
 
 export async function deployServer(slug: string): Promise<{ status: string; pid?: number }> {
-  const response = await fetch(`${API_BASE}/spaces/${slug}/deploy`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/spaces/${slug}/deploy`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
@@ -176,7 +195,7 @@ export async function fetchHeartbeatActivity(): Promise<HeartbeatEntry[]> {
 }
 
 export async function updateHeartbeatInterval(intervalMinutes: number): Promise<{ intervalMinutes: number }> {
-  const response = await fetch(`${API_BASE}/heartbeat`, {
+  const response = await apiFetch(`${API_BASE}/heartbeat`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ intervalMinutes }),
@@ -199,7 +218,7 @@ export async function fetchSchedule(): Promise<ScheduleData> {
 }
 
 export async function addScheduleJob(job: ScheduledJob): Promise<{ schedule: ScheduledJob[] }> {
-  const response = await fetch(`${API_BASE}/schedule`, {
+  const response = await apiFetch(`${API_BASE}/schedule`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(job),
@@ -209,7 +228,7 @@ export async function addScheduleJob(job: ScheduledJob): Promise<{ schedule: Sch
 }
 
 export async function deleteScheduleJob(name: string): Promise<{ schedule: ScheduledJob[] }> {
-  const response = await fetch(`${API_BASE}/schedule/${encodeURIComponent(name)}`, {
+  const response = await apiFetch(`${API_BASE}/schedule/${encodeURIComponent(name)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -254,21 +273,21 @@ export async function fetchAgentDetail(id: string): Promise<AgentDetail> {
 }
 
 export async function deleteSkill(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/skills/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/skills/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function deleteAgent(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/agents/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function deleteHook(event: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/hooks/${encodeURIComponent(event)}`, {
+  const response = await apiFetch(`${API_BASE}/hooks/${encodeURIComponent(event)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -280,7 +299,7 @@ export async function fetchPlugins(): Promise<PluginInfo[]> {
 }
 
 export async function installPlugin(name: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/plugins/install`, {
+  const response = await apiFetch(`${API_BASE}/plugins/install`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -289,7 +308,7 @@ export async function installPlugin(name: string): Promise<void> {
 }
 
 export async function uninstallPlugin(name: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/plugins/uninstall`, {
+  const response = await apiFetch(`${API_BASE}/plugins/uninstall`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -298,7 +317,7 @@ export async function uninstallPlugin(name: string): Promise<void> {
 }
 
 export async function enablePlugin(name: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/plugins/enable`, {
+  const response = await apiFetch(`${API_BASE}/plugins/enable`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -307,7 +326,7 @@ export async function enablePlugin(name: string): Promise<void> {
 }
 
 export async function disablePlugin(name: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/plugins/disable`, {
+  const response = await apiFetch(`${API_BASE}/plugins/disable`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -321,7 +340,7 @@ export async function fetchMarketplaces(): Promise<MarketplaceInfo[]> {
 }
 
 export async function addMarketplace(url: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/marketplaces`, {
+  const response = await apiFetch(`${API_BASE}/marketplaces`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
@@ -339,7 +358,7 @@ export async function fetchPluginFile(name: string, filePath: string): Promise<s
 }
 
 export async function removeMarketplace(name: string): Promise<{ uninstalledCount: number; uninstalledPlugins: string[]; message: string }> {
-  const response = await fetch(`${API_BASE}/marketplaces/${encodeURIComponent(name)}`, {
+  const response = await apiFetch(`${API_BASE}/marketplaces/${encodeURIComponent(name)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -347,7 +366,7 @@ export async function removeMarketplace(name: string): Promise<{ uninstalledCoun
 }
 
 export async function refreshMarketplaces(): Promise<void> {
-  const response = await fetch(`${API_BASE}/marketplaces/refresh`, {
+  const response = await apiFetch(`${API_BASE}/marketplaces/refresh`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -360,7 +379,7 @@ export async function fetchPluginCredentials(name: string): Promise<PluginCreden
 }
 
 export async function savePluginCredential(name: string, key: string, value: string): Promise<{ ok: boolean; validation?: { valid: boolean; error?: string } }> {
-  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials`, {
+  const response = await apiFetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ key, value }),
@@ -370,7 +389,7 @@ export async function savePluginCredential(name: string, key: string, value: str
 }
 
 export async function installPluginBin(name: string, installId: string): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/install-bin`, {
+  const response = await apiFetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/install-bin`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ installId }),
@@ -380,7 +399,7 @@ export async function installPluginBin(name: string, installId: string): Promise
 }
 
 export async function deletePluginCredential(name: string, key: string): Promise<{ ok: boolean }> {
-  const response = await fetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials/${encodeURIComponent(key)}`, {
+  const response = await apiFetch(`${API_BASE}/plugins/${encodeURIComponent(name)}/credentials/${encodeURIComponent(key)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -398,7 +417,7 @@ export async function fetchSessions(limit = 20, space?: string): Promise<Session
 }
 
 export async function dismissSession(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/sessions/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/sessions/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -421,14 +440,14 @@ export async function fetchSuperbotSkillFile(id: string, filePath: string): Prom
 }
 
 export async function deleteSuperbotSkill(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/superbot-skills/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/superbot-skills/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function toggleSuperbotSkill(id: string): Promise<{ enabled: boolean }> {
-  const response = await fetch(`${API_BASE}/superbot-skills/${encodeURIComponent(id)}/toggle`, {
+  const response = await apiFetch(`${API_BASE}/superbot-skills/${encodeURIComponent(id)}/toggle`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -436,7 +455,7 @@ export async function toggleSuperbotSkill(id: string): Promise<{ enabled: boolea
 }
 
 export async function toggleHook(event: string): Promise<{ enabled: boolean }> {
-  const response = await fetch(`${API_BASE}/hooks/${encodeURIComponent(event)}/toggle`, {
+  const response = await apiFetch(`${API_BASE}/hooks/${encodeURIComponent(event)}/toggle`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -456,7 +475,7 @@ export interface HookTestResult {
 }
 
 export async function testHook(event: string, input?: Record<string, unknown>): Promise<HookTestResult> {
-  const response = await fetch(`${API_BASE}/hooks/${encodeURIComponent(event)}/test`, {
+  const response = await apiFetch(`${API_BASE}/hooks/${encodeURIComponent(event)}/test`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input ? { input } : {}),
@@ -466,7 +485,7 @@ export async function testHook(event: string, input?: Record<string, unknown>): 
 }
 
 export async function toggleAgent(id: string): Promise<{ enabled: boolean }> {
-  const response = await fetch(`${API_BASE}/agents/${encodeURIComponent(id)}/toggle`, {
+  const response = await apiFetch(`${API_BASE}/agents/${encodeURIComponent(id)}/toggle`, {
     method: 'POST',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -512,7 +531,7 @@ export async function fetchMessages(
 export async function sendMessageToOrchestrator(text: string, images?: { name: string; data: string }[]): Promise<{ ok: boolean }> {
   const body: Record<string, unknown> = { text }
   if (images && images.length > 0) body.images = images
-  const response = await fetch(`${API_BASE}/messages`, {
+  const response = await apiFetch(`${API_BASE}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -541,7 +560,7 @@ export interface AnalysisSnapshotSummary {
 }
 
 export async function runSelfImprovement(days = 30): Promise<{ status: string; days: number }> {
-  const response = await fetch(`${API_BASE}/self-improvement/run`, {
+  const response = await apiFetch(`${API_BASE}/self-improvement/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ days }),
@@ -568,7 +587,7 @@ export async function fetchDashboardConfig(): Promise<DashboardConfig> {
 }
 
 export async function saveDashboardConfig(config: DashboardConfig): Promise<DashboardConfig> {
-  const response = await fetch(`${API_BASE}/dashboard-config`, {
+  const response = await apiFetch(`${API_BASE}/dashboard-config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ config }),
@@ -586,7 +605,7 @@ export async function fetchTodos(): Promise<TodoItem[]> {
 }
 
 export async function addTodo(text: string): Promise<TodoItem> {
-  const response = await fetch(`${API_BASE}/todos`, {
+  const response = await apiFetch(`${API_BASE}/todos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -597,7 +616,7 @@ export async function addTodo(text: string): Promise<TodoItem> {
 }
 
 export async function updateTodo(id: string, updates: { text?: string; completed?: boolean }): Promise<TodoItem> {
-  const response = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -608,7 +627,7 @@ export async function updateTodo(id: string, updates: { text?: string; completed
 }
 
 export async function deleteTodo(id: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
+  const response = await apiFetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -631,7 +650,7 @@ export async function fetchAutoTriageRules(): Promise<AutoTriageRule[]> {
 }
 
 export async function addAutoTriageRule(rule: string, source?: string, space?: string, project?: string): Promise<AutoTriageRule> {
-  const response = await fetch(`${API_BASE}/auto-triage-rules`, {
+  const response = await apiFetch(`${API_BASE}/auto-triage-rules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rule, source, space, project }),
@@ -641,12 +660,12 @@ export async function addAutoTriageRule(rule: string, source?: string, space?: s
 }
 
 export async function deleteAutoTriageRule(index: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/auto-triage-rules/${index}`, { method: 'DELETE' })
+  const response = await apiFetch(`${API_BASE}/auto-triage-rules/${index}`, { method: 'DELETE' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function updateAutoTriageRule(index: number, rule: string): Promise<AutoTriageRule> {
-  const response = await fetch(`${API_BASE}/auto-triage-rules/${index}`, {
+  const response = await apiFetch(`${API_BASE}/auto-triage-rules/${index}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rule }),
@@ -667,7 +686,7 @@ export async function fetchKnowledgeContent(source: string, filename: string): P
 }
 
 export async function saveKnowledgeFile(source: string, filename: string, content: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
+  const response = await apiFetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -676,14 +695,14 @@ export async function saveKnowledgeFile(source: string, filename: string, conten
 }
 
 export async function deleteKnowledgeFile(source: string, filename: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
+  const response = await apiFetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/${encodeURIComponent(filename)}`, {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function createKnowledgeFile(source: string, filename: string, content?: string): Promise<{ filename: string }> {
-  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}`, {
+  const response = await apiFetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filename, content: content || '' }),
@@ -711,7 +730,7 @@ export async function getIMessageStatus(): Promise<IMessageStatus> {
 }
 
 export async function saveIMessageConfig(appleId: string, phoneNumber: string): Promise<IMessageStatus> {
-  const response = await fetch(`${API_BASE}/imessage/save`, {
+  const response = await apiFetch(`${API_BASE}/imessage/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ appleId, phoneNumber }),
@@ -721,23 +740,23 @@ export async function saveIMessageConfig(appleId: string, phoneNumber: string): 
 }
 
 export async function startIMessageWatcher(): Promise<void> {
-  const response = await fetch(`${API_BASE}/imessage/start`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/imessage/start`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function stopIMessageWatcher(): Promise<void> {
-  const response = await fetch(`${API_BASE}/imessage/stop`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/imessage/stop`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function testIMessage(): Promise<{ sent: boolean; error?: string }> {
-  const response = await fetch(`${API_BASE}/imessage/test`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/imessage/test`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
 
 export async function resetIMessage(): Promise<void> {
-  const response = await fetch(`${API_BASE}/imessage/reset`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/imessage/reset`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
@@ -756,7 +775,7 @@ export async function getTelegramStatus(): Promise<TelegramStatus> {
 }
 
 export async function saveTelegramConfig(botToken: string): Promise<TelegramStatus> {
-  const response = await fetch(`${API_BASE}/telegram/save`, {
+  const response = await apiFetch(`${API_BASE}/telegram/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ botToken }),
@@ -766,19 +785,41 @@ export async function saveTelegramConfig(botToken: string): Promise<TelegramStat
 }
 
 export async function startTelegramWatcher(): Promise<void> {
-  const response = await fetch(`${API_BASE}/telegram/start`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/telegram/start`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function stopTelegramWatcher(): Promise<void> {
-  const response = await fetch(`${API_BASE}/telegram/stop`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/telegram/stop`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 export async function testTelegram(): Promise<{ sent: boolean; error?: string }> {
-  const response = await fetch(`${API_BASE}/telegram/test`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/telegram/test`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
+}
+
+// --- Telegram tunnel (Mini App) ---
+
+export interface TunnelStatus {
+  running: boolean
+  url: string
+}
+
+export async function getTunnelStatus(): Promise<TunnelStatus> {
+  return fetchJson<TunnelStatus>('/telegram/tunnel-status')
+}
+
+export async function startTunnel(): Promise<{ url: string; alreadyRunning?: boolean; menuButtonUpdated?: boolean }> {
+  const response = await apiFetch(`${API_BASE}/telegram/start-tunnel`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function stopTunnel(): Promise<void> {
+  const response = await apiFetch(`${API_BASE}/telegram/stop-tunnel`, { method: 'POST' })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
 }
 
 // --- Browser (superbot2 Chrome profile) ---
@@ -794,17 +835,17 @@ export async function getBrowserStatus(): Promise<BrowserStatus> {
 }
 
 export async function setupBrowser(): Promise<{ success: boolean; output?: string; error?: string }> {
-  const response = await fetch(`${API_BASE}/browser/setup`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/browser/setup`, { method: 'POST' })
   return response.json()
 }
 
 export async function openBrowser(): Promise<{ success: boolean; error?: string }> {
-  const response = await fetch(`${API_BASE}/browser/open`, { method: 'POST' })
+  const response = await apiFetch(`${API_BASE}/browser/open`, { method: 'POST' })
   return response.json()
 }
 
 export async function saveUser(content: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/user`, {
+  const response = await apiFetch(`${API_BASE}/user`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -815,7 +856,7 @@ export async function saveUser(content: string): Promise<void> {
 export async function uploadKnowledgeFile(source: string, file: File): Promise<{ filename: string }> {
   const formData = new FormData()
   formData.append('file', file)
-  const response = await fetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/upload`, {
+  const response = await apiFetch(`${API_BASE}/knowledge/${encodeURIComponent(source)}/upload`, {
     method: 'POST',
     body: formData,
   })

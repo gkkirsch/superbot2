@@ -370,6 +370,7 @@ async function handleTextMessage(text) {
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
+      '/dashboard - Open the dashboard Mini App\n' +
       '/help - List commands'
     )
     return
@@ -384,6 +385,7 @@ async function handleTextMessage(text) {
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
+      '/dashboard - Open the dashboard Mini App\n' +
       '/help - Show this message\n\n' +
       'Any other message is sent to the superbot2 orchestrator.'
     )
@@ -417,6 +419,11 @@ async function handleTextMessage(text) {
 
   if (cmd === '/spaces') {
     await handleSpacesCommand()
+    return
+  }
+
+  if (cmd === '/dashboard') {
+    await handleDashboardCommand()
     return
   }
 
@@ -714,6 +721,35 @@ async function handleSpacesCommand() {
     logError(`Spaces command failed: ${err.message}`)
     await sendMessage('Failed to list spaces.')
   }
+}
+
+async function handleDashboardCommand() {
+  const config = await readJsonFile(CONFIG_PATH)
+  const webAppUrl = config?.telegram?.webAppUrl
+
+  if (!webAppUrl) {
+    await sendMessage(
+      '<b>Dashboard Mini App</b>\n\n' +
+      'No web app URL configured yet.\n\n' +
+      'Set it in <code>~/.superbot2/config.json</code> under <code>telegram.webAppUrl</code>, ' +
+      'or run the tunnel script first:\n' +
+      '<code>bash scripts/start-tunnel.sh</code>'
+    )
+    return
+  }
+
+  await sendMessage(
+    '<b>superbot2 Dashboard</b>\n\n' +
+    'Tap the button below to open the dashboard.',
+    {
+      replyMarkup: {
+        inline_keyboard: [[{
+          text: 'Open Dashboard',
+          web_app: { url: webAppUrl },
+        }]],
+      },
+    }
+  )
 }
 
 // --- Escalation cards ---
