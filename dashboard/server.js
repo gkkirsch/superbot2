@@ -1,8 +1,8 @@
 import express from 'express'
-import { readdir, readFile, writeFile, appendFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
+import { readdir, readFile, writeFile, appendFile, rename, mkdir, mkdtemp, stat, rm, unlink, cp, chmod } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import yaml from 'js-yaml'
 import multer from 'multer'
@@ -5080,6 +5080,47 @@ app.post('/api/skill-tester/run', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'no_skill_md', skillName, message: `SKILL.md not found in ${skillDir}` })}\n\n`)
   }
 
+  // Create temp working directory with CLAUDE.md so Claude naturally discovers skill instructions
+  const tempDir = await mkdtemp(join(tmpdir(), 'skill-test-'))
+  let skillLoaded = false
+
+  try {
+    // Init as git repo so Claude discovers CLAUDE.md as project context
+    execFileSync('git', ['init', '-q'], { cwd: tempDir })
+
+    if (skillMdExists) {
+      const skillMdRaw = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
+      // Strip YAML frontmatter (everything between --- delimiters)
+      const body = skillMdRaw.replace(/^---[\s\S]*?---\s*/, '').trim()
+      if (body) {
+        await writeFile(join(tempDir, 'CLAUDE.md'), body, 'utf-8')
+        skillLoaded = true
+      }
+    }
+
+    // Copy scripts directory so relative paths work
+    const scriptsDir = join(skillDir, 'scripts')
+    try {
+      await stat(scriptsDir)
+      await cp(scriptsDir, join(tempDir, 'scripts'), { recursive: true })
+      // Make scripts executable
+      const scriptFiles = await readdir(join(tempDir, 'scripts'))
+      for (const f of scriptFiles) {
+        await chmod(join(tempDir, 'scripts', f), 0o755)
+      }
+    } catch {}
+
+    if (skillLoaded) {
+      res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName, path: skillDir })}\n\n`)
+    }
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ type: 'error', message: `Failed to set up temp dir: ${err.message}` })}\n\n`)
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+    res.end()
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    return
+  }
+
   const env = { ...process.env }
   delete env.CLAUDECODE
 
@@ -5087,11 +5128,11 @@ app.post('/api/skill-tester/run', async (req, res) => {
     '-p',
     '--dangerously-skip-permissions',
     '--output-format', 'stream-json',
-    '--verbose',
-    '--plugin-dir', skillDir
+    '--verbose'
   ], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env
+    env,
+    cwd: tempDir
   })
 
   // Single-turn: write prompt to stdin and close
@@ -5108,18 +5149,6 @@ app.post('/api/skill-tester/run', async (req, res) => {
     if (!line.trim()) return
     try {
       const event = JSON.parse(line)
-
-      // Parse system init event for plugin load confirmation
-      if (event.type === 'system' && event.subtype === 'init') {
-        const plugins = event.plugins || []
-        const loaded = plugins.find(p => p.name === skillName)
-        if (loaded) {
-          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName: loaded.name, path: loaded.path })}\n\n`)
-        } else {
-          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'not_loaded', skillName, message: 'Plugin directory exists but was not loaded by Claude' })}\n\n`)
-        }
-        return
-      }
 
       if (event.type === 'stream_event') {
         const inner = event.event
@@ -5195,11 +5224,14 @@ app.post('/api/skill-tester/run', async (req, res) => {
     }
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
     res.end()
+    // Clean up temp directory
+    rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
 
-  // Clean up child process on client disconnect
+  // Clean up child process and temp dir on client disconnect
   res.on('close', () => {
     try { child.kill() } catch {}
+    rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
 })
 
