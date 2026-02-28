@@ -223,21 +223,6 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
 
 // --- My Skills Sidebar ---
 
-interface InstalledSkill {
-  name: string
-  description: string
-  version: string
-  installPath: string
-}
-
-interface DraftSkill {
-  name: string
-  sessionId?: string
-  createdAt: string
-  status: string
-  type?: 'plugin' | 'skill'
-}
-
 interface ValidationIssue {
   file: string
   field: string | null
@@ -250,48 +235,53 @@ interface ValidationResult {
   warnings: ValidationIssue[]
 }
 
-function MySkillsSidebar({ onNewDraft, refreshKey, selectedDraft, onSelectDraft }: {
+function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill }: {
   onNewDraft: (type: 'plugin' | 'skill') => void
   refreshKey: number
-  selectedDraft: string | null
-  onSelectDraft: (name: string) => void
+  selectedSkill: TesterSkill | null
+  onSelectSkill: (skill: TesterSkill) => void
 }) {
-  const [skills, setSkills] = useState<InstalledSkill[]>([])
-  const [drafts, setDrafts] = useState<DraftSkill[]>([])
+  const [activeTab, setActiveTab] = useState<'drafts' | 'active'>('drafts')
+  const [skills, setSkills] = useState<TesterSkill[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    async function fetchAll() {
+    async function fetchSkills() {
+      setLoading(true)
       try {
-        const [skillsRes, draftsRes] = await Promise.all([
-          fetch('/api/skill-creator/my-skills'),
-          fetch('/api/skill-creator/drafts')
-        ])
-        const [skillsData, draftsData] = await Promise.all([
-          skillsRes.json(),
-          draftsRes.json()
-        ])
-        if (!cancelled) {
-          if (skillsData.ok) setSkills(skillsData.skills)
-          if (draftsData.ok) setDrafts(draftsData.drafts)
-        }
+        const res = await fetch(`/api/skill-tester/skills?source=${activeTab}`)
+        const data = await res.json()
+        if (!cancelled && data.ok) setSkills(data.skills)
       } catch {}
       if (!cancelled) setLoading(false)
     }
-    fetchAll()
-
-    // Poll every 30s
-    const interval = setInterval(fetchAll, 30000)
+    fetchSkills()
+    const interval = setInterval(fetchSkills, 30000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [refreshKey])
-
-  const hasContent = skills.length > 0 || drafts.length > 0
+  }, [activeTab, refreshKey])
 
   return (
     <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 flex flex-col overflow-hidden">
       <div className="px-4 pt-4 pb-2">
-        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Plugins</h2>
+        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Skills</h2>
+      </div>
+
+      {/* Drafts / Active tabs */}
+      <div className="flex gap-1 px-3 pb-2">
+        {(['drafts', 'active'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              activeTab === tab
+                ? 'bg-sand/15 text-sand border border-sand/30'
+                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
+            }`}
+          >
+            {tab === 'drafts' ? 'Drafts' : 'Active'}
+          </button>
+        ))}
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
@@ -299,62 +289,34 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedDraft, onSelectDraft 
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
           </div>
-        ) : !hasContent ? (
+        ) : skills.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-center px-2">
-            <p className="text-xs text-stone/40">No plugins yet — create your first one!</p>
+            <p className="text-xs text-stone/40">
+              {activeTab === 'drafts' ? 'No drafts yet — create your first one!' : 'No active skills installed'}
+            </p>
           </div>
         ) : (
-          <>
-            {drafts.length > 0 && (
-              <div className="mb-3">
-                <p className="text-[10px] font-medium text-stone/40 uppercase tracking-wider px-3 mb-1">Drafts</p>
-                <div className="space-y-0.5">
-                  {drafts.map(draft => {
-                    const isSelected = selectedDraft === draft.name
-                    const isPlugin = draft.type === 'plugin'
-                    return (
-                      <button
-                        key={draft.name}
-                        onClick={() => onSelectDraft(draft.name)}
-                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-blue-500/15 border border-blue-500/30'
-                            : 'hover:bg-surface/40 border border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{draft.name}</p>
-                          <span className={`shrink-0 text-[9px] px-1 py-0.5 rounded ${
-                            isPlugin
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-purple-500/20 text-purple-400'
-                          }`}>
-                            {isPlugin ? 'Plugin' : 'Skill'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-stone/60 mt-0.5">{draft.status === 'complete' ? 'Ready to promote' : draft.status}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-            {skills.length > 0 && (
-              <div>
-                {drafts.length > 0 && (
-                  <p className="text-[10px] font-medium text-stone/40 uppercase tracking-wider px-3 mb-1">Installed</p>
-                )}
-                <div className="space-y-0.5">
-                  {skills.map(skill => (
-                    <div key={skill.name} className="px-3 py-2 rounded-lg hover:bg-surface/40 transition-colors cursor-default">
-                      <p className="text-sm text-parchment truncate">{skill.name}</p>
-                      <p className="text-xs text-stone/60 line-clamp-2 mt-0.5">{skill.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
+          <div className="space-y-0.5">
+            {skills.map(skill => {
+              const isSelected = selectedSkill?.id === skill.id && selectedSkill?.source === skill.source
+              return (
+                <button
+                  key={skill.id}
+                  onClick={() => onSelectSkill(skill)}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-500/15 border border-blue-500/30'
+                      : 'hover:bg-surface/40 border border-transparent'
+                  }`}
+                >
+                  <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{skill.name}</p>
+                  {skill.description && (
+                    <p className="text-xs text-stone/60 mt-0.5 line-clamp-2">{skill.description}</p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -425,37 +387,12 @@ interface TesterSkill {
   source: 'drafts' | 'active'
 }
 
-type TesterTab = 'drafts' | 'active'
-
-function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
-  const [activeTab, setActiveTab] = useState<TesterTab>('drafts')
-  const [skills, setSkills] = useState<TesterSkill[]>([])
-  const [selectedSkill, setSelectedSkill] = useState('')
+function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [prompt, setPrompt] = useState('')
   const [output, setOutput] = useState('')
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
   const outputRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
-
-  // Fetch skills when tab changes
-  useEffect(() => {
-    fetch(`/api/skill-tester/skills?source=${activeTab}`)
-      .then(r => r.json())
-      .then(data => { if (data.ok) setSkills(data.skills) })
-      .catch(() => {})
-  }, [activeTab])
-
-  // Sync defaultSkill to selectedSkill when skills load or default changes
-  useEffect(() => {
-    if (!defaultSkill || skills.length === 0) return
-    const match = skills.find(s => s.name === defaultSkill || s.id === defaultSkill)
-    if (match) setSelectedSkill(match.id)
-  }, [defaultSkill, skills])
-
-  // When defaultSkill is set, default to Drafts tab
-  useEffect(() => {
-    if (defaultSkill) setActiveTab('drafts')
-  }, [defaultSkill])
 
   // Auto-scroll output
   useEffect(() => {
@@ -477,7 +414,7 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
       const response = await fetch('/api/skill-tester/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillName: selectedSkill, prompt: prompt.trim(), source: activeTab }),
+        body: JSON.stringify({ skillName: selectedSkill.id, prompt: prompt.trim(), source: selectedSkill.source }),
         signal: controller.signal,
       })
 
@@ -538,34 +475,17 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
-      {/* Source tabs */}
-      <div className="flex gap-1 shrink-0">
-        {(['drafts', 'active'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => { setActiveTab(tab); setSelectedSkill('') }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === tab
-                ? 'bg-sand/15 text-sand border border-sand/30'
-                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-            }`}
-          >
-            {tab === 'drafts' ? 'Drafts' : 'Active'}
-          </button>
-        ))}
+      {/* Selected skill indicator */}
+      <div className="shrink-0 px-1">
+        {selectedSkill ? (
+          <p className="text-xs text-stone/70">
+            Testing: <span className="text-parchment font-medium">{selectedSkill.name}</span>
+            <span className="text-stone/40 ml-1.5">({selectedSkill.source})</span>
+          </p>
+        ) : (
+          <p className="text-xs text-stone/40">Select a skill from the sidebar to test</p>
+        )}
       </div>
-
-      {/* Skill selector */}
-      <select
-        value={selectedSkill}
-        onChange={e => setSelectedSkill(e.target.value)}
-        className="w-full text-sm bg-ink/50 text-parchment border border-border-custom rounded-lg px-3 py-2 focus:outline-none focus:border-sand/50 shrink-0"
-      >
-        <option value="">Select a skill...</option>
-        {skills.map(s => (
-          <option key={s.id} value={s.id}>{s.name}</option>
-        ))}
-      </select>
 
       {/* Prompt input */}
       <textarea
@@ -634,8 +554,14 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-              <p className="text-xs text-stone/40">Select a skill and enter a prompt to test</p>
-              <p className="text-[10px] text-stone/30 mt-1">Ctrl+Enter to run</p>
+              {selectedSkill ? (
+                <>
+                  <p className="text-xs text-stone/40">Enter a prompt to test {selectedSkill.name}</p>
+                  <p className="text-[10px] text-stone/30 mt-1">Ctrl+Enter to run</p>
+                </>
+              ) : (
+                <p className="text-xs text-stone/40">Select a skill from the sidebar to test</p>
+              )}
             </div>
           </div>
         )}
@@ -664,6 +590,7 @@ export function SkillCreator() {
   const [selectedDraft, setSelectedDraft] = useState<string | null>(() => {
     try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
   })
+  const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
@@ -694,6 +621,7 @@ export function SkillCreator() {
   const draftMessagesRef = useRef<Map<string, Message[]>>(new Map())
   const sessionIdRef = useRef(sessionId)
   const selectedDraftRef = useRef(selectedDraft)
+  const selectedSkillRef = useRef(selectedSkill)
   const messagesRef = useRef(messages)
 
   // Auto-scroll to bottom
@@ -708,6 +636,7 @@ export function SkillCreator() {
   // Keep refs in sync with state (avoids stale closures in callbacks)
   useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
   useEffect(() => { selectedDraftRef.current = selectedDraft }, [selectedDraft])
+  useEffect(() => { selectedSkillRef.current = selectedSkill }, [selectedSkill])
   useEffect(() => { messagesRef.current = messages }, [messages])
 
   // Persist selectedDraft to localStorage
@@ -1033,6 +962,7 @@ export function SkillCreator() {
         setSkillsRefreshKey(k => k + 1)
         setSelectedDraft(data.name)
         setSelectedDraftType(draftType)
+        setSelectedSkill({ id: data.name, name: data.name, description: '', source: 'drafts' })
       } else {
         setError(data.error || 'Failed to create draft')
       }
@@ -1045,15 +975,19 @@ export function SkillCreator() {
   useEffect(() => {
     if (draftName && !selectedDraft) {
       setSelectedDraft(draftName)
+      if (!selectedSkill) {
+        setSelectedSkill({ id: draftName, name: draftName, description: '', source: 'drafts' })
+      }
     }
-  }, [draftName, selectedDraft])
+  }, [draftName, selectedDraft, selectedSkill])
 
-  // Select a draft from sidebar — saves current messages, resets session, loads new draft's history
-  const handleSelectDraft = useCallback(async (name: string) => {
+  // Select a skill from the sidebar — handles both drafts and active skills
+  const handleSelectSkill = useCallback(async (skill: TesterSkill) => {
+    const currentSkill = selectedSkillRef.current
+    const isDeselecting = currentSkill?.id === skill.id && currentSkill?.source === skill.source
+
+    // Save current draft messages
     const currentDraft = selectedDraftRef.current
-    const isDeselecting = currentDraft === name
-
-    // Save current messages for the current draft
     if (currentDraft && messagesRef.current.length > 0) {
       draftMessagesRef.current.set(currentDraft, [...messagesRef.current])
     }
@@ -1071,48 +1005,56 @@ export function SkillCreator() {
     setPluginMeta(null)
 
     if (isDeselecting) {
+      setSelectedSkill(null)
       setSelectedDraft(null)
       return
     }
 
-    setSelectedDraft(name)
+    setSelectedSkill(skill)
 
-    // Reset chat state
-    setStreamingText('')
-    setIsProcessing(false)
-    setError(null)
-    pendingToolsRef.current = []
-    initialScrollDoneRef.current = false
+    if (skill.source === 'drafts') {
+      setSelectedDraft(skill.id)
 
-    // Kill existing session process
-    try {
-      await fetch(`/api/skill-creator/session/${sessionIdRef.current}`, { method: 'DELETE' })
-    } catch { /* ignore */ }
-    eventSourceRef.current?.close()
+      // Reset chat state
+      setStreamingText('')
+      setIsProcessing(false)
+      setError(null)
+      pendingToolsRef.current = []
+      initialScrollDoneRef.current = false
 
-    // Load messages from in-memory cache or fetch from backend
-    const cached = draftMessagesRef.current.get(name)
-    if (cached && cached.length > 0) {
-      setMessages(cached)
-    } else {
+      // Kill existing session process
       try {
-        const res = await fetch(`/api/skill-creator/drafts/${name}/chat-history`)
-        const data = await res.json()
-        if (data.ok && data.messages.length > 0) {
-          setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
-            id: crypto.randomUUID(),
-            ...m,
-          })))
-        } else {
+        await fetch(`/api/skill-creator/session/${sessionIdRef.current}`, { method: 'DELETE' })
+      } catch { /* ignore */ }
+      eventSourceRef.current?.close()
+
+      // Load messages from in-memory cache or fetch from backend
+      const cached = draftMessagesRef.current.get(skill.id)
+      if (cached && cached.length > 0) {
+        setMessages(cached)
+      } else {
+        try {
+          const res = await fetch(`/api/skill-creator/drafts/${skill.id}/chat-history`)
+          const data = await res.json()
+          if (data.ok && data.messages.length > 0) {
+            setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
+              id: crypto.randomUUID(),
+              ...m,
+            })))
+          } else {
+            setMessages([])
+          }
+        } catch {
           setMessages([])
         }
-      } catch {
-        setMessages([])
       }
-    }
 
-    // New SSE session for this draft
-    setSessionId(crypto.randomUUID())
+      // New SSE session for this draft
+      setSessionId(crypto.randomUUID())
+    } else {
+      // Active skill — clear draft state
+      setSelectedDraft(null)
+    }
   }, [])
 
   // Fetch files for the selected draft
@@ -1367,7 +1309,7 @@ export function SkillCreator() {
       {/* Accordion layout */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
-        <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedDraft={selectedDraft} onSelectDraft={handleSelectDraft} />
+        <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedSkill={selectedSkill} onSelectSkill={handleSelectSkill} />
 
         {/* Editor panel */}
         <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'editor' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
@@ -1781,7 +1723,7 @@ export function SkillCreator() {
                 <FlaskConical className="h-4 w-4 text-sand" />
                 <h2 className="text-sm font-medium text-parchment">Test a Skill</h2>
               </div>
-              <SkillTester defaultSkill={selectedDraft} />
+              <SkillTester selectedSkill={selectedSkill} />
             </div>
           ) : (
             <button
