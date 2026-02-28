@@ -4846,24 +4846,63 @@ setInterval(mirrorRepliesToImessage, 5000)
 // --- Skill Tester ---
 
 // List installed skills from ~/.superbot2/skills/
-app.get('/api/skill-tester/skills', async (_req, res) => {
+app.get('/api/skill-tester/skills', async (req, res) => {
   try {
-    const skillsDir = join(SUPERBOT_DIR, 'skills')
-    await mkdir(skillsDir, { recursive: true })
-    const entries = await readdir(skillsDir, { withFileTypes: true })
-    const skills = []
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const skillPath = join(skillsDir, entry.name)
-      let name = entry.name
-      let description = ''
-      try {
-        const skillMd = await readFile(join(skillPath, 'SKILL.md'), 'utf-8')
-        const fm = parseFrontmatter(skillMd)
-        if (fm.name) name = String(fm.name)
-        if (fm.description) description = String(fm.description).trim()
-      } catch {}
-      skills.push({ id: entry.name, name, description })
+    const source = req.query.source || 'all' // 'drafts' | 'active' | 'all'
+
+    async function readSkillsFrom(dir, sourceLabel) {
+      await mkdir(dir, { recursive: true })
+      const entries = await readdir(dir, { withFileTypes: true })
+      const skills = []
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+        const skillPath = join(dir, entry.name)
+        let name = entry.name
+        let description = ''
+        // Try root SKILL.md first, then look in skills/ subdirectories (plugin layout)
+        let found = false
+        try {
+          const skillMd = await readFile(join(skillPath, 'SKILL.md'), 'utf-8')
+          const fm = parseFrontmatter(skillMd)
+          if (fm.name) name = String(fm.name)
+          if (fm.description) description = String(fm.description).trim()
+          found = true
+        } catch {}
+        if (!found) {
+          try {
+            const skillsSubdir = join(skillPath, 'skills')
+            const subEntries = await readdir(skillsSubdir, { withFileTypes: true })
+            for (const sub of subEntries) {
+              if (!sub.isDirectory()) continue
+              try {
+                const skillMd = await readFile(join(skillsSubdir, sub.name, 'SKILL.md'), 'utf-8')
+                const fm = parseFrontmatter(skillMd)
+                if (fm.name) name = String(fm.name)
+                if (fm.description) description = String(fm.description).trim()
+                break
+              } catch {}
+            }
+          } catch {}
+        }
+        skills.push({ id: entry.name, name, description, source: sourceLabel })
+      }
+      return skills
+    }
+
+    const activeDir = join(SUPERBOT_DIR, 'skills')
+    const draftsDir = SKILL_CREATOR_DRAFTS_DIR
+
+    let skills = []
+    if (source === 'active') {
+      skills = await readSkillsFrom(activeDir, 'active')
+    } else if (source === 'drafts') {
+      skills = await readSkillsFrom(draftsDir, 'drafts')
+    } else {
+      const [active, drafts] = await Promise.all([
+        readSkillsFrom(activeDir, 'active'),
+        readSkillsFrom(draftsDir, 'drafts'),
+      ])
+      skills = [...drafts, ...active]
     }
     res.json({ ok: true, skills })
   } catch (err) {
@@ -4873,7 +4912,7 @@ app.get('/api/skill-tester/skills', async (_req, res) => {
 
 // Run a skill test via claude -p with SSE streaming response
 app.post('/api/skill-tester/run', (req, res) => {
-  const { skillName, prompt } = req.body
+  const { skillName, prompt, source } = req.body
   if (!skillName || !prompt) {
     return res.status(400).json({ error: 'skillName and prompt required' })
   }
@@ -4881,7 +4920,8 @@ app.post('/api/skill-tester/run', (req, res) => {
     return res.status(400).json({ error: 'Invalid skill name' })
   }
 
-  const skillDir = join(SUPERBOT_DIR, 'skills', skillName)
+  const baseDir = source === 'drafts' ? SKILL_CREATOR_DRAFTS_DIR : join(SUPERBOT_DIR, 'skills')
+  const skillDir = join(baseDir, skillName)
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',

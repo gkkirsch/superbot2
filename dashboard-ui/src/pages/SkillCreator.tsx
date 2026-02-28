@@ -422,9 +422,13 @@ interface TesterSkill {
   id: string
   name: string
   description: string
+  source: 'drafts' | 'active'
 }
 
+type TesterTab = 'drafts' | 'active'
+
 function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
+  const [activeTab, setActiveTab] = useState<TesterTab>('drafts')
   const [skills, setSkills] = useState<TesterSkill[]>([])
   const [selectedSkill, setSelectedSkill] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -433,13 +437,13 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
   const outputRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // Fetch available skills on mount
+  // Fetch skills when tab changes
   useEffect(() => {
-    fetch('/api/skill-tester/skills')
+    fetch(`/api/skill-tester/skills?source=${activeTab}`)
       .then(r => r.json())
       .then(data => { if (data.ok) setSkills(data.skills) })
       .catch(() => {})
-  }, [])
+  }, [activeTab])
 
   // Sync defaultSkill to selectedSkill when skills load or default changes
   useEffect(() => {
@@ -447,6 +451,11 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
     const match = skills.find(s => s.name === defaultSkill || s.id === defaultSkill)
     if (match) setSelectedSkill(match.id)
   }, [defaultSkill, skills])
+
+  // When defaultSkill is set, default to Drafts tab
+  useEffect(() => {
+    if (defaultSkill) setActiveTab('drafts')
+  }, [defaultSkill])
 
   // Auto-scroll output
   useEffect(() => {
@@ -468,7 +477,7 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
       const response = await fetch('/api/skill-tester/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillName: selectedSkill, prompt: prompt.trim() }),
+        body: JSON.stringify({ skillName: selectedSkill, prompt: prompt.trim(), source: activeTab }),
         signal: controller.signal,
       })
 
@@ -529,6 +538,23 @@ function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
+      {/* Source tabs */}
+      <div className="flex gap-1 shrink-0">
+        {(['drafts', 'active'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => { setActiveTab(tab); setSelectedSkill('') }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              activeTab === tab
+                ? 'bg-sand/15 text-sand border border-sand/30'
+                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
+            }`}
+          >
+            {tab === 'drafts' ? 'Drafts' : 'Active'}
+          </button>
+        ))}
+      </div>
+
       {/* Skill selector */}
       <select
         value={selectedSkill}
