@@ -554,21 +554,35 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
           )}
           {allSchedulesSorted.map(job => {
             const times = getJobTimes(job)
+            const isMultiTime = times.length > 1
             return (
               <button
                 key={job.name}
                 onClick={() => setEditingJob(job)}
-                className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
+                className="w-full text-left px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
               >
-                <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
-                  {toTitleCase(job.name)}
-                </span>
-                <span className="text-xs text-stone/40 shrink-0">
-                  {formatDays(job.days)}
-                </span>
-                <span className="text-xs font-mono tabular-nums text-stone/50 shrink-0">
-                  {times.map(t => to12Hour(t)).join(', ')}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
+                    {toTitleCase(job.name)}
+                  </span>
+                  <span className="text-xs text-stone/40 shrink-0">
+                    {formatDays(job.days)}
+                  </span>
+                  {!isMultiTime && times.length === 1 && (
+                    <span className="text-xs font-mono tabular-nums text-stone/50 shrink-0">
+                      {to12Hour(times[0])}
+                    </span>
+                  )}
+                </div>
+                {isMultiTime && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {times.map(t => (
+                      <span key={t} className="text-[10px] font-mono tabular-nums text-stone/50 bg-stone/[0.08] px-1.5 py-0.5 rounded">
+                        {to12Hour(t)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </button>
             )
           })}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check, ChevronDown } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -170,19 +170,18 @@ function ScheduleDashboardSection() {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setAddingJob(!addingJob)}
-              className="text-xs text-stone hover:text-sand transition-colors inline-flex items-center gap-1"
+              className="p-1 text-stone/50 hover:text-sand transition-colors rounded hover:bg-sand/10"
+              title="Add job"
             >
-              <Plus className="h-3 w-3" /> Add
+              <Plus className="h-3.5 w-3.5" />
             </button>
             <div className="relative" ref={viewMenuRef}>
               <button
                 onClick={e => { e.stopPropagation(); setShowViewMenu(v => !v) }}
-                className={`px-1.5 py-0.5 rounded text-xs transition-colors inline-flex items-center gap-0.5 ${
-                  showViewMenu ? 'text-sand bg-sand/10' : 'text-stone/50 hover:text-stone hover:bg-surface'
-                }`}
+                className={`p-1 rounded transition-colors ${showViewMenu || viewMode !== 'timeline' ? 'text-sand bg-sand/10' : 'text-stone/50 hover:text-stone hover:bg-surface'}`}
+                title="Schedule view"
               >
-                {SCHEDULE_VIEWS.find(v => v.value === viewMode)?.label}
-                <ChevronDown className="h-3 w-3" />
+                <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
               {showViewMenu && (
                 <div className="absolute right-0 top-full mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-lg py-1 min-w-[140px]">
