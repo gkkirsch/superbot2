@@ -811,7 +811,7 @@ export async function getTunnelStatus(): Promise<TunnelStatus> {
   return fetchJson<TunnelStatus>('/telegram/tunnel-status')
 }
 
-export async function startTunnel(): Promise<{ url: string; alreadyRunning?: boolean }> {
+export async function startTunnel(): Promise<{ url: string; alreadyRunning?: boolean; menuButtonUpdated?: boolean }> {
   const response = await apiFetch(`${API_BASE}/telegram/start-tunnel`, { method: 'POST' })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()

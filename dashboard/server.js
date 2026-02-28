@@ -1284,6 +1284,21 @@ app.post('/api/telegram/test', async (_req, res) => {
 
 // --- Telegram tunnel (for Mini App) ---
 
+async function updateTelegramMenuButton(botToken, url) {
+  if (!botToken || !url) return false
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${botToken}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ menu_button: { type: 'web_app', text: 'Dashboard', web_app: { url } } }),
+    })
+    const data = await resp.json()
+    return data.ok === true
+  } catch {
+    return false
+  }
+}
+
 app.get('/api/telegram/tunnel-status', async (_req, res) => {
   try {
     const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
@@ -1311,9 +1326,11 @@ app.post('/api/telegram/start-tunnel', async (_req, res) => {
       try {
         const pid = readFileSync(pidFile, 'utf-8').trim()
         process.kill(Number(pid), 0)
-        // Already running — return current URL
+        // Already running — update menu button and return current URL
         const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
-        return res.json({ url: config?.telegram?.webAppUrl || '', alreadyRunning: true })
+        const url = config?.telegram?.webAppUrl || ''
+        const menuButtonUpdated = await updateTelegramMenuButton(config?.telegram?.botToken, url)
+        return res.json({ url, alreadyRunning: true, menuButtonUpdated })
       } catch {}
     }
 
@@ -1336,15 +1353,18 @@ app.post('/api/telegram/start-tunnel', async (_req, res) => {
 
     // Extract URL from stdout
     const urlMatch = stdout.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
-    const url = urlMatch ? urlMatch[0] : ''
+    let url = urlMatch ? urlMatch[0] : ''
 
     if (!url) {
       // Fallback: read from config (the script saves it there)
       const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
-      return res.json({ url: config?.telegram?.webAppUrl || '' })
+      url = config?.telegram?.webAppUrl || ''
     }
 
-    res.json({ url })
+    // Check if menu button was updated by the script
+    const menuButtonUpdated = stdout.includes('Updated Telegram menu button')
+
+    res.json({ url, menuButtonUpdated })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

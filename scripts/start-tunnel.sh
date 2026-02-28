@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start-tunnel.sh — Start a Cloudflare quick tunnel to expose localhost:3274
+# start-tunnel.sh — Start a Cloudflare quick tunnel to expose the dashboard
 # The tunnel URL is saved to ~/.superbot2/config.json under telegram.webAppUrl
 #
 # Usage: bash start-tunnel.sh [port]
@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-PORT="${1:-3274}"
+PORT="${1:-${SUPERBOT2_UI_PORT:-47474}}"
 SUPERBOT_DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
 CONFIG="$SUPERBOT_DIR/config.json"
 LOG="$SUPERBOT_DIR/logs/tunnel.log"
@@ -77,6 +77,23 @@ if [ -f "$CONFIG" ]; then
         fs.writeFileSync('$CONFIG', JSON.stringify(config, null, 2));
     "
     echo "Saved webAppUrl to config.json"
+
+    # Auto-update Telegram menu button if bot token is configured
+    BOT_TOKEN=$(node -e "const c = JSON.parse(require('fs').readFileSync('$CONFIG','utf-8')); console.log(c.telegram?.botToken || '')")
+
+    if [ -n "$BOT_TOKEN" ]; then
+        RESULT=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setChatMenuButton" \
+            -H "Content-Type: application/json" \
+            -d "{\"menu_button\": {\"type\": \"web_app\", \"text\": \"Dashboard\", \"web_app\": {\"url\": \"$TUNNEL_URL\"}}}")
+
+        if echo "$RESULT" | grep -q '"ok":true'; then
+            echo "Updated Telegram menu button to $TUNNEL_URL"
+        else
+            echo "WARNING: Failed to update Telegram menu button: $RESULT"
+        fi
+    else
+        echo "No Telegram bot token found in config — skipping menu button update"
+    fi
 else
     echo "WARNING: config.json not found at $CONFIG — URL not saved"
 fi

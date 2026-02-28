@@ -613,6 +613,7 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
   const [tunnelStarting, setTunnelStarting] = useState(false)
   const [tunnelError, setTunnelError] = useState('')
   const [copied, setCopied] = useState(false)
+  const [menuButtonUpdated, setMenuButtonUpdated] = useState(false)
 
   async function handleSave() {
     setSaving(true)
@@ -648,6 +649,7 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
       const result = await startTunnel()
       if (result.url) {
         setTunnelUrl(result.url)
+        if (result.menuButtonUpdated) setMenuButtonUpdated(true)
       } else {
         setTunnelError('Tunnel started but no URL was returned')
       }
@@ -825,9 +827,9 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
           {step === 4 && (
             <>
               <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
-                <p className="text-sm text-parchment font-medium">1. Start HTTPS Tunnel</p>
+                <p className="text-sm text-parchment font-medium">Start HTTPS Tunnel</p>
                 <p className="text-xs text-stone/60">
-                  Telegram requires HTTPS. This starts a Cloudflare tunnel to expose your local dashboard.
+                  Telegram requires HTTPS. This starts a Cloudflare tunnel and automatically registers the menu button with Telegram.
                 </p>
 
                 {!tunnelUrl ? (
@@ -860,6 +862,16 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
                         {copied ? <Check className="h-3.5 w-3.5 text-moss" /> : <Copy className="h-3.5 w-3.5" />}
                       </button>
                     </div>
+                    {menuButtonUpdated ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-moss shrink-0" />
+                        <span className="text-xs text-moss">Telegram menu button updated automatically</span>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg px-3 py-2 text-xs bg-sand/10 border border-sand/20 text-sand">
+                        Menu button could not be updated automatically. You can set it manually in @BotFather with <span className="font-mono">/setmenubutton</span>.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -868,17 +880,6 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
                     {tunnelError}
                   </div>
                 )}
-              </div>
-
-              <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
-                <p className="text-sm text-parchment font-medium">2. Register with BotFather</p>
-                <p className="text-xs text-stone/60 mb-2">Open @BotFather in Telegram and set the menu button:</p>
-                <ol className="text-xs text-stone space-y-2 list-decimal list-inside">
-                  <li>Send <span className="text-sand font-mono">/setmenubutton</span></li>
-                  <li>Select your bot</li>
-                  <li>Paste the tunnel URL above</li>
-                  <li>Send <span className="text-sand font-mono">Dashboard</span> as the button label</li>
-                </ol>
               </div>
 
               <div className="rounded-lg bg-ink border border-border-custom p-4 space-y-3">
@@ -896,7 +897,8 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
                 </button>
                 <button
                   onClick={() => setStep(5)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors"
+                  disabled={!tunnelUrl}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-sand/15 text-sand hover:bg-sand/25 transition-colors disabled:opacity-50"
                 >
                   Next <ArrowRight className="h-3.5 w-3.5" />
                 </button>
@@ -923,7 +925,7 @@ export function TelegramSetupModal({ onClose, onComplete }: { onClose: () => voi
 
               <div className="rounded-lg bg-ink/50 border border-border-custom p-3">
                 <p className="text-xs text-stone/60">
-                  <span className="text-parchment">Note:</span> Quick tunnel URLs change each restart. If you restart the tunnel, update BotFather with <span className="text-sand font-mono">/setmenubutton</span> and the new URL.
+                  <span className="text-parchment">Note:</span> Quick tunnel URLs change each restart. The menu button is updated automatically when you start a new tunnel.
                 </p>
               </div>
 
