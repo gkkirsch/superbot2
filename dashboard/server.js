@@ -4989,6 +4989,66 @@ app.post('/api/skill-tester/run', (req, res) => {
   })
 })
 
+// Get files inside a skill directory (for file viewer)
+app.get('/api/skill-tester/skill-files', async (req, res) => {
+  try {
+    const { name, source } = req.query
+    if (!name || !source) {
+      return res.status(400).json({ error: 'name and source required' })
+    }
+    if (String(name).includes('/') || String(name).includes('..')) {
+      return res.status(400).json({ error: 'Invalid skill name' })
+    }
+
+    const baseDir = source === 'drafts' ? SKILL_CREATOR_DRAFTS_DIR : join(SUPERBOT_DIR, 'skills')
+    const skillDir = join(baseDir, String(name))
+
+    try {
+      await stat(skillDir)
+    } catch {
+      return res.status(404).json({ error: 'Skill not found' })
+    }
+
+    const TEXT_EXTENSIONS = new Set(['.md', '.sh', '.js', '.ts', '.json', '.yaml', '.yml', '.txt', '.jsx', '.tsx', '.css', '.html', '.toml', '.cfg', '.env', '.ini', '.xml', '.mjs', '.cjs'])
+    const SKIP_DIRS = new Set(['node_modules', '.git', '__pycache__', '.DS_Store'])
+
+    const files = []
+
+    async function walk(dir, prefix) {
+      const entries = await readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        if (SKIP_DIRS.has(entry.name)) continue
+        const fullPath = join(dir, entry.name)
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+
+        if (entry.isDirectory()) {
+          await walk(fullPath, relPath)
+        } else {
+          const ext = extname(entry.name).toLowerCase()
+          if (!TEXT_EXTENSIONS.has(ext)) continue
+          try {
+            const content = await readFile(fullPath, 'utf-8')
+            files.push({ path: relPath, content })
+          } catch {}
+        }
+      }
+    }
+
+    await walk(skillDir, '')
+
+    // Sort: SKILL.md first, then alphabetically
+    files.sort((a, b) => {
+      if (a.path === 'SKILL.md') return -1
+      if (b.path === 'SKILL.md') return 1
+      return a.path.localeCompare(b.path)
+    })
+
+    res.json({ skillName: name, source, files })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Start ---
 
 app.listen(PORT, () => {

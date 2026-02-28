@@ -387,6 +387,101 @@ interface TesterSkill {
   source: 'drafts' | 'active'
 }
 
+interface SkillFileEntry {
+  path: string
+  content: string
+}
+
+function SkillFileViewer({ skill }: { skill: TesterSkill }) {
+  const [files, setFiles] = useState<SkillFileEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchFiles() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`/api/skill-tester/skill-files?name=${encodeURIComponent(skill.id)}&source=${skill.source}`)
+        const data = await res.json()
+        if (!cancelled) {
+          if (data.error) {
+            setError(data.error)
+          } else {
+            setFiles(data.files || [])
+            setActiveFile(data.files?.[0]?.path || null)
+          }
+        }
+      } catch {
+        if (!cancelled) setError('Failed to load skill files')
+      }
+      if (!cancelled) setLoading(false)
+    }
+    fetchFiles()
+    return () => { cancelled = true }
+  }, [skill.id, skill.source])
+
+  const activeContent = files.find(f => f.path === activeFile)?.content || ''
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 text-stone/40 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm text-ember/70">{error}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      {/* Skill name + source badge */}
+      <div className="px-5 py-3 border-b border-border-custom flex items-center gap-3 shrink-0">
+        <h2 className="text-sm font-medium text-parchment">{skill.name}</h2>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+          skill.source === 'active'
+            ? 'bg-moss/15 text-moss border border-moss/30'
+            : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+        }`}>
+          {skill.source === 'active' ? 'Active' : 'Draft'}
+        </span>
+      </div>
+
+      {/* File tabs */}
+      <div className="flex overflow-x-auto border-b border-border-custom shrink-0 bg-ink/30 px-2 no-scrollbar">
+        {files.map(f => (
+          <button
+            key={f.path}
+            onClick={() => setActiveFile(f.path)}
+            className={`px-3 py-2 text-xs whitespace-nowrap border-b-2 transition-colors ${
+              activeFile === f.path
+                ? 'border-sand text-parchment'
+                : 'border-transparent text-stone/60 hover:text-stone hover:border-stone/30'
+            }`}
+          >
+            {f.path}
+          </button>
+        ))}
+      </div>
+
+      {/* File content */}
+      <div className="flex-1 min-h-0 overflow-auto p-4">
+        <pre className="text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words bg-ink/80 rounded-lg border border-border-custom p-4 min-h-full">
+          <code>{activeContent}</code>
+        </pre>
+      </div>
+    </div>
+  )
+}
+
 function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [prompt, setPrompt] = useState('')
   const [output, setOutput] = useState('')
@@ -1314,6 +1409,9 @@ export function SkillCreator() {
         {/* Editor panel */}
         <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'editor' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
         {activePanel === 'editor' ? (<>
+        {selectedSkill ? (
+          <SkillFileViewer skill={selectedSkill} />
+        ) : (<>
         {/* Center column — Chat */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
           {/* Chat messages */}
@@ -1703,6 +1801,7 @@ export function SkillCreator() {
           </div>
 
         </div>
+        </>)}
         </>) : (
           <button
             onClick={() => setActivePanel('editor')}
