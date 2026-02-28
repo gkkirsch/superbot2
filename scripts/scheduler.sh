@@ -46,13 +46,19 @@ const [nowHour, nowMin, nowDay, nowDate] = [process.argv[3], process.argv[4], pr
 
 const due = [];
 for (const job of schedule) {
-  const [jobH, jobM] = job.time.split(':');
-  if (jobH !== nowHour || jobM !== nowMin) continue;
-  if (job.days && job.days.length > 0 && !job.days.includes(nowDay)) continue;
-  const key = job.name + ':' + nowDate + 'T' + job.time;
-  if (lastRun[job.name] === key) continue;
-  lastRun[job.name] = key;
-  due.push(job);
+  // Support both time (string) and times (string[])
+  const jobTimes = job.times || (job.time ? [job.time] : []);
+  for (const t of jobTimes) {
+    const [jobH, jobM] = t.split(':');
+    if (jobH !== nowHour || jobM !== nowMin) continue;
+    if (job.days && job.days.length > 0 && !job.days.includes(nowDay)) continue;
+    const key = job.name + ':' + nowDate + 'T' + t;
+    if (lastRun[key] === key) continue;
+    lastRun[key] = key;
+    // Include the matched time in the output for the inbox message
+    due.push({ ...job, time: t });
+    break; // only fire once per job per minute
+  }
 }
 fs.writeFileSync(process.argv[2], JSON.stringify(lastRun, null, 2));
 if (due.length > 0) console.log(JSON.stringify(due));

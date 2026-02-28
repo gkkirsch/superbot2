@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Check, X, Trash2, Clock } from 'lucide-react'
+import { Check, X, Trash2, Clock, Plus, ChevronDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchedule } from '@/hooks/useSpaces'
 import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
@@ -7,9 +7,6 @@ import type { ScheduledJob } from '@/lib/types'
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
-}
-const SHORT_DAY_LABELS: Record<string, string> = {
-  mon: 'M', tue: 'T', wed: 'W', thu: 'Th', fri: 'F', sat: 'Sa', sun: 'Su',
 }
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
@@ -28,25 +25,77 @@ function to12Hour(time24: string): string {
   return `${h}:${mStr} ${suffix}`
 }
 
-function relativeTime(dateStr: string): string {
-  if (!dateStr) return ''
-  const now = new Date()
-  const then = new Date(dateStr)
-  if (isNaN(then.getTime())) return ''
-  const diffMs = now.getTime() - then.getTime()
-  if (diffMs < 0) return 'just now'
-  const diffMins = Math.floor(diffMs / 60000)
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
+/** Get all times for a job, normalizing time vs times */
+function getJobTimes(job: ScheduledJob): string[] {
+  if (job.times && job.times.length > 0) return job.times
+  if (job.time) return [job.time]
+  return []
 }
+
+/** Parse HH:MM to minutes since midnight */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+interface TimelineItem {
+  job: ScheduledJob
+  time: string
+  minutes: number
+  isPast: boolean
+  isNext: boolean
+}
+
+function buildTimeline(schedule: ScheduledJob[]): TimelineItem[] {
+  const now = new Date()
+  const nowDay = now.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase()
+  const nowMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const items: TimelineItem[] = []
+
+  for (const job of schedule) {
+    const activeDays = job.days && job.days.length > 0 && job.days.length < 7
+      ? job.days
+      : ALL_DAYS
+
+    // Only show today's fire times
+    if (!activeDays.includes(nowDay) && !activeDays.includes('*')) continue
+
+    const times = getJobTimes(job)
+    for (const time of times) {
+      const minutes = timeToMinutes(time)
+      items.push({
+        job,
+        time,
+        minutes,
+        isPast: minutes < nowMinutes,
+        isNext: false,
+      })
+    }
+  }
+
+  // Sort chronologically
+  items.sort((a, b) => a.minutes - b.minutes)
+
+  // Mark the first non-past item as "up next"
+  const nextIdx = items.findIndex(item => !item.isPast)
+  if (nextIdx >= 0) {
+    items[nextIdx].isNext = true
+  }
+
+  return items
+}
+
+const DEFAULT_VISIBLE = 3
 
 function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
   const queryClient = useQueryClient()
-  const [form, setForm] = useState<ScheduledJob>({ ...job, days: job.days ? [...job.days] : [] })
+  const jobTimes = getJobTimes(job)
+  const [form, setForm] = useState<ScheduledJob & { _times: string[] }>({
+    ...job,
+    days: job.days ? [...job.days] : [],
+    _times: jobTimes.length > 0 ? [...jobTimes] : ['09:00'],
+  })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const originalName = job.name
@@ -62,13 +111,39 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
     setForm({ ...form, days: days.includes(day) ? days.filter(d => d !== day) : [...days, day] })
   }
 
+  const updateTime = (idx: number, value: string) => {
+    const newTimes = [...form._times]
+    newTimes[idx] = value
+    setForm({ ...form, _times: newTimes })
+  }
+
+  const addTime = () => {
+    setForm({ ...form, _times: [...form._times, '12:00'] })
+  }
+
+  const removeTime = (idx: number) => {
+    if (form._times.length <= 1) return
+    setForm({ ...form, _times: form._times.filter((_, i) => i !== idx) })
+  }
+
   const handleSave = async () => {
-    if (!form.name || !form.task) return
+    if (!form.name || !form.task || form._times.length === 0) return
     setSaving(true)
     try {
-      const toSave = { ...form }
-      if (!toSave.space) delete (toSave as Partial<ScheduledJob>).space
-      if (!toSave.days || toSave.days.length === 0 || toSave.days.length === 7) delete (toSave as Partial<ScheduledJob>).days
+      const toSave: ScheduledJob = {
+        name: form.name,
+        task: form.task,
+      }
+      if (form.space) toSave.space = form.space
+      if (form.days && form.days.length > 0 && form.days.length < 7) toSave.days = form.days
+
+      // Use times array if multiple, single time for backward compat
+      if (form._times.length === 1) {
+        toSave.time = form._times[0]
+      } else {
+        toSave.times = [...form._times].sort()
+      }
+
       await updateScheduleJob(originalName, toSave)
       queryClient.invalidateQueries({ queryKey: ['schedule'] })
       onClose()
@@ -115,25 +190,43 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
               className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-stone mb-1.5">Time</label>
-              <input
-                type="time"
-                value={form.time}
-                onChange={e => setForm({ ...form, time: e.target.value })}
-                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
-              />
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Times</label>
+            <div className="space-y-2">
+              {form._times.map((t, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={t}
+                    onChange={e => updateTime(idx, e.target.value)}
+                    className="flex-1 bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
+                  />
+                  {form._times.length > 1 && (
+                    <button
+                      onClick={() => removeTime(idx)}
+                      className="p-1.5 text-stone hover:text-ember transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={addTime}
+                className="text-xs text-sand/60 hover:text-sand transition-colors inline-flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add time
+              </button>
             </div>
-            <div>
-              <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
-              <input
-                type="text"
-                value={form.space || ''}
-                onChange={e => setForm({ ...form, space: e.target.value })}
-                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
-              />
-            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
+            <input
+              type="text"
+              value={form.space || ''}
+              onChange={e => setForm({ ...form, space: e.target.value })}
+              className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+            />
           </div>
           <div>
             <label className="block text-xs text-stone mb-1.5">Days</label>
@@ -182,7 +275,7 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || !form.name || !form.task}
+              disabled={saving || !form.name || !form.task || form._times.length === 0}
               className="text-xs bg-sand/20 text-sand hover:bg-sand/30 px-3 py-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {saving ? 'Saving...' : 'Save changes'}
@@ -198,23 +291,41 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
   const { data, isLoading } = useSchedule()
   const queryClient = useQueryClient()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
-  const [newJob, setNewJob] = useState<ScheduledJob>({ name: '', time: '09:00', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
+  const [expanded, setExpanded] = useState(false)
+  const [newTimes, setNewTimes] = useState<string[]>(['09:00'])
+  const [newJob, setNewJob] = useState<Omit<ScheduledJob, 'time' | 'times'> & { name: string; days: string[]; task: string; space: string }>({
+    name: '', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '',
+  })
 
   if (isLoading) {
     return <div className="h-20 rounded-lg bg-stone/5 animate-pulse" />
   }
 
   const schedule = data?.schedule || []
-  const lastRun = data?.lastRun || {}
+  const timeline = buildTimeline(schedule)
+
+  const visibleItems = expanded ? timeline : timeline.slice(0, DEFAULT_VISIBLE)
+  const hiddenCount = timeline.length - DEFAULT_VISIBLE
 
   const handleAdd = async () => {
-    if (!newJob.name || !newJob.time || !newJob.task) return
-    const job = { ...newJob }
-    if (!job.space) delete (job as Partial<ScheduledJob>).space
-    if (!job.days || job.days.length === 0 || job.days.length === 7) delete (job as Partial<ScheduledJob>).days
+    if (!newJob.name || newTimes.length === 0 || !newJob.task) return
+    const job: ScheduledJob = {
+      name: newJob.name,
+      task: newJob.task,
+    }
+    if (newJob.space) job.space = newJob.space
+    if (newJob.days.length > 0 && newJob.days.length < 7) job.days = newJob.days
+
+    if (newTimes.length === 1) {
+      job.time = newTimes[0]
+    } else {
+      job.times = [...newTimes].sort()
+    }
+
     await addScheduleJob(job)
     queryClient.invalidateQueries({ queryKey: ['schedule'] })
-    setNewJob({ name: '', time: '09:00', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
+    setNewJob({ name: '', days: ['mon', 'tue', 'wed', 'thu', 'fri'], task: '', space: '' })
+    setNewTimes(['09:00'])
     setAdding(false)
   }
 
@@ -223,84 +334,146 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
     setNewJob({ ...newJob, days: days.includes(day) ? days.filter(d => d !== day) : [...days, day] })
   }
 
+  const addNewTime = () => setNewTimes([...newTimes, '12:00'])
+  const removeNewTime = (idx: number) => {
+    if (newTimes.length <= 1) return
+    setNewTimes(newTimes.filter((_, i) => i !== idx))
+  }
+  const updateNewTime = (idx: number, value: string) => {
+    const t = [...newTimes]
+    t[idx] = value
+    setNewTimes(t)
+  }
+
   return (
-    <div className="space-y-3">
-      {schedule.length === 0 && !adding && (
+    <div className="space-y-1">
+      {timeline.length === 0 && !adding && (
         <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
           <Clock className="h-4 w-4 text-stone/30 shrink-0" />
-          <p className="text-xs text-stone/50">No scheduled jobs yet</p>
+          <p className="text-xs text-stone/50">No scheduled jobs for today</p>
         </div>
       )}
 
-      {schedule.map((job) => {
-        const lastKey = lastRun[job.name]
-        const lastDate = lastKey ? lastKey.split(':').slice(1).join(':') : null
-        const activeDays = job.days && job.days.length > 0 && job.days.length < 7 ? job.days : ALL_DAYS
-
-        return (
+      {/* Timeline items */}
+      <div
+        className="space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out"
+      >
+        {visibleItems.map((item, idx) => (
           <button
-            key={job.name}
-            onClick={() => setEditingJob(job)}
-            className="w-full text-left rounded-lg border border-border-custom bg-surface/30 px-4 py-3 hover:border-sand/30 hover:bg-surface/50 transition-colors"
+            key={`${item.job.name}-${item.time}-${idx}`}
+            onClick={() => setEditingJob(item.job)}
+            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              item.isNext
+                ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
+                : item.isPast
+                  ? 'bg-surface/20 hover:bg-surface/30'
+                  : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
+            }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-parchment text-sm">{toTitleCase(job.name)}</span>
-              <div className="flex items-center gap-1 text-sand text-xs shrink-0 ml-3">
-                <Clock className="h-3 w-3" />
-                <span>{to12Hour(job.time)}</span>
-              </div>
+            {/* Time indicator */}
+            <div className="flex items-center gap-2 shrink-0 w-[80px]">
+              {item.isNext && (
+                <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+              )}
+              {!item.isNext && (
+                <span className={`h-2 w-2 rounded-full shrink-0 ${item.isPast ? 'bg-stone/20' : 'bg-stone/30'}`} />
+              )}
+              <span className={`text-xs font-mono tabular-nums ${
+                item.isNext
+                  ? 'text-blue-400 font-medium'
+                  : item.isPast
+                    ? 'text-stone/30 line-through'
+                    : 'text-stone/60'
+              }`}>
+                {to12Hour(item.time)}
+              </span>
             </div>
-            <div className="flex items-center justify-between mt-1.5">
-              <div className="flex items-center gap-0.5">
-                {ALL_DAYS.map(day => (
-                  <span
-                    key={day}
-                    className={`text-[10px] leading-none px-1 py-0.5 rounded ${
-                      activeDays.includes(day) ? 'text-stone bg-stone/15' : 'text-stone/20'
-                    }`}
-                  >
-                    {SHORT_DAY_LABELS[day]}
-                  </span>
-                ))}
-              </div>
-              {lastDate && <span className="text-[11px] text-sand/40">{relativeTime(lastDate)}</span>}
-            </div>
+
+            {/* Job name */}
+            <span className={`text-sm truncate ${
+              item.isNext
+                ? 'text-parchment font-medium'
+                : item.isPast
+                  ? 'text-stone/30'
+                  : 'text-stone/70'
+            }`}>
+              {toTitleCase(item.job.name)}
+            </span>
+
+            {/* Next badge */}
+            {item.isNext && (
+              <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
+                Next
+              </span>
+            )}
           </button>
-        )
-      })}
+        ))}
+      </div>
+
+      {/* Show all toggle */}
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="w-full text-center py-1.5 text-xs text-stone/50 hover:text-stone transition-colors flex items-center justify-center gap-1"
+        >
+          <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+          {expanded ? 'Show less' : `Show all ${timeline.length} scheduled`}
+        </button>
+      )}
 
       {/* Add new job form */}
       {adding && (
-        <div className="rounded-lg border border-sand/30 bg-surface/50 p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Job name (e.g. morning-briefing)"
-              value={newJob.name}
-              onChange={e => setNewJob({ ...newJob, name: e.target.value.replace(/\s+/g, '-').toLowerCase() })}
-              className="col-span-2 bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
-            />
-            <input
-              type="time"
-              value={newJob.time}
-              onChange={e => setNewJob({ ...newJob, time: e.target.value })}
-              className="bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
-            />
-            <input
-              type="text"
-              placeholder="Space (optional)"
-              value={newJob.space}
-              onChange={e => setNewJob({ ...newJob, space: e.target.value })}
-              className="bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
-            />
-            <textarea
-              placeholder="Task description"
-              value={newJob.task}
-              onChange={e => setNewJob({ ...newJob, task: e.target.value })}
-              rows={2}
-              className="col-span-2 bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50 resize-none"
-            />
+        <div className="rounded-lg border border-sand/30 bg-surface/50 p-4 space-y-3 mt-2">
+          <input
+            type="text"
+            placeholder="Job name (e.g. morning-briefing)"
+            value={newJob.name}
+            onChange={e => setNewJob({ ...newJob, name: e.target.value.replace(/\s+/g, '-').toLowerCase() })}
+            className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+          />
+          <div>
+            <label className="block text-xs text-stone mb-1.5">Times</label>
+            <div className="space-y-2">
+              {newTimes.map((t, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={t}
+                    onChange={e => updateNewTime(idx, e.target.value)}
+                    className="flex-1 bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment focus:outline-none focus:border-sand/50"
+                  />
+                  {newTimes.length > 1 && (
+                    <button
+                      onClick={() => removeNewTime(idx)}
+                      className="p-1.5 text-stone hover:text-ember transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={addNewTime}
+                className="text-xs text-sand/60 hover:text-sand transition-colors inline-flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add time
+              </button>
+            </div>
           </div>
+          <input
+            type="text"
+            placeholder="Space (optional)"
+            value={newJob.space}
+            onChange={e => setNewJob({ ...newJob, space: e.target.value })}
+            className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+          />
+          <textarea
+            placeholder="Task description"
+            value={newJob.task}
+            onChange={e => setNewJob({ ...newJob, task: e.target.value })}
+            rows={2}
+            className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50 resize-none"
+          />
           <div className="flex items-center gap-1">
             {ALL_DAYS.map(day => (
               <button
@@ -318,14 +491,14 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
           </div>
           <div className="flex items-center gap-2 justify-end">
             <button
-              onClick={() => setAdding(false)}
+              onClick={() => { setAdding(false); setNewTimes(['09:00']) }}
               className="text-xs text-stone hover:text-parchment transition-colors inline-flex items-center gap-1"
             >
               <X className="h-3 w-3" /> Cancel
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newJob.name || !newJob.task}
+              disabled={!newJob.name || !newJob.task || newTimes.length === 0}
               className="text-xs text-sand hover:text-sand/80 transition-colors inline-flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Check className="h-3 w-3" /> Add job

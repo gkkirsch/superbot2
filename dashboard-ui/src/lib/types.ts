@@ -78,7 +78,8 @@ export interface EscalationAnswer {
 
 export interface ScheduledJob {
   name: string
-  time: string
+  time?: string
+  times?: string[]
   days?: string[]
   task: string
   space?: string

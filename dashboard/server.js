@@ -1713,8 +1713,11 @@ app.post('/api/schedule', async (req, res) => {
     if (!job.name || typeof job.name !== 'string') {
       return res.status(400).json({ error: 'name is required' })
     }
-    if (!job.time || typeof job.time !== 'string' || !/^\d{1,2}:\d{2}$/.test(job.time)) {
-      return res.status(400).json({ error: 'time is required in HH:MM format' })
+    const timePattern = /^\d{1,2}:\d{2}$/
+    const hasTime = job.time && typeof job.time === 'string' && timePattern.test(job.time)
+    const hasTimes = Array.isArray(job.times) && job.times.length > 0 && job.times.every(t => typeof t === 'string' && timePattern.test(t))
+    if (!hasTime && !hasTimes) {
+      return res.status(400).json({ error: 'time (HH:MM string) or times (HH:MM string[]) is required' })
     }
     if (!job.task || typeof job.task !== 'string') {
       return res.status(400).json({ error: 'task is required' })
