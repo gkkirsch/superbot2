@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check, ChevronDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -10,6 +10,7 @@ import { AutoTriageRulesModal } from '@/components/AutoTriageRulesModal'
 import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection } from '@/features/ScheduleSection'
+import type { ScheduleViewMode } from '@/features/ScheduleSection'
 import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
@@ -139,8 +140,26 @@ function PulseDashboardSection() {
   )
 }
 
+const SCHEDULE_VIEWS: { value: ScheduleViewMode; label: string }[] = [
+  { value: 'timeline', label: 'Timeline' },
+  { value: 'all-schedules', label: 'All Schedules' },
+]
+
 function ScheduleDashboardSection() {
   const [addingJob, setAddingJob] = useState(false)
+  const [viewMode, setViewMode] = useState<ScheduleViewMode>('timeline')
+  const [showViewMenu, setShowViewMenu] = useState(false)
+  const viewMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
+        setShowViewMenu(false)
+      }
+    }
+    if (showViewMenu) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showViewMenu])
 
   return (
     <section className="group" data-section="schedule">
@@ -148,15 +167,42 @@ function ScheduleDashboardSection() {
         title="Schedule"
         icon={Clock}
         action={
-          <button
-            onClick={() => setAddingJob(!addingJob)}
-            className="text-xs text-stone hover:text-sand transition-colors inline-flex items-center gap-1"
-          >
-            <Plus className="h-3 w-3" /> Add
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAddingJob(!addingJob)}
+              className="text-xs text-stone hover:text-sand transition-colors inline-flex items-center gap-1"
+            >
+              <Plus className="h-3 w-3" /> Add
+            </button>
+            <div className="relative" ref={viewMenuRef}>
+              <button
+                onClick={e => { e.stopPropagation(); setShowViewMenu(v => !v) }}
+                className={`px-1.5 py-0.5 rounded text-xs transition-colors inline-flex items-center gap-0.5 ${
+                  showViewMenu ? 'text-sand bg-sand/10' : 'text-stone/50 hover:text-stone hover:bg-surface'
+                }`}
+              >
+                {SCHEDULE_VIEWS.find(v => v.value === viewMode)?.label}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+              {showViewMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-lg py-1 min-w-[140px]">
+                  {SCHEDULE_VIEWS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={e => { e.stopPropagation(); setViewMode(opt.value); setShowViewMenu(false) }}
+                      className="w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-surface transition-colors text-left"
+                    >
+                      <span className={viewMode === opt.value ? 'text-sand' : 'text-stone'}>{opt.label}</span>
+                      {viewMode === opt.value && <Check className="h-3 w-3 text-sand" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         }
       />
-      <ScheduleSection adding={addingJob} setAdding={setAddingJob} />
+      <ScheduleSection adding={addingJob} setAdding={setAddingJob} viewMode={viewMode} />
     </section>
   )
 }

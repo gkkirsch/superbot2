@@ -138,6 +138,20 @@ function buildNextDayTimeline(schedule: ScheduledJob[]): NextDayTimeline | null 
   return null
 }
 
+/** Format days array into a readable string */
+function formatDays(days?: string[]): string {
+  if (!days || days.length === 0 || days.length === 7) return 'Every day'
+  const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri']
+  const weekend = ['sat', 'sun']
+  if (days.length === 5 && weekdays.every(d => days.includes(d))) return 'Weekdays'
+  if (days.length === 2 && weekend.every(d => days.includes(d))) return 'Weekends'
+  // Sort in week order and use abbreviations
+  const sorted = ALL_DAYS.filter(d => days.includes(d))
+  return sorted.map(d => DAY_LABELS[d]).join(', ')
+}
+
+export type ScheduleViewMode = 'timeline' | 'all-schedules'
+
 const DEFAULT_VISIBLE = 3
 
 function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
@@ -340,7 +354,7 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
   )
 }
 
-export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdding: (v: boolean) => void }) {
+export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { adding: boolean; setAdding: (v: boolean) => void; viewMode?: ScheduleViewMode }) {
   const { data, isLoading } = useSchedule()
   const queryClient = useQueryClient()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
@@ -415,147 +429,143 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
     setNewTimes(t)
   }
 
+  const allSchedulesSorted = viewMode === 'all-schedules'
+    ? [...schedule].sort((a, b) => a.name.localeCompare(b.name))
+    : []
+
   return (
     <div className="space-y-1">
-      {timeline.length === 0 && !nextDay && !adding && (
-        <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
-          <Clock className="h-4 w-4 text-stone/30 shrink-0" />
-          <p className="text-xs text-stone/50">No scheduled jobs</p>
-        </div>
-      )}
-
-      {/* Timeline items */}
-      <div
-        className="space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out"
-      >
-        {visibleItems.map((item, idx) => {
-          // Show divider above the first non-past item when there are past items before it
-          const showDivider = !item.isPast && idx > 0 && visibleItems[idx - 1].isPast
-
-          return (
-            <div key={`${item.job.name}-${item.time}-${idx}`}>
-              {showDivider && (
-                <div className="border-t border-stone/15 my-1.5" />
-              )}
-              <button
-                onClick={() => setEditingJob(item.job)}
-                className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  item.isNext
-                    ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
-                    : item.isPast
-                      ? 'hover:bg-surface/30'
-                      : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
-                }`}
-              >
-                {/* Time indicator */}
-                <div className="flex items-center gap-2 shrink-0 w-[80px]">
-                  {item.isNext && (
-                    <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
-                  )}
-                  {item.isPast && (
-                    <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
-                  )}
-                  {!item.isNext && !item.isPast && (
-                    <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
-                  )}
-                  <span className={`text-xs font-mono tabular-nums ${
-                    item.isNext
-                      ? 'text-blue-400 font-medium'
-                      : item.isPast
-                        ? 'text-stone/40'
-                        : 'text-stone/60'
-                  }`}>
-                    {to12Hour(item.time)}
-                  </span>
-                </div>
-
-                {/* Job name */}
-                <span className={`text-sm truncate ${
-                  item.isNext
-                    ? 'text-parchment font-medium'
-                    : item.isPast
-                      ? 'text-stone/40'
-                      : 'text-stone/70'
-                }`}>
-                  {toTitleCase(item.job.name)}
-                </span>
-
-                {/* Next badge */}
-                {item.isNext && (
-                  <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
-                    Next
-                  </span>
-                )}
-              </button>
+      {viewMode === 'timeline' && (
+        <>
+          {timeline.length === 0 && !nextDay && !adding && (
+            <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+              <Clock className="h-4 w-4 text-stone/30 shrink-0" />
+              <p className="text-xs text-stone/50">No scheduled jobs</p>
             </div>
-          )
-        })}
-      </div>
+          )}
 
-      {/* Show all toggle */}
-      {hiddenCount > 0 && (
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="w-full text-center py-1.5 text-xs text-stone/50 hover:text-stone transition-colors flex items-center justify-center gap-1"
-        >
-          <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
-          {expanded ? 'Show less' : `Show all ${timeline.length} scheduled`}
-        </button>
-      )}
+          {/* Timeline items */}
+          <div
+            className="space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out"
+          >
+            {visibleItems.map((item, idx) => {
+              const showDivider = !item.isPast && idx > 0 && visibleItems[idx - 1].isPast
 
-      {/* Next day section — shown when today has no upcoming items */}
-      {nextDay && (
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2 py-1.5">
-            <div className="flex-1 border-t border-stone/15" />
-            <span className="text-[10px] text-stone/50 uppercase tracking-wider">{nextDay.dayLabel}</span>
-            <div className="flex-1 border-t border-stone/15" />
+              return (
+                <div key={`${item.job.name}-${item.time}-${idx}`}>
+                  {showDivider && (
+                    <div className="border-t border-stone/15 my-1.5" />
+                  )}
+                  <button
+                    onClick={() => setEditingJob(item.job)}
+                    className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                      item.isPast
+                        ? 'hover:bg-surface/30'
+                        : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 shrink-0 w-[80px]">
+                      {item.isPast && (
+                        <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
+                      )}
+                      {!item.isPast && (
+                        <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
+                      )}
+                      <span className={`text-xs font-mono tabular-nums ${
+                        item.isPast ? 'text-stone/40' : 'text-stone/60'
+                      }`}>
+                        {to12Hour(item.time)}
+                      </span>
+                    </div>
+
+                    <span className={`text-sm truncate ${
+                      item.isPast ? 'text-stone/40' : 'text-stone/70'
+                    }`}>
+                      {toTitleCase(item.job.name)}
+                    </span>
+                  </button>
+                </div>
+              )
+            })}
           </div>
-          {(tomorrowExpanded ? nextDay.items : nextDay.items.slice(0, 1)).map((item, idx) => (
+
+          {hiddenCount > 0 && (
             <button
-              key={`next-${item.job.name}-${item.time}-${idx}`}
-              onClick={() => setEditingJob(item.job)}
-              className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                item.isNext
-                  ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
-                  : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-2 shrink-0 w-[80px]">
-                {item.isNext && (
-                  <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
-                )}
-                {!item.isNext && (
-                  <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
-                )}
-                <span className={`text-xs font-mono tabular-nums ${
-                  item.isNext ? 'text-blue-400 font-medium' : 'text-stone/60'
-                }`}>
-                  {to12Hour(item.time)}
-                </span>
-              </div>
-              <span className={`text-sm truncate ${
-                item.isNext ? 'text-parchment font-medium' : 'text-stone/70'
-              }`}>
-                {toTitleCase(item.job.name)}
-              </span>
-              {item.isNext && (
-                <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
-                  Next
-                </span>
-              )}
-            </button>
-          ))}
-          {nextDay.items.length > 1 && (
-            <button
-              onClick={() => setTomorrowExpanded(v => !v)}
+              onClick={() => setExpanded(v => !v)}
               className="w-full text-center py-1.5 text-xs text-stone/50 hover:text-stone transition-colors flex items-center justify-center gap-1"
             >
-              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${tomorrowExpanded ? 'rotate-180' : ''}`} />
-              {tomorrowExpanded ? 'Show less' : `Show all ${nextDay.items.length} for ${nextDay.dayLabel.toLowerCase()}`}
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+              {expanded ? 'Show less' : `Show all ${timeline.length} scheduled`}
             </button>
           )}
-        </div>
+
+          {nextDay && (
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 py-1.5">
+                <div className="flex-1 border-t border-stone/15" />
+                <span className="text-[10px] text-stone/50 uppercase tracking-wider">{nextDay.dayLabel}</span>
+                <div className="flex-1 border-t border-stone/15" />
+              </div>
+              {(tomorrowExpanded ? nextDay.items : nextDay.items.slice(0, 1)).map((item, idx) => (
+                <button
+                  key={`next-${item.job.name}-${item.time}-${idx}`}
+                  onClick={() => setEditingJob(item.job)}
+                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
+                >
+                  <div className="flex items-center gap-2 shrink-0 w-[80px]">
+                    <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
+                    <span className="text-xs font-mono tabular-nums text-stone/60">
+                      {to12Hour(item.time)}
+                    </span>
+                  </div>
+                  <span className="text-sm truncate text-stone/70">
+                    {toTitleCase(item.job.name)}
+                  </span>
+                </button>
+              ))}
+              {nextDay.items.length > 1 && (
+                <button
+                  onClick={() => setTomorrowExpanded(v => !v)}
+                  className="w-full text-center py-1.5 text-xs text-stone/50 hover:text-stone transition-colors flex items-center justify-center gap-1"
+                >
+                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${tomorrowExpanded ? 'rotate-180' : ''}`} />
+                  {tomorrowExpanded ? 'Show less' : `Show all ${nextDay.items.length} for ${nextDay.dayLabel.toLowerCase()}`}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {viewMode === 'all-schedules' && (
+        <>
+          {allSchedulesSorted.length === 0 && !adding && (
+            <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
+              <Clock className="h-4 w-4 text-stone/30 shrink-0" />
+              <p className="text-xs text-stone/50">No scheduled jobs</p>
+            </div>
+          )}
+          {allSchedulesSorted.map(job => {
+            const times = getJobTimes(job)
+            return (
+              <button
+                key={job.name}
+                onClick={() => setEditingJob(job)}
+                className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
+              >
+                <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
+                  {toTitleCase(job.name)}
+                </span>
+                <span className="text-xs text-stone/40 shrink-0">
+                  {formatDays(job.days)}
+                </span>
+                <span className="text-xs font-mono tabular-nums text-stone/50 shrink-0">
+                  {times.map(t => to12Hour(t)).join(', ')}
+                </span>
+              </button>
+            )
+          })}
+        </>
       )}
 
       {/* Add new job form */}
