@@ -380,56 +380,68 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
       <div
         className="space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out"
       >
-        {visibleItems.map((item, idx) => (
-          <button
-            key={`${item.job.name}-${item.time}-${idx}`}
-            onClick={() => setEditingJob(item.job)}
-            className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-              item.isNext
-                ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
-                : item.isPast
-                  ? 'bg-surface/20 hover:bg-surface/30'
-                  : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
-            }`}
-          >
-            {/* Time indicator */}
-            <div className="flex items-center gap-2 shrink-0 w-[80px]">
-              {item.isNext && (
-                <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+        {visibleItems.map((item, idx) => {
+          // Show divider above the first non-past item when there are past items before it
+          const showDivider = !item.isPast && idx > 0 && visibleItems[idx - 1].isPast
+
+          return (
+            <div key={`${item.job.name}-${item.time}-${idx}`}>
+              {showDivider && (
+                <div className="border-t border-stone/15 my-1.5" />
               )}
-              {!item.isNext && (
-                <span className={`h-2 w-2 rounded-full shrink-0 ${item.isPast ? 'bg-stone/20' : 'bg-stone/30'}`} />
-              )}
-              <span className={`text-xs font-mono tabular-nums ${
-                item.isNext
-                  ? 'text-blue-400 font-medium'
-                  : item.isPast
-                    ? 'text-stone/30 line-through'
-                    : 'text-stone/60'
-              }`}>
-                {to12Hour(item.time)}
-              </span>
+              <button
+                onClick={() => setEditingJob(item.job)}
+                className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  item.isNext
+                    ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
+                    : item.isPast
+                      ? 'hover:bg-surface/30'
+                      : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
+                }`}
+              >
+                {/* Time indicator */}
+                <div className="flex items-center gap-2 shrink-0 w-[80px]">
+                  {item.isNext && (
+                    <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+                  )}
+                  {item.isPast && (
+                    <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
+                  )}
+                  {!item.isNext && !item.isPast && (
+                    <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
+                  )}
+                  <span className={`text-xs font-mono tabular-nums ${
+                    item.isNext
+                      ? 'text-blue-400 font-medium'
+                      : item.isPast
+                        ? 'text-stone/40'
+                        : 'text-stone/60'
+                  }`}>
+                    {to12Hour(item.time)}
+                  </span>
+                </div>
+
+                {/* Job name */}
+                <span className={`text-sm truncate ${
+                  item.isNext
+                    ? 'text-parchment font-medium'
+                    : item.isPast
+                      ? 'text-stone/40'
+                      : 'text-stone/70'
+                }`}>
+                  {toTitleCase(item.job.name)}
+                </span>
+
+                {/* Next badge */}
+                {item.isNext && (
+                  <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
+                    Next
+                  </span>
+                )}
+              </button>
             </div>
-
-            {/* Job name */}
-            <span className={`text-sm truncate ${
-              item.isNext
-                ? 'text-parchment font-medium'
-                : item.isPast
-                  ? 'text-stone/30'
-                  : 'text-stone/70'
-            }`}>
-              {toTitleCase(item.job.name)}
-            </span>
-
-            {/* Next badge */}
-            {item.isNext && (
-              <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
-                Next
-              </span>
-            )}
-          </button>
-        ))}
+          )
+        })}
       </div>
 
       {/* Show all toggle */}
