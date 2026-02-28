@@ -716,6 +716,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [prompt, setPrompt] = useState('')
   const [output, setOutput] = useState('')
   const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const [skillStatus, setSkillStatus] = useState<{ status: string; skillName?: string; message?: string; path?: string } | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -731,6 +732,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
 
     setOutput('')
     setStatus('running')
+    setSkillStatus(null)
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -765,7 +767,9 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
-            if (data.type === 'chunk') {
+            if (data.type === 'skill_status') {
+              setSkillStatus(data)
+            } else if (data.type === 'chunk') {
               setOutput(prev => prev + data.text)
             } else if (data.type === 'done') {
               setStatus('done')
@@ -795,6 +799,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const handleClear = () => {
     if (abortRef.current) abortRef.current.abort()
     setOutput('')
+    setSkillStatus(null)
     setStatus('idle')
   }
 
@@ -868,8 +873,39 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
         ref={outputRef}
         className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-3 text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words"
       >
-        {output ? (
+        {output || skillStatus || status === 'running' ? (
           <>
+            {/* Skill load status line */}
+            {status === 'running' && !skillStatus && (
+              <div className="text-[11px] text-stone/50 mb-2 flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading skill...</span>
+              </div>
+            )}
+            {skillStatus?.status === 'loaded' && (
+              <div className="text-[11px] text-moss/70 mb-2 flex items-center gap-1.5">
+                <Check className="h-3 w-3" />
+                <span>{skillStatus.skillName} loaded</span>
+              </div>
+            )}
+            {skillStatus?.status === 'not_found' && (
+              <div className="text-[11px] text-ember/70 mb-2 flex items-center gap-1.5">
+                <XCircle className="h-3 w-3" />
+                <span>Skill not found at {skillStatus.message?.split(': ')[1]}</span>
+              </div>
+            )}
+            {skillStatus?.status === 'no_skill_md' && (
+              <div className="text-[11px] text-sand/70 mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="h-3 w-3" />
+                <span>SKILL.md missing — skill may not work correctly</span>
+              </div>
+            )}
+            {skillStatus?.status === 'not_loaded' && (
+              <div className="text-[11px] text-ember/70 mb-2 flex items-center gap-1.5">
+                <XCircle className="h-3 w-3" />
+                <span>Skill not loaded by Claude</span>
+              </div>
+            )}
             {output}
             {status === 'running' && (
               <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />

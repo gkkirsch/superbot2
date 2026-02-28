@@ -5040,7 +5040,7 @@ app.post('/api/skill-creator/chat-simple', (req, res) => {
 })
 
 // Run a skill test via claude -p with SSE streaming response
-app.post('/api/skill-tester/run', (req, res) => {
+app.post('/api/skill-tester/run', async (req, res) => {
   const { skillName, prompt, source } = req.body
   if (!skillName || !prompt) {
     return res.status(400).json({ error: 'skillName and prompt required' })
@@ -5058,6 +5058,27 @@ app.post('/api/skill-tester/run', (req, res) => {
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   })
+
+  // Pre-check: does the skill directory and SKILL.md exist?
+  let dirExists = false
+  let skillMdExists = false
+  try {
+    await stat(skillDir)
+    dirExists = true
+    await stat(join(skillDir, 'SKILL.md'))
+    skillMdExists = true
+  } catch {}
+
+  if (!dirExists) {
+    res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'not_found', skillName, message: `Skill directory not found: ${skillDir}` })}\n\n`)
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+    res.end()
+    return
+  }
+
+  if (!skillMdExists) {
+    res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'no_skill_md', skillName, message: `SKILL.md not found in ${skillDir}` })}\n\n`)
+  }
 
   const env = { ...process.env }
   delete env.CLAUDECODE
@@ -5083,6 +5104,19 @@ app.post('/api/skill-tester/run', (req, res) => {
     if (!line.trim()) return
     try {
       const event = JSON.parse(line)
+
+      // Parse system init event for plugin load confirmation
+      if (event.type === 'system' && event.subtype === 'init') {
+        const plugins = event.plugins || []
+        const loaded = plugins.find(p => p.name === skillName)
+        if (loaded) {
+          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName: loaded.name, path: loaded.path })}\n\n`)
+        } else {
+          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'not_loaded', skillName, message: 'Plugin directory exists but was not loaded by Claude' })}\n\n`)
+        }
+        return
+      }
+
       if (event.type === 'stream_event') {
         const inner = event.event
         if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
