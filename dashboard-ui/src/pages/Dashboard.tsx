@@ -25,6 +25,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Check, X, Plus, RotateCcw } from 'lucide-react'
 import { useDashboardConfig } from '@/hooks/useSpaces'
 import { SECTION_REGISTRY, DEFAULT_DASHBOARD_CONFIG } from '@/features/DashboardSections'
+import { TipsRotator } from '@/features/TipsRotator'
 import type { DashboardConfig } from '@/lib/types'
 
 type ColumnId = 'leftColumn' | 'centerColumn' | 'rightColumn'
@@ -343,7 +344,9 @@ export function Dashboard() {
     <div className="min-h-screen bg-ink">
       <div className="mx-auto max-w-[1600px] px-6 py-10">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-end gap-3 flex-wrap">
+        <div className="mb-8 flex items-center gap-3 flex-wrap">
+          {/* Tips rotator — left side, hidden during edit mode */}
+          {!isEditing && <TipsRotator />}
           {/* Hidden sections tray — inline with buttons, no layout jump */}
           {isEditing && layout.hidden.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap flex-1">
