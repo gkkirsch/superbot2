@@ -93,6 +93,51 @@ function buildTimeline(schedule: ScheduledJob[]): TimelineItem[] {
   return items
 }
 
+interface NextDayTimeline {
+  dayLabel: string
+  items: TimelineItem[]
+}
+
+/** Build timeline for the next day (within 7 days) that has scheduled jobs */
+function buildNextDayTimeline(schedule: ScheduledJob[]): NextDayTimeline | null {
+  const now = new Date()
+  const todayIndex = now.getDay()
+
+  for (let offset = 1; offset <= 7; offset++) {
+    const futureIndex = (todayIndex + offset) % 7
+    const futureDay = DAY_MAP[futureIndex]
+    const items: TimelineItem[] = []
+
+    for (const job of schedule) {
+      const activeDays = job.days && job.days.length > 0 && job.days.length < 7
+        ? job.days
+        : ALL_DAYS
+
+      if (!activeDays.includes(futureDay) && !activeDays.includes('*')) continue
+
+      const times = getJobTimes(job)
+      for (const time of times) {
+        items.push({
+          job,
+          time,
+          minutes: timeToMinutes(time),
+          isPast: false,
+          isNext: false,
+        })
+      }
+    }
+
+    if (items.length > 0) {
+      items.sort((a, b) => a.minutes - b.minutes)
+      items[0].isNext = true
+      const dayLabel = offset === 1 ? 'Tomorrow' : DAY_LABELS[futureDay]
+      return { dayLabel, items }
+    }
+  }
+
+  return null
+}
+
 const DEFAULT_VISIBLE = 3
 
 function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
@@ -300,6 +345,7 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
   const queryClient = useQueryClient()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [tomorrowExpanded, setTomorrowExpanded] = useState(false)
   const [addingSaving, setAddingSaving] = useState(false)
   const [, setTick] = useState(0)
   const [newTimes, setNewTimes] = useState<string[]>(['09:00'])
@@ -319,6 +365,8 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
 
   const schedule = data?.schedule || []
   const timeline = buildTimeline(schedule)
+  const hasUpcoming = timeline.some(i => !i.isPast)
+  const nextDay = !hasUpcoming ? buildNextDayTimeline(schedule) : null
 
   const visibleItems = expanded ? timeline : timeline.slice(0, DEFAULT_VISIBLE)
   const hiddenCount = timeline.length - DEFAULT_VISIBLE
@@ -369,10 +417,10 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
 
   return (
     <div className="space-y-1">
-      {timeline.length === 0 && !adding && (
+      {timeline.length === 0 && !nextDay && !adding && (
         <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
           <Clock className="h-4 w-4 text-stone/30 shrink-0" />
-          <p className="text-xs text-stone/50">No scheduled jobs for today</p>
+          <p className="text-xs text-stone/50">No scheduled jobs</p>
         </div>
       )}
 
@@ -453,6 +501,61 @@ export function ScheduleSection({ adding, setAdding }: { adding: boolean; setAdd
           <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
           {expanded ? 'Show less' : `Show all ${timeline.length} scheduled`}
         </button>
+      )}
+
+      {/* Next day section — shown when today has no upcoming items */}
+      {nextDay && (
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-2 py-1.5">
+            <div className="flex-1 border-t border-stone/15" />
+            <span className="text-[10px] text-stone/50 uppercase tracking-wider">{nextDay.dayLabel}</span>
+            <div className="flex-1 border-t border-stone/15" />
+          </div>
+          {(tomorrowExpanded ? nextDay.items : nextDay.items.slice(0, 1)).map((item, idx) => (
+            <button
+              key={`next-${item.job.name}-${item.time}-${idx}`}
+              onClick={() => setEditingJob(item.job)}
+              className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                item.isNext
+                  ? 'bg-blue-500/[0.08] border border-blue-500/20 hover:bg-blue-500/[0.12]'
+                  : 'bg-surface/30 hover:bg-surface/50 border border-transparent'
+              }`}
+            >
+              <div className="flex items-center gap-2 shrink-0 w-[80px]">
+                {item.isNext && (
+                  <span className="h-2 w-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+                )}
+                {!item.isNext && (
+                  <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
+                )}
+                <span className={`text-xs font-mono tabular-nums ${
+                  item.isNext ? 'text-blue-400 font-medium' : 'text-stone/60'
+                }`}>
+                  {to12Hour(item.time)}
+                </span>
+              </div>
+              <span className={`text-sm truncate ${
+                item.isNext ? 'text-parchment font-medium' : 'text-stone/70'
+              }`}>
+                {toTitleCase(item.job.name)}
+              </span>
+              {item.isNext && (
+                <span className="ml-auto text-[10px] font-medium text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
+                  Next
+                </span>
+              )}
+            </button>
+          ))}
+          {nextDay.items.length > 1 && (
+            <button
+              onClick={() => setTomorrowExpanded(v => !v)}
+              className="w-full text-center py-1.5 text-xs text-stone/50 hover:text-stone transition-colors flex items-center justify-center gap-1"
+            >
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${tomorrowExpanded ? 'rotate-180' : ''}`} />
+              {tomorrowExpanded ? 'Show less' : `Show all ${nextDay.items.length} for ${nextDay.dayLabel.toLowerCase()}`}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Add new job form */}
