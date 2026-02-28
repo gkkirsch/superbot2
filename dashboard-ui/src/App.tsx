@@ -10,11 +10,14 @@ import { Knowledge } from './pages/Knowledge'
 import { Skills } from './pages/Skills'
 import { SkillCreator } from './pages/SkillCreator'
 import { Learn } from './pages/Learn'
+import { useTelegram } from './hooks/useTelegram'
 
 function AppContent() {
+  const { isTelegram } = useTelegram()
+
   return (
     <>
-      <UpdateBanner />
+      {!isTelegram && <UpdateBanner />}
       <Nav />
       <Routes>
         <Route path="/" element={<Dashboard />} />
@@ -26,7 +29,7 @@ function AppContent() {
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/learn" element={<Learn />} />
       </Routes>
-      <UpdateCheckButton />
+      {!isTelegram && <UpdateCheckButton />}
     </>
   )
 }
