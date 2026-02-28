@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, FlaskConical, Play, Square } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -424,8 +424,7 @@ interface TesterSkill {
   description: string
 }
 
-function SkillTester() {
-  const [expanded, setExpanded] = useState(false)
+function SkillTester({ defaultSkill }: { defaultSkill?: string | null }) {
   const [skills, setSkills] = useState<TesterSkill[]>([])
   const [selectedSkill, setSelectedSkill] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -441,6 +440,13 @@ function SkillTester() {
       .then(data => { if (data.ok) setSkills(data.skills) })
       .catch(() => {})
   }, [])
+
+  // Sync defaultSkill to selectedSkill when skills load or default changes
+  useEffect(() => {
+    if (!defaultSkill || skills.length === 0) return
+    const match = skills.find(s => s.name === defaultSkill || s.id === defaultSkill)
+    if (match) setSelectedSkill(match.id)
+  }, [defaultSkill, skills])
 
   // Auto-scroll output
   useEffect(() => {
@@ -522,98 +528,92 @@ function SkillTester() {
   }
 
   return (
-    <div className="border-t border-border-custom shrink-0">
-      {/* Toggle header */}
-      <button
-        onClick={() => setExpanded(prev => !prev)}
-        className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-stone/60 hover:text-parchment transition-colors"
+    <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
+      {/* Skill selector */}
+      <select
+        value={selectedSkill}
+        onChange={e => setSelectedSkill(e.target.value)}
+        className="w-full text-sm bg-ink/50 text-parchment border border-border-custom rounded-lg px-3 py-2 focus:outline-none focus:border-sand/50 shrink-0"
       >
-        <div className="flex items-center gap-1.5">
-          <FlaskConical className="h-3.5 w-3.5" />
-          <span className="uppercase tracking-wider">Test a Skill</span>
-        </div>
-        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
+        <option value="">Select a skill...</option>
+        {skills.map(s => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </select>
 
-      {expanded && (
-        <div className="px-3 pb-3 space-y-2">
-          {/* Skill selector */}
-          <select
-            value={selectedSkill}
-            onChange={e => setSelectedSkill(e.target.value)}
-            className="w-full text-xs bg-ink/50 text-parchment border border-border-custom rounded-lg px-2 py-1.5 focus:outline-none focus:border-sand/50"
+      {/* Prompt input */}
+      <textarea
+        value={prompt}
+        onChange={e => setPrompt(e.target.value)}
+        placeholder="Ask the skill something..."
+        rows={4}
+        className="w-full text-sm bg-ink/50 text-parchment border border-border-custom rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-sand/50 placeholder:text-stone/30 shrink-0"
+        onKeyDown={e => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleRun()
+        }}
+      />
+
+      {/* Actions row */}
+      <div className="flex items-center gap-2 shrink-0">
+        {status === 'running' ? (
+          <button
+            onClick={handleStop}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-ember/20 text-ember rounded-lg hover:bg-ember/30 transition-colors"
           >
-            <option value="">Select a skill...</option>
-            {skills.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+            <Square className="h-3 w-3" /> Stop
+          </button>
+        ) : (
+          <button
+            onClick={handleRun}
+            disabled={!selectedSkill || !prompt.trim()}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <Play className="h-3 w-3" /> Run
+          </button>
+        )}
+        {output && (
+          <button
+            onClick={handleClear}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-stone/50 hover:text-parchment transition-colors"
+          >
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
+        {/* Status indicator */}
+        <span className={`text-[10px] ml-auto ${
+          status === 'running' ? 'text-sand/70' :
+          status === 'done' ? 'text-moss/70' :
+          status === 'error' ? 'text-ember/70' :
+          'text-stone/40'
+        }`}>
+          {status === 'running' && <><Loader2 className="h-3 w-3 animate-spin inline mr-1" />Running...</>}
+          {status === 'done' && 'Done'}
+          {status === 'error' && 'Error'}
+        </span>
+      </div>
 
-          {/* Prompt input */}
-          <textarea
-            value={prompt}
-            onChange={e => setPrompt(e.target.value)}
-            placeholder="Ask the skill something..."
-            rows={3}
-            className="w-full text-xs bg-ink/50 text-parchment border border-border-custom rounded-lg px-2 py-1.5 resize-none focus:outline-none focus:border-sand/50 placeholder:text-stone/30"
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleRun()
-            }}
-          />
-
-          {/* Actions row */}
-          <div className="flex items-center gap-2">
-            {status === 'running' ? (
-              <button
-                onClick={handleStop}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-ember/20 text-ember rounded-lg hover:bg-ember/30 transition-colors"
-              >
-                <Square className="h-3 w-3" /> Stop
-              </button>
-            ) : (
-              <button
-                onClick={handleRun}
-                disabled={!selectedSkill || !prompt.trim()}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              >
-                <Play className="h-3 w-3" /> Run
-              </button>
+      {/* Output area */}
+      <div
+        ref={outputRef}
+        className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-3 text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words"
+      >
+        {output ? (
+          <>
+            {output}
+            {status === 'running' && (
+              <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
             )}
-            {output && (
-              <button
-                onClick={handleClear}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-stone/50 hover:text-parchment transition-colors"
-              >
-                <X className="h-3 w-3" /> Clear
-              </button>
-            )}
-            {/* Status indicator */}
-            <span className={`text-[10px] ml-auto ${
-              status === 'running' ? 'text-sand/70' :
-              status === 'done' ? 'text-moss/70' :
-              status === 'error' ? 'text-ember/70' :
-              'text-stone/40'
-            }`}>
-              {status === 'running' && <><Loader2 className="h-3 w-3 animate-spin inline mr-1" />Running...</>}
-              {status === 'done' && 'Done'}
-              {status === 'error' && 'Error'}
-            </span>
-          </div>
-
-          {/* Output area */}
-          {output && (
-            <div
-              ref={outputRef}
-              className="max-h-64 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-2.5 text-xs text-parchment/80 font-mono whitespace-pre-wrap break-words"
-            >
-              {output}
-              {status === 'running' && (
-                <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
-              )}
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+              <p className="text-xs text-stone/40">Select a skill and enter a prompt to test</p>
+              <p className="text-[10px] text-stone/30 mt-1">Ctrl+Enter to run</p>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -653,6 +653,7 @@ export function SkillCreator() {
   const [validating, setValidating] = useState(false)
   const [validationExpanded, setValidationExpanded] = useState(false)
   const [selectedDraftType, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
+  const [activePanel, setActivePanel] = useState<'editor' | 'tester'>('editor')
   const [pluginMeta, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
   const [pluginMetaSaving, setPluginMetaSaving] = useState(false)
 
@@ -1337,11 +1338,14 @@ export function SkillCreator() {
         </div>
       </div>
 
-      {/* 3-column layout */}
+      {/* Accordion layout */}
       <div className="flex-1 flex min-h-0">
         {/* Left column — My Skills sidebar */}
         <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedDraft={selectedDraft} onSelectDraft={handleSelectDraft} />
 
+        {/* Editor panel */}
+        <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'editor' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
+        {activePanel === 'editor' ? (<>
         {/* Center column — Chat */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
           {/* Chat messages */}
@@ -1730,8 +1734,39 @@ export function SkillCreator() {
             </div>
           </div>
 
-          {/* Skill Tester */}
-          <SkillTester />
+        </div>
+        </>) : (
+          <button
+            onClick={() => setActivePanel('editor')}
+            className="w-12 h-full border-r border-border-custom bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
+          >
+            <ChevronRight className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
+            <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Editor</span>
+            <Wand2 className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
+          </button>
+        )}
+        </div>
+
+        {/* Tester panel */}
+        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'tester' ? 'flex-1' : 'w-12 shrink-0'}`}>
+          {activePanel === 'tester' ? (
+            <div className="flex flex-col h-full min-w-0">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
+                <FlaskConical className="h-4 w-4 text-sand" />
+                <h2 className="text-sm font-medium text-parchment">Test a Skill</h2>
+              </div>
+              <SkillTester defaultSkill={selectedDraft} />
+            </div>
+          ) : (
+            <button
+              onClick={() => setActivePanel('tester')}
+              className="w-12 h-full bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
+            >
+              <FlaskConical className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
+              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Tester</span>
+              <ChevronLeft className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
+            </button>
+          )}
         </div>
       </div>
 
