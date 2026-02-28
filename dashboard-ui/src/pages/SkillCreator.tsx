@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, FlaskConical, Play, Square } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -410,6 +410,208 @@ function NewDraftDropdown({ onNewDraft }: { onNewDraft: (type: 'plugin' | 'skill
               <p className="text-[10px] text-stone/50 mt-0.5">Standalone SKILL.md file</p>
             </div>
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Skill Tester ---
+
+interface TesterSkill {
+  id: string
+  name: string
+  description: string
+}
+
+function SkillTester() {
+  const [expanded, setExpanded] = useState(false)
+  const [skills, setSkills] = useState<TesterSkill[]>([])
+  const [selectedSkill, setSelectedSkill] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [output, setOutput] = useState('')
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const outputRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Fetch available skills on mount
+  useEffect(() => {
+    fetch('/api/skill-tester/skills')
+      .then(r => r.json())
+      .then(data => { if (data.ok) setSkills(data.skills) })
+      .catch(() => {})
+  }, [])
+
+  // Auto-scroll output
+  useEffect(() => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    }
+  }, [output])
+
+  const handleRun = async () => {
+    if (!selectedSkill || !prompt.trim() || status === 'running') return
+
+    setOutput('')
+    setStatus('running')
+
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    try {
+      const response = await fetch('/api/skill-tester/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillName: selectedSkill, prompt: prompt.trim() }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok || !response.body) {
+        setStatus('error')
+        setOutput('Failed to connect to skill tester')
+        return
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'chunk') {
+              setOutput(prev => prev + data.text)
+            } else if (data.type === 'done') {
+              setStatus('done')
+            } else if (data.type === 'error') {
+              setStatus('error')
+              setOutput(prev => prev + '\n\n--- Error ---\n' + data.message)
+            }
+          } catch {}
+        }
+      }
+
+      // If stream ended without a 'done' event
+      setStatus(prev => prev === 'running' ? 'done' : prev)
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setStatus('error')
+        setOutput(prev => prev + '\n\nConnection error')
+      }
+    }
+  }
+
+  const handleStop = () => {
+    if (abortRef.current) abortRef.current.abort()
+    setStatus('done')
+  }
+
+  const handleClear = () => {
+    if (abortRef.current) abortRef.current.abort()
+    setOutput('')
+    setStatus('idle')
+  }
+
+  return (
+    <div className="border-t border-border-custom shrink-0">
+      {/* Toggle header */}
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-stone/60 hover:text-parchment transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <FlaskConical className="h-3.5 w-3.5" />
+          <span className="uppercase tracking-wider">Test a Skill</span>
+        </div>
+        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2">
+          {/* Skill selector */}
+          <select
+            value={selectedSkill}
+            onChange={e => setSelectedSkill(e.target.value)}
+            className="w-full text-xs bg-ink/50 text-parchment border border-border-custom rounded-lg px-2 py-1.5 focus:outline-none focus:border-sand/50"
+          >
+            <option value="">Select a skill...</option>
+            {skills.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+
+          {/* Prompt input */}
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            placeholder="Ask the skill something..."
+            rows={3}
+            className="w-full text-xs bg-ink/50 text-parchment border border-border-custom rounded-lg px-2 py-1.5 resize-none focus:outline-none focus:border-sand/50 placeholder:text-stone/30"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleRun()
+            }}
+          />
+
+          {/* Actions row */}
+          <div className="flex items-center gap-2">
+            {status === 'running' ? (
+              <button
+                onClick={handleStop}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-ember/20 text-ember rounded-lg hover:bg-ember/30 transition-colors"
+              >
+                <Square className="h-3 w-3" /> Stop
+              </button>
+            ) : (
+              <button
+                onClick={handleRun}
+                disabled={!selectedSkill || !prompt.trim()}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <Play className="h-3 w-3" /> Run
+              </button>
+            )}
+            {output && (
+              <button
+                onClick={handleClear}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-stone/50 hover:text-parchment transition-colors"
+              >
+                <X className="h-3 w-3" /> Clear
+              </button>
+            )}
+            {/* Status indicator */}
+            <span className={`text-[10px] ml-auto ${
+              status === 'running' ? 'text-sand/70' :
+              status === 'done' ? 'text-moss/70' :
+              status === 'error' ? 'text-ember/70' :
+              'text-stone/40'
+            }`}>
+              {status === 'running' && <><Loader2 className="h-3 w-3 animate-spin inline mr-1" />Running...</>}
+              {status === 'done' && 'Done'}
+              {status === 'error' && 'Error'}
+            </span>
+          </div>
+
+          {/* Output area */}
+          {output && (
+            <div
+              ref={outputRef}
+              className="max-h-64 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-2.5 text-xs text-parchment/80 font-mono whitespace-pre-wrap break-words"
+            >
+              {output}
+              {status === 'running' && (
+                <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1527,6 +1729,9 @@ export function SkillCreator() {
               </button>
             </div>
           </div>
+
+          {/* Skill Tester */}
+          <SkillTester />
         </div>
       </div>
 

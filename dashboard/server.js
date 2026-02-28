@@ -4843,6 +4843,112 @@ async function mirrorRepliesToImessage() {
 // Poll every 5 seconds for new orchestrator replies to mirror
 setInterval(mirrorRepliesToImessage, 5000)
 
+// --- Skill Tester ---
+
+// List installed skills from ~/.superbot2/skills/
+app.get('/api/skill-tester/skills', async (_req, res) => {
+  try {
+    const skillsDir = join(SUPERBOT_DIR, 'skills')
+    await mkdir(skillsDir, { recursive: true })
+    const entries = await readdir(skillsDir, { withFileTypes: true })
+    const skills = []
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const skillPath = join(skillsDir, entry.name)
+      let name = entry.name
+      let description = ''
+      try {
+        const skillMd = await readFile(join(skillPath, 'SKILL.md'), 'utf-8')
+        const fm = parseFrontmatter(skillMd)
+        if (fm.name) name = String(fm.name)
+        if (fm.description) description = String(fm.description).trim()
+      } catch {}
+      skills.push({ id: entry.name, name, description })
+    }
+    res.json({ ok: true, skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Run a skill test via claude -p with SSE streaming response
+app.post('/api/skill-tester/run', (req, res) => {
+  const { skillName, prompt } = req.body
+  if (!skillName || !prompt) {
+    return res.status(400).json({ error: 'skillName and prompt required' })
+  }
+  if (skillName.includes('/') || skillName.includes('..')) {
+    return res.status(400).json({ error: 'Invalid skill name' })
+  }
+
+  const skillDir = join(SUPERBOT_DIR, 'skills', skillName)
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+
+  const env = { ...process.env }
+  delete env.CLAUDECODE
+
+  const child = spawn(CLAUDE_BIN, [
+    '-p',
+    '--dangerously-skip-permissions',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--plugin-dir', skillDir
+  ], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env
+  })
+
+  // Single-turn: write prompt to stdin and close
+  child.stdin.write(prompt)
+  child.stdin.end()
+
+  const rl = createInterface({ input: child.stdout })
+
+  rl.on('line', (line) => {
+    if (!line.trim()) return
+    try {
+      const event = JSON.parse(line)
+      if (event.type === 'stream_event') {
+        const inner = event.event
+        if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text: inner.delta.text })}\n\n`)
+        }
+      } else if (event.type === 'assistant') {
+        const content = event.message?.content || []
+        const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
+        if (text) {
+          res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`)
+        }
+      }
+    } catch {
+      // Skip unparseable lines
+    }
+  })
+
+  const stderrChunks = []
+  child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
+
+  child.on('exit', (code) => {
+    if (code !== 0) {
+      const stderr = stderrChunks.join('')
+      res.write(`data: ${JSON.stringify({ type: 'error', message: `Process exited with code ${code}`, stderr })}\n\n`)
+    }
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+    res.end()
+  })
+
+  // Clean up child process on client disconnect
+  res.on('close', () => {
+    try { child.kill() } catch {}
+  })
+})
+
 // --- Start ---
 
 app.listen(PORT, () => {
