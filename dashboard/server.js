@@ -1293,6 +1293,23 @@ async function updateTelegramMenuButton(botToken, url) {
       body: JSON.stringify({ menu_button: { type: 'web_app', text: 'Dashboard', web_app: { url } } }),
     })
     const data = await resp.json()
+
+    // Also register bot command menu
+    fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands: [
+        { command: 'dashboard', description: 'Open the superbot2 dashboard' },
+        { command: 'status', description: 'Portfolio status summary' },
+        { command: 'escalations', description: 'Show pending escalations' },
+        { command: 'spaces', description: 'Spaces and project details' },
+        { command: 'recent', description: 'Recent session summaries' },
+        { command: 'schedule', description: 'Scheduled jobs' },
+        { command: 'todo', description: 'Your todos' },
+        { command: 'help', description: 'List available commands' },
+      ] }),
+    }).catch(() => {}) // non-critical
+
     return data.ok === true
   } catch {
     return false

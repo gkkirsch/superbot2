@@ -91,6 +91,18 @@ if [ -f "$CONFIG" ]; then
         else
             echo "WARNING: Failed to update Telegram menu button: $RESULT"
         fi
+
+        # Register bot commands (shows autocomplete when users type /)
+        COMMANDS='[{"command":"dashboard","description":"Open the superbot2 dashboard"},{"command":"status","description":"Portfolio status summary"},{"command":"escalations","description":"Show pending escalations"},{"command":"spaces","description":"Spaces and project details"},{"command":"recent","description":"Recent session summaries"},{"command":"schedule","description":"Scheduled jobs"},{"command":"todo","description":"Your todos"},{"command":"help","description":"List available commands"}]'
+        CMD_RESULT=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
+            -H "Content-Type: application/json" \
+            -d "{\"commands\": $COMMANDS}")
+
+        if echo "$CMD_RESULT" | grep -q '"ok":true'; then
+            echo "Registered bot command menu"
+        else
+            echo "WARNING: Failed to register bot commands: $CMD_RESULT"
+        fi
     else
         echo "No Telegram bot token found in config — skipping menu button update"
     fi
