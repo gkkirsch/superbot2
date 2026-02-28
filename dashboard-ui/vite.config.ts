@@ -14,6 +14,7 @@ export default defineConfig({
   server: {
     host: true,
     port: parseInt(process.env.SUPERBOT2_UI_PORT || '47474', 10),
+    allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
         target: `http://localhost:${process.env.SUPERBOT2_API_PORT || '3274'}`,
