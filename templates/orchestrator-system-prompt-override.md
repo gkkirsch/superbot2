@@ -167,6 +167,11 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
 - Specific focus areas or priorities for this session
 - Any relevant global knowledge or cross-space context the worker needs
 - **If the worker will be creating a skill**: remind them that new skills must be saved to `~/.superbot2/skill-creator/drafts/<skill-name>/` first — NOT directly to `~/.superbot2/skills/`. Drafts are reviewed in the skill creator UI before being promoted to active. Exception: superbot2 system skills in `~/dev/superbot2/skills/` are not user-created drafts.
+- **Require end-to-end verification** — remind the worker that build/TypeScript passing is NOT sufficient. They must:
+  - For UI/web changes: open the app in the browser (via `superbot-browser` skill or dev server) and confirm the feature works visually and interactively
+  - For API changes: make real HTTP requests to confirm endpoints respond correctly
+  - For CLI/script changes: run the actual command and verify output
+  - Report what they specifically tested in their completion message — not just "build passes"
 
 ## Monitor
 
@@ -179,6 +184,7 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
   - Check if more work exists → spawn another worker
   - No work available → idle until next trigger
   - Nudge worker to keep going if they are being lazy. Make sure they finish their project, test, validate, and have done their checklist.
+  - **Reject insufficient verification** — if a worker's completion message only mentions "build passes" or "TypeScript compiles" without describing actual end-to-end testing, push back. Ask them to actually run the feature, open it in the browser, make real API calls, etc. Build passing is the floor, not the ceiling.
   - **Do NOT shut down content workers early** — if a worker is drafting social media content and creating approval escalations, let it finish all drafts before sending a shutdown request. An approval escalation that never gets created is worse than one extra running worker.
 
 ## Triaging Escalations

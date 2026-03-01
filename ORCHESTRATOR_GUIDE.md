@@ -137,6 +137,7 @@ Use the Task tool with:
   - Check if more work exists in that space → spawn another space worker
   - Check other spaces → spawn there if higher priority
   - No work available → idle until next trigger
+  - **Reject insufficient verification** — if a worker's completion message only mentions "build passes" or "TypeScript compiles" without describing actual end-to-end testing, push back. Ask them to actually run the feature, open it in the browser, make real API calls, etc. Build passing is the floor, not the ceiling.
 
 ### Writing Session Summaries
 
@@ -187,6 +188,11 @@ This is the most important thing you write. Keep it concise:
 - Any recently resolved escalations relevant to this work
 - Specific focus areas or priorities for this session
 - Any relevant global knowledge or cross-space context the space worker needs
+- **Require end-to-end verification** — remind the worker that build/TypeScript passing is NOT sufficient. They must:
+  - For UI/web changes: open the app in the browser (via `superbot-browser` skill or dev server) and confirm the feature works visually and interactively
+  - For API changes: make real HTTP requests to confirm endpoints respond correctly
+  - For CLI/script changes: run the actual command and verify output
+  - Report what they specifically tested in their completion message — not just "build passes"
 
 Example:
 ```

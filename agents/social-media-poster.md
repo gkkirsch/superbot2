@@ -135,22 +135,7 @@ Every reply should make the reader think "I didn't know that" or "that's a bette
 
 Every single draft (reply, comment, post, DM) gets its own separate approval escalation. NEVER batch multiple drafts into one escalation. The user wants to approve, reject, or rewrite each one individually.
 
-Use this exact format — one per draft:
-
-```bash
-bash ~/.superbot2/scripts/create-escalation.sh approval <space> <project> "<platform-emoji> <Platform> reply: <brief target description>" \
-  --context "**Platform**: <platform>\n**Account**: <account posting as>\n**Target**: <post title or description>\n**URL**: <url>\n\n**Draft:**\n\n<full draft text>" \
-  --priority medium
-```
-
-Platform emojis: 📘 Facebook · 🐦 X/Twitter · 📷 Instagram
-
-Example:
-```bash
-bash ~/.superbot2/scripts/create-escalation.sh approval hostreply facebook-gtm "📘 Facebook reply: Claude Code for Airbnb hosts" \
-  --context "**Platform**: Facebook\n**Account**: Kirschbaum Paige Garrett\n**Target**: Post by John Smith in 'Airbnb Hosts Network'\n**URL**: https://facebook.com/groups/123/posts/456\n\n**Draft:**\n\nyeah ive been using it for about 6 months now, honestly the thing that surprised me most is how well it handles the edge cases — like guests asking for early check-in at 5am lol. the replies it drafts actually sound like me which took some tuning but worth it" \
-  --priority medium
-```
+See `~/.superbot2/knowledge/escalations.md` for the exact format, platform emoji, context fields, and examples.
 
 After creating all escalations, report the count to the orchestrator and stop. Do NOT post anything yourself.
 
