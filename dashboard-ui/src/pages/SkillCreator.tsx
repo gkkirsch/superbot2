@@ -848,7 +848,11 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               testStreamTextRef.current = d.text
               setTestStreamText(d.text)
             }
-            if (d.tools && d.tools.length > 0) {
+            // Always sync tools with the assistant snapshot (ground truth).
+            // Previously only updated when d.tools.length > 0, which left
+            // stale tools from earlier tool_start events — causing the result
+            // handler to suppress the final response text.
+            if (d.tools) {
               testPendingToolsRef.current = d.tools
             }
           } else if (d.type === 'result') {
@@ -857,22 +861,22 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             // double-invokes functional updaters, which would create
             // duplicate messages.
             const text = testStreamTextRef.current
-            const tools = testPendingToolsRef.current
             testPendingToolsRef.current = []
             testStreamTextRef.current = ''
             setTestStreamText('')
-            if (tools.length > 0) {
-              // Tool-use turn: suppress text to avoid duplicate output.
-              // Claude often outputs the same answer before the tool call
-              // and again after — only the final text-only turn matters.
-              // Tool activity is already shown by banners/indicators.
-            } else if (text.trim()) {
-              // Text-only turn: this is the actual response.
-              setTestMessages(msgs => [...msgs, {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                content: text,
-              }])
+            if (text.trim()) {
+              // Deduplicate: if the last assistant message has the same
+              // content, skip (prevents the rare case where Claude echoes
+              // the same text across consecutive turns).
+              setTestMessages(msgs => {
+                const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant')
+                if (lastAssistant && lastAssistant.content === text) return msgs
+                return [...msgs, {
+                  id: crypto.randomUUID(),
+                  role: 'assistant',
+                  content: text,
+                }]
+              })
             }
             setTestStatus('ready')
           } else if (d.type === 'error') {
