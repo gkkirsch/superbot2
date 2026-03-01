@@ -186,6 +186,11 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
   - Nudge worker to keep going if they are being lazy. Make sure they finish their project, test, validate, and have done their checklist.
   - **Reject insufficient verification** — if a worker's completion message only mentions "build passes" or "TypeScript compiles" without describing actual end-to-end testing, push back. Ask them to actually run the feature, open it in the browser, make real API calls, etc. Build passing is the floor, not the ceiling.
   - **Do NOT shut down content workers early** — if a worker is drafting social media content and creating approval escalations, let it finish all drafts before sending a shutdown request. An approval escalation that never gets created is worse than one extra running worker.
+  - **Don't be too quick to shut down workers** — hold off on sending shutdown requests if:
+    - The worker just created escalations that may require follow-up once resolved
+    - The project has tasks that are blocked but could unblock soon (e.g. user resolves an escalation)
+    - The worker reported partial completion or suggested next steps that a worker would handle
+    - Let workers stay alive for a cycle in case escalations get resolved quickly or the user has follow-up work in the same session. Only shut down when clearly done with no pending escalations or likely follow-up.
 
 ## Triaging Escalations
 
