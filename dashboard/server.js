@@ -4673,8 +4673,11 @@ app.post('/api/skill-creator/upload', async (req, res) => {
 // Start an isolated test session for a draft
 app.post('/api/skill-creator/test/start', async (req, res) => {
   try {
-    const { draftName, source } = req.body
+    const { draftName, source = 'drafts' } = req.body
     if (!draftName) return res.status(400).json({ error: 'draftName required' })
+    if (source !== 'active' && source !== 'drafts') {
+      return res.status(400).json({ error: 'source must be "active" or "drafts"' })
+    }
 
     // Resolve skill path based on source
     let skillSourcePath
