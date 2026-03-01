@@ -701,7 +701,7 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             rows={2}
             className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleSend()
               }
@@ -725,13 +725,13 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               onClick={handleSend}
               disabled={!input.trim()}
               className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-              title="Send (Cmd+Enter)"
+              title="Send (Enter)"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </div>
-        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Cmd+Enter to send</p>
+        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Enter to send, Shift+Enter for new line</p>
       </div>
     </div>
   )
@@ -755,6 +755,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const testInputRef = useRef<HTMLTextAreaElement>(null)
   const testEventSourceRef = useRef<EventSource | null>(null)
   const testPendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
+  const testStreamTextRef = useRef('')
   const testSessionIdRef = useRef(testSessionId)
 
   useEffect(() => { testSessionIdRef.current = testSessionId }, [testSessionId])
@@ -796,6 +797,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
 
     setTestStatus('starting')
     setTestMessages([])
+    testStreamTextRef.current = ''
     setTestStreamText('')
     testPendingToolsRef.current = []
 
@@ -825,7 +827,8 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
         try {
           const d = JSON.parse(event.data)
           if (d.type === 'text') {
-            setTestStreamText(prev => prev + d.text)
+            testStreamTextRef.current += d.text
+            setTestStreamText(testStreamTextRef.current)
           } else if (d.type === 'tool_start') {
             testPendingToolsRef.current = [...testPendingToolsRef.current, { name: d.name, input: {} }]
             // Prominent skill invocation banner
@@ -842,30 +845,35 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             // (after thinking, after text) which causes duplicate messages.
             // Message creation is deferred to the single 'result' event.
             if (d.text && d.text.trim()) {
+              testStreamTextRef.current = d.text
               setTestStreamText(d.text)
             }
             if (d.tools && d.tools.length > 0) {
               testPendingToolsRef.current = d.tools
             }
           } else if (d.type === 'result') {
-            setTestStreamText(prev => {
-              const tools = testPendingToolsRef.current
-              testPendingToolsRef.current = []
-              if (tools.length > 0) {
-                // Tool-use turn: suppress text to avoid duplicate output.
-                // Claude often outputs the same answer before the tool call
-                // and again after — only the final text-only turn matters.
-                // Tool activity is already shown by banners/indicators.
-              } else if (prev.trim()) {
-                // Text-only turn: this is the actual response.
-                setTestMessages(msgs => [...msgs, {
-                  id: crypto.randomUUID(),
-                  role: 'assistant',
-                  content: prev,
-                }])
-              }
-              return ''
-            })
+            // Read from ref to avoid nesting setTestMessages inside a
+            // setTestStreamText functional updater — React StrictMode
+            // double-invokes functional updaters, which would create
+            // duplicate messages.
+            const text = testStreamTextRef.current
+            const tools = testPendingToolsRef.current
+            testPendingToolsRef.current = []
+            testStreamTextRef.current = ''
+            setTestStreamText('')
+            if (tools.length > 0) {
+              // Tool-use turn: suppress text to avoid duplicate output.
+              // Claude often outputs the same answer before the tool call
+              // and again after — only the final text-only turn matters.
+              // Tool activity is already shown by banners/indicators.
+            } else if (text.trim()) {
+              // Text-only turn: this is the actual response.
+              setTestMessages(msgs => [...msgs, {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: text,
+              }])
+            }
             setTestStatus('ready')
           } else if (d.type === 'error') {
             setTestMessages(msgs => [...msgs, { id: crypto.randomUUID(), role: 'system', content: `Error: ${d.message}` }])
@@ -896,6 +904,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     setTestMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
     setTestInput('')
     setTestStatus('processing')
+    testStreamTextRef.current = ''
     setTestStreamText('')
     testPendingToolsRef.current = []
 
@@ -1100,7 +1109,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             disabled={testStatus !== 'ready'}
             className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar disabled:opacity-50"
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleTestSend()
               }
@@ -1124,13 +1133,13 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               onClick={handleTestSend}
               disabled={!testInput.trim() || testStatus !== 'ready'}
               className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-              title="Send (Cmd+Enter)"
+              title="Send (Enter)"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </div>
-        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Cmd+Enter to send</p>
+        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Enter to send, Shift+Enter for new line</p>
       </div>
     </div>
   )
