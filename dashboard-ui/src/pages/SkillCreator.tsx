@@ -849,14 +849,19 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             }
           } else if (d.type === 'result') {
             setTestStreamText(prev => {
-              if (prev.trim()) {
-                const tools = testPendingToolsRef.current
-                testPendingToolsRef.current = []
+              const tools = testPendingToolsRef.current
+              testPendingToolsRef.current = []
+              if (tools.length > 0) {
+                // Tool-use turn: suppress text to avoid duplicate output.
+                // Claude often outputs the same answer before the tool call
+                // and again after — only the final text-only turn matters.
+                // Tool activity is already shown by banners/indicators.
+              } else if (prev.trim()) {
+                // Text-only turn: this is the actual response.
                 setTestMessages(msgs => [...msgs, {
                   id: crypto.randomUUID(),
                   role: 'assistant',
                   content: prev,
-                  tools: tools.length > 0 ? tools : undefined,
                 }])
               }
               return ''
