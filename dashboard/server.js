@@ -5545,6 +5545,521 @@ app.get('/api/skill-tester/skill-files', async (req, res) => {
   }
 })
 
+// ============================================================================
+// Agent API — programmatic skill creation, testing, and promotion
+// ============================================================================
+//
+// All endpoints require: Authorization: Bearer <AGENT_API_KEY>
+// Default AGENT_API_KEY: "superbot2-agent" (override via env)
+//
+// curl examples:
+//
+// # Create a draft
+// curl -X POST http://localhost:3274/api/agent/skills/draft \
+//   -H "Authorization: Bearer superbot2-agent" \
+//   -H "Content-Type: application/json" \
+//   -d '{"name":"my-skill","files":{"SKILL.md":"---\nname: my-skill\ndescription: A test skill\n---\n# My Skill\nSay hello."}}'
+//
+// # List all drafts
+// curl http://localhost:3274/api/agent/skills/drafts \
+//   -H "Authorization: Bearer superbot2-agent"
+//
+// # Read a draft's files
+// curl http://localhost:3274/api/agent/skills/draft/my-skill \
+//   -H "Authorization: Bearer superbot2-agent"
+//
+// # Update a single file
+// curl -X PUT http://localhost:3274/api/agent/skills/draft/my-skill/file \
+//   -H "Authorization: Bearer superbot2-agent" \
+//   -H "Content-Type: application/json" \
+//   -d '{"path":"scripts/check.sh","content":"#!/bin/bash\necho ok"}'
+//
+// # Test a draft (non-streaming, waits up to 60s)
+// curl -X POST http://localhost:3274/api/agent/skills/draft/my-skill/test \
+//   -H "Authorization: Bearer superbot2-agent" \
+//   -H "Content-Type: application/json" \
+//   -d '{"message":"hello"}'
+//
+// # Promote a draft to active
+// curl -X POST http://localhost:3274/api/agent/skills/draft/my-skill/promote \
+//   -H "Authorization: Bearer superbot2-agent"
+//
+// # Delete a draft
+// curl -X DELETE http://localhost:3274/api/agent/skills/draft/my-skill \
+//   -H "Authorization: Bearer superbot2-agent"
+//
+
+const AGENT_API_KEY = process.env.AGENT_API_KEY || 'superbot2-agent'
+
+function agentAuth(req, res, next) {
+  const auth = req.headers.authorization
+  if (!auth || auth !== `Bearer ${AGENT_API_KEY}`) {
+    return res.status(401).json({ error: 'Unauthorized — provide Authorization: Bearer <AGENT_API_KEY>' })
+  }
+  next()
+}
+
+// Create or overwrite a draft
+app.post('/api/agent/skills/draft', agentAuth, async (req, res) => {
+  try {
+    const { name, files } = req.body
+    if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name (string) required' })
+    if (!files || typeof files !== 'object') return res.status(400).json({ error: 'files (object: path → content) required' })
+    if (/[\/\\]|\.\./.test(name)) return res.status(400).json({ error: 'Invalid draft name' })
+
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, name)
+    await mkdir(draftPath, { recursive: true })
+
+    // Write each file
+    for (const [filePath, content] of Object.entries(files)) {
+      if (typeof content !== 'string') continue
+      const fullPath = resolve(draftPath, filePath)
+      // Security: ensure path stays within draft
+      if (!fullPath.startsWith(draftPath + '/')) continue
+      await mkdir(join(fullPath, '..'), { recursive: true })
+      await writeFile(fullPath, content, 'utf-8')
+    }
+
+    // Create/update draft-metadata.json
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    let meta = {}
+    try {
+      const raw = await readFile(metaPath, 'utf-8')
+      meta = JSON.parse(raw)
+    } catch {}
+    const now = new Date().toISOString()
+    if (!meta.createdAt) meta.createdAt = now
+    meta.updatedAt = now
+    meta.sessionId = meta.sessionId || 'agent-api'
+    meta.status = meta.status || 'complete'
+    meta.type = await inferDraftType(draftPath)
+    await writeFile(metaPath, JSON.stringify(meta, null, 2))
+
+    res.json({ ok: true, name, filesWritten: Object.keys(files).length })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// List all drafts
+app.get('/api/agent/skills/drafts', agentAuth, async (req, res) => {
+  try {
+    await mkdir(SKILL_CREATOR_DRAFTS_DIR, { recursive: true })
+    const entries = await readdir(SKILL_CREATOR_DRAFTS_DIR, { withFileTypes: true })
+    const drafts = []
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, entry.name)
+      const metaPath = join(draftPath, 'draft-metadata.json')
+
+      // Collect files
+      const fileList = []
+      async function walk(dir, prefix) {
+        let items
+        try { items = await readdir(dir, { withFileTypes: true }) } catch { return }
+        for (const item of items) {
+          if (item.name === 'draft-metadata.json' || item.name === 'chat-history.jsonl') continue
+          const relPath = prefix ? `${prefix}/${item.name}` : item.name
+          if (item.isDirectory()) {
+            await walk(join(dir, item.name), relPath)
+          } else {
+            fileList.push(relPath)
+          }
+        }
+      }
+      await walk(draftPath, '')
+
+      let meta = {}
+      try {
+        const raw = await readFile(metaPath, 'utf-8')
+        meta = JSON.parse(raw)
+      } catch {}
+
+      drafts.push({
+        name: entry.name,
+        files: fileList,
+        createdAt: meta.createdAt || null,
+        updatedAt: meta.updatedAt || null,
+        status: meta.status || 'unknown',
+        type: meta.type || await inferDraftType(draftPath),
+      })
+    }
+    res.json({ ok: true, drafts })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Read all files in a draft (returns map of path → content)
+app.get('/api/agent/skills/draft/:name', agentAuth, async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+
+    const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.zip', '.tar', '.gz'])
+    const files = {}
+    async function walk(dir, prefix) {
+      let items
+      try { items = await readdir(dir, { withFileTypes: true }) } catch { return }
+      for (const item of items) {
+        if (item.name === 'draft-metadata.json' || item.name === 'chat-history.jsonl') continue
+        const relPath = prefix ? `${prefix}/${item.name}` : item.name
+        if (item.isDirectory()) {
+          await walk(join(dir, item.name), relPath)
+        } else {
+          const ext = extname(item.name).toLowerCase()
+          if (BINARY_EXTS.has(ext)) continue
+          try {
+            files[relPath] = await readFile(join(dir, item.name), 'utf-8')
+          } catch {}
+        }
+      }
+    }
+    await walk(draftPath, '')
+
+    res.json({ ok: true, name: req.params.name, files })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Write/update a single file in a draft
+app.put('/api/agent/skills/draft/:name/file', agentAuth, async (req, res) => {
+  try {
+    const { path: filePath, content } = req.body
+    if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path (string) required' })
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content (string) required' })
+
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+
+    const fullPath = resolve(draftPath, filePath)
+    if (!fullPath.startsWith(draftPath + '/')) {
+      return res.status(400).json({ error: 'Invalid file path' })
+    }
+
+    await mkdir(join(fullPath, '..'), { recursive: true })
+    await writeFile(fullPath, content, 'utf-8')
+
+    // Update draft metadata timestamp
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    try {
+      const raw = await readFile(metaPath, 'utf-8')
+      const meta = JSON.parse(raw)
+      meta.updatedAt = new Date().toISOString()
+      meta.type = await inferDraftType(draftPath)
+      await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    } catch {}
+
+    res.json({ ok: true, path: filePath })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Delete a draft
+app.delete('/api/agent/skills/draft/:name', agentAuth, async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+    await rm(draftPath, { recursive: true, force: true })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Non-streaming test endpoint — spawns claude, sends message, waits for complete response
+app.post('/api/agent/skills/draft/:name/test', agentAuth, async (req, res) => {
+  const { message } = req.body
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'message (string) required' })
+  }
+
+  const draftName = req.params.name
+  const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, draftName)
+  if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+    return res.status(400).json({ error: 'Invalid draft name' })
+  }
+  try { await stat(draftPath) } catch {
+    return res.status(404).json({ error: 'Draft not found' })
+  }
+
+  // Set up isolated temp directory (same logic as /api/skill-creator/test/start)
+  let tempDir
+  try {
+    tempDir = await mkdtemp(join(tmpdir(), 'agent-skill-test-'))
+
+    let skillName = draftName
+    const isPlugin = existsSync(join(draftPath, '.claude-plugin', 'plugin.json'))
+
+    if (isPlugin) {
+      try {
+        const pjRaw = await readFile(join(draftPath, '.claude-plugin', 'plugin.json'), 'utf-8')
+        const pj = JSON.parse(pjRaw)
+        skillName = pj.name || draftName
+      } catch {}
+      const pluginDest = join(tempDir, '.claude', 'plugins', skillName)
+      await mkdir(pluginDest, { recursive: true })
+      await cp(draftPath, pluginDest, { recursive: true })
+    } else {
+      // Skill-only: find SKILL.md
+      let skillSourceDir = draftPath
+      let foundSkillMd = existsSync(join(draftPath, 'SKILL.md'))
+      if (!foundSkillMd) {
+        try {
+          const entries = await readdir(join(draftPath, 'skills'), { withFileTypes: true })
+          for (const entry of entries) {
+            if (entry.isDirectory() && existsSync(join(draftPath, 'skills', entry.name, 'SKILL.md'))) {
+              skillSourceDir = join(draftPath, 'skills', entry.name)
+              skillName = entry.name
+              foundSkillMd = true
+              break
+            }
+          }
+        } catch {}
+      }
+      if (!foundSkillMd) {
+        await rm(tempDir, { recursive: true, force: true })
+        return res.status(400).json({ error: 'No SKILL.md found in draft' })
+      }
+      const skillDest = join(tempDir, '.claude', 'skills', skillName)
+      await mkdir(skillDest, { recursive: true })
+      await cp(skillSourceDir, skillDest, { recursive: true })
+    }
+
+    // Spawn claude subprocess
+    const env = { ...process.env }
+    delete env.CLAUDECODE
+    const child = spawn(CLAUDE_BIN, [
+      '-p',
+      '--output-format', 'stream-json',
+      '--input-format', 'stream-json',
+      '--verbose',
+      '--permission-mode', 'bypassPermissions',
+      '--model', 'sonnet',
+      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+      '--setting-sources', 'project'
+    ], {
+      cwd: tempDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env
+    })
+
+    // Collect response
+    let responseText = ''
+    let skillInvoked = false
+    let invokedSkillName = null
+    let resultReceived = false
+
+    const stderrChunks = []
+    child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
+
+    const rl = createInterface({ input: child.stdout })
+
+    // Promise resolves on result event (turn complete) or timeout
+    const result = await new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        try { child.kill() } catch {}
+        resolve({ timedOut: true })
+      }, 60000)
+
+      child.on('exit', (code) => {
+        clearTimeout(timeout)
+        if (!resultReceived) resolve({ code, timedOut: false })
+      })
+
+      rl.on('line', (line) => {
+        if (!line.trim()) return
+        try {
+          const event = JSON.parse(line)
+
+          // Track skill invocations from tool_use events
+          if (event.type === 'stream_event') {
+            const inner = event.event
+            if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use' && inner.content_block?.name === 'Skill') {
+              skillInvoked = true
+            }
+          }
+
+          // Capture assistant text from complete snapshots
+          if (event.type === 'assistant') {
+            const content = event.message?.content || []
+            const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
+            if (text) responseText = text
+
+            // Check tool_use blocks for Skill invocation and capture skill name
+            const toolUses = content.filter(b => b.type === 'tool_use')
+            for (const tu of toolUses) {
+              if (tu.name === 'Skill') {
+                skillInvoked = true
+                if (tu.input?.skill) invokedSkillName = tu.input.skill
+              }
+            }
+          }
+
+          // Result event = turn complete. Resolve and kill the process.
+          if (event.type === 'result') {
+            resultReceived = true
+            clearTimeout(timeout)
+            try { child.kill() } catch {}
+            resolve({ timedOut: false })
+          }
+        } catch {}
+      })
+
+      // Send the message after listeners are set up
+      child.stdin.write(JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: message.trim() }
+      }) + '\n')
+    })
+
+    // Clean up temp dir
+    rm(tempDir, { recursive: true, force: true }).catch(() => {})
+
+    if (result.timedOut) {
+      return res.json({
+        ok: true,
+        response: responseText || '(timed out after 60s)',
+        skillInvoked,
+        skillName: invokedSkillName,
+        timedOut: true,
+      })
+    }
+
+    if (result.code !== undefined && result.code !== 0 && !responseText) {
+      return res.status(500).json({
+        error: `claude process exited with code ${result.code}`,
+        stderr: stderrChunks.join(''),
+      })
+    }
+
+    res.json({
+      ok: true,
+      response: responseText,
+      skillInvoked,
+      skillName: invokedSkillName,
+      timedOut: false,
+    })
+  } catch (err) {
+    if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Promote a draft to active
+app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) => {
+  try {
+    const draftName = req.params.name
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, draftName)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch {
+      return res.status(404).json({ error: 'Draft not found' })
+    }
+
+    // Detect type
+    const isPlugin = existsSync(join(draftPath, '.claude-plugin', 'plugin.json'))
+
+    if (isPlugin) {
+      // Plugin promote — same as existing /api/skill-creator/promote
+      let pluginJson
+      try {
+        const raw = await readFile(join(draftPath, '.claude-plugin', 'plugin.json'), 'utf-8')
+        pluginJson = JSON.parse(raw)
+      } catch {
+        return res.status(400).json({ error: 'Draft missing .claude-plugin/plugin.json — not a valid plugin' })
+      }
+      const pluginName = pluginJson.name
+      if (!pluginName) return res.status(400).json({ error: 'plugin.json missing name field' })
+
+      // Ensure author.name = 'superbot2'
+      if (!pluginJson.author || typeof pluginJson.author === 'string') {
+        pluginJson.author = { name: 'superbot2' }
+      } else {
+        pluginJson.author.name = 'superbot2'
+      }
+      await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
+
+      const version = pluginJson.version || '1.0.0'
+      const cachePath = join(process.env.HOME, '.claude', 'plugins', 'cache', 'local', pluginName, version)
+      await mkdir(cachePath, { recursive: true })
+      await cp(draftPath, cachePath, { recursive: true })
+      try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
+
+      const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+      let installedData
+      try {
+        const raw = await readFile(installedPluginsPath, 'utf-8')
+        installedData = JSON.parse(raw)
+      } catch {
+        installedData = { version: 2, plugins: {} }
+      }
+      const now = new Date().toISOString()
+      installedData.plugins[`${pluginName}@local`] = [{
+        scope: 'user',
+        installPath: cachePath,
+        version,
+        installedAt: now,
+        lastUpdated: now,
+      }]
+      await writeFile(installedPluginsPath, JSON.stringify(installedData, null, 2))
+
+      // Update draft metadata
+      const metaPath = join(draftPath, 'draft-metadata.json')
+      try {
+        const raw = await readFile(metaPath, 'utf-8')
+        const meta = JSON.parse(raw)
+        meta.status = 'promoted'
+        meta.promotedAt = now
+        meta.promotedName = pluginName
+        await writeFile(metaPath, JSON.stringify(meta, null, 2))
+      } catch {}
+
+      res.json({ ok: true, type: 'plugin', name: pluginName, installPath: cachePath, version })
+    } else {
+      // Skill-only promote — copy to ~/.superbot2/skills/<name>/
+      const activeSkillsDir = join(SUPERBOT_DIR, 'skills')
+      const destPath = join(activeSkillsDir, draftName)
+      await mkdir(destPath, { recursive: true })
+      await cp(draftPath, destPath, { recursive: true })
+      try { await rm(join(destPath, 'draft-metadata.json'), { force: true }) } catch {}
+      try { await rm(join(destPath, 'chat-history.jsonl'), { force: true }) } catch {}
+
+      // Update draft metadata
+      const metaPath = join(draftPath, 'draft-metadata.json')
+      try {
+        const raw = await readFile(metaPath, 'utf-8')
+        const meta = JSON.parse(raw)
+        meta.status = 'promoted'
+        meta.promotedAt = new Date().toISOString()
+        await writeFile(metaPath, JSON.stringify(meta, null, 2))
+      } catch {}
+
+      res.json({ ok: true, type: 'skill', name: draftName, installPath: destPath })
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Start ---
 
 app.listen(PORT, () => {
