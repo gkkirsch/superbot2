@@ -4763,8 +4763,11 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
     })
 
     // Spawn the isolated claude subprocess
+    // Override HOME so Claude only discovers skills/plugins from tempDir/.claude/,
+    // not from the user's global ~/.claude/ directory
     const env = { ...process.env }
     delete env.CLAUDECODE
+    env.HOME = tempDir
     const child = spawn(CLAUDE_BIN, [
       '-p',
       '--output-format', 'stream-json',

@@ -813,20 +813,16 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
           } else if (d.type === 'tool_start') {
             testPendingToolsRef.current = [...testPendingToolsRef.current, { name: d.name, input: {} }]
           } else if (d.type === 'assistant') {
-            setTestStreamText(prev => {
-              const finalText = d.text || prev
-              const tools = d.tools || testPendingToolsRef.current
-              testPendingToolsRef.current = []
-              if (finalText.trim()) {
-                setTestMessages(msgs => [...msgs, {
-                  id: crypto.randomUUID(),
-                  role: 'assistant',
-                  content: finalText,
-                  tools: tools.length > 0 ? tools : undefined,
-                }])
-              }
-              return ''
-            })
+            // Update streaming text with the complete snapshot for display accuracy.
+            // Don't create a message — multiple assistant snapshots fire per turn
+            // (after thinking, after text) which causes duplicate messages.
+            // Message creation is deferred to the single 'result' event.
+            if (d.text && d.text.trim()) {
+              setTestStreamText(d.text)
+            }
+            if (d.tools && d.tools.length > 0) {
+              testPendingToolsRef.current = d.tools
+            }
           } else if (d.type === 'result') {
             setTestStreamText(prev => {
               if (prev.trim()) {
