@@ -5605,12 +5605,14 @@ app.post('/api/agent/skills/draft', agentAuth, async (req, res) => {
     const { name, files } = req.body
     if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name (string) required' })
     if (!files || typeof files !== 'object') return res.status(400).json({ error: 'files (object: path → content) required' })
-    if (/[\/\\]|\.\./.test(name)) return res.status(400).json({ error: 'Invalid draft name' })
-
-    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, name)
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
     await mkdir(draftPath, { recursive: true })
 
     // Write each file
+    let written = 0
     for (const [filePath, content] of Object.entries(files)) {
       if (typeof content !== 'string') continue
       const fullPath = resolve(draftPath, filePath)
@@ -5618,6 +5620,7 @@ app.post('/api/agent/skills/draft', agentAuth, async (req, res) => {
       if (!fullPath.startsWith(draftPath + '/')) continue
       await mkdir(join(fullPath, '..'), { recursive: true })
       await writeFile(fullPath, content, 'utf-8')
+      written++
     }
 
     // Create/update draft-metadata.json
@@ -5635,7 +5638,7 @@ app.post('/api/agent/skills/draft', agentAuth, async (req, res) => {
     meta.type = await inferDraftType(draftPath)
     await writeFile(metaPath, JSON.stringify(meta, null, 2))
 
-    res.json({ ok: true, name, filesWritten: Object.keys(files).length })
+    res.json({ ok: true, name, filesWritten: written })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -5866,6 +5869,7 @@ app.post('/api/agent/skills/draft/:name/test', agentAuth, async (req, res) => {
     let skillInvoked = false
     let invokedSkillName = null
     let resultReceived = false
+    let resolved = false
 
     const stderrChunks = []
     child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
@@ -5873,15 +5877,21 @@ app.post('/api/agent/skills/draft/:name/test', agentAuth, async (req, res) => {
     const rl = createInterface({ input: child.stdout })
 
     // Promise resolves on result event (turn complete) or timeout
-    const result = await new Promise((resolve) => {
+    const result = await new Promise((resolvePromise) => {
+      function safeResolve(value) {
+        if (resolved) return
+        resolved = true
+        clearTimeout(timeout)
+        resolvePromise(value)
+      }
+
       const timeout = setTimeout(() => {
         try { child.kill() } catch {}
-        resolve({ timedOut: true })
+        safeResolve({ timedOut: true })
       }, 60000)
 
       child.on('exit', (code) => {
-        clearTimeout(timeout)
-        if (!resultReceived) resolve({ code, timedOut: false })
+        if (!resultReceived) safeResolve({ code, timedOut: false })
       })
 
       rl.on('line', (line) => {
@@ -5916,22 +5926,24 @@ app.post('/api/agent/skills/draft/:name/test', agentAuth, async (req, res) => {
           // Result event = turn complete. Resolve and kill the process.
           if (event.type === 'result') {
             resultReceived = true
-            clearTimeout(timeout)
             try { child.kill() } catch {}
-            resolve({ timedOut: false })
+            safeResolve({ timedOut: false })
           }
         } catch {}
       })
 
-      // Send the message after listeners are set up
+      // Send the message after listeners are set up, then close stdin
       child.stdin.write(JSON.stringify({
         type: 'user',
         message: { role: 'user', content: message.trim() }
       }) + '\n')
+      child.stdin.end()
     })
 
     // Clean up temp dir
-    rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    rm(tempDir, { recursive: true, force: true }).catch(err => {
+      console.warn(`[agent-api] failed to clean temp dir ${tempDir}: ${err.message}`)
+    })
 
     if (result.timedOut) {
       return res.json({
@@ -5958,7 +5970,9 @@ app.post('/api/agent/skills/draft/:name/test', agentAuth, async (req, res) => {
       timedOut: false,
     })
   } catch (err) {
-    if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    if (tempDir) rm(tempDir, { recursive: true, force: true }).catch(e => {
+      console.warn(`[agent-api] failed to clean temp dir ${tempDir}: ${e.message}`)
+    })
     res.status(500).json({ error: err.message })
   }
 })
@@ -5989,6 +6003,7 @@ app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) =>
       }
       const pluginName = pluginJson.name
       if (!pluginName) return res.status(400).json({ error: 'plugin.json missing name field' })
+      if (/[\/\\]|\.\./.test(pluginName)) return res.status(400).json({ error: 'Invalid plugin name in plugin.json' })
 
       // Ensure author.name = 'superbot2'
       if (!pluginJson.author || typeof pluginJson.author === 'string') {
