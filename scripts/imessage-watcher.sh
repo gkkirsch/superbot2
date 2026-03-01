@@ -14,13 +14,13 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   exit 0
 fi
 
-ENABLED=$(python3 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('imessage',{}).get('enabled', False))" 2>/dev/null || echo "False")
-if [[ "$ENABLED" != "True" ]]; then
+ENABLED=$(jq -r '.imessage.enabled // false' "$CONFIG_FILE" 2>/dev/null || echo "false")
+if [[ "$ENABLED" != "true" ]]; then
   echo "imessage-watcher: iMessage not enabled, exiting."
   exit 0
 fi
 
-APPLE_ID=$(python3 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('imessage',{}).get('appleId', ''))" 2>/dev/null || echo "")
+APPLE_ID=$(jq -r '.imessage.appleId // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
 if [[ -z "$APPLE_ID" || "$APPLE_ID" == "YOUR_SUPERBOT2_APPLE_ID" ]]; then
   echo "imessage-watcher: Apple ID not configured, exiting." >&2
   exit 0
@@ -67,11 +67,8 @@ while true; do
       echo "imessage-watcher: new message (rowid=$ROWID): ${TEXT:0:50}..."
 
       # POST to dashboard API
-      # Use python3 for proper JSON escaping
-      PAYLOAD=$(python3 -c "
-import json, sys
-print(json.dumps({'text': sys.argv[1]}))
-" "$TEXT" 2>/dev/null)
+      # Use jq for proper JSON escaping
+      PAYLOAD=$(jq -cn --arg text "$TEXT" '{"text": $text}' 2>/dev/null)
 
       HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
         -X POST "$API_URL" \
