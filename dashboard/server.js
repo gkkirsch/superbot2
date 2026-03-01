@@ -1,9 +1,10 @@
 import express from 'express'
-import { readdir, readFile, writeFile, appendFile, rename, mkdir, stat, rm, unlink, cp } from 'node:fs/promises'
+import { readdir, readFile, writeFile, appendFile, rename, mkdir, mkdtemp, stat, rm, unlink, cp, chmod } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import yaml from 'js-yaml'
 import multer from 'multer'
 
@@ -3658,6 +3659,7 @@ app.post('/api/updates/run', async (_req, res) => {
 import { createInterface } from 'node:readline'
 
 const SKILL_CREATOR_SESSIONS = new Map()
+const SKILL_CREATOR_TEST_SESSIONS = new Map()
 const SKILL_CREATOR_UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads', 'skill-creator')
 const SKILL_CREATOR_DRAFTS_DIR = join(SUPERBOT_DIR, 'skill-creator', 'drafts')
 const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-prompt.md')
@@ -4666,6 +4668,254 @@ app.post('/api/skill-creator/upload', async (req, res) => {
   }
 })
 
+// --- Isolated Skill Test Endpoints ---
+
+// Start an isolated test session for a draft
+app.post('/api/skill-creator/test/start', async (req, res) => {
+  try {
+    const { draftName, source = 'drafts' } = req.body
+    if (!draftName) return res.status(400).json({ error: 'draftName required' })
+    if (source !== 'active' && source !== 'drafts') {
+      return res.status(400).json({ error: 'source must be "active" or "drafts"' })
+    }
+
+    // Resolve skill path based on source
+    let skillSourcePath
+    if (source === 'active') {
+      const activeSkillsDir = join(SUPERBOT_DIR, 'skills')
+      skillSourcePath = resolve(activeSkillsDir, draftName)
+      if (!skillSourcePath.startsWith(activeSkillsDir + '/')) {
+        return res.status(400).json({ error: 'Invalid skill name' })
+      }
+    } else {
+      skillSourcePath = resolve(SKILL_CREATOR_DRAFTS_DIR, draftName)
+      if (!skillSourcePath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+        return res.status(400).json({ error: 'Invalid draft name' })
+      }
+    }
+
+    // Verify skill/draft exists
+    try {
+      await stat(skillSourcePath)
+    } catch {
+      return res.status(404).json({ error: source === 'active' ? 'Skill not found' : 'Draft not found' })
+    }
+
+    // Create temp directory for the isolated test
+    const tempDir = await mkdtemp(join(tmpdir(), 'skill-test-'))
+
+    // Detect type and copy files into Claude-discoverable structure
+    let skillName = draftName
+    const isPlugin = existsSync(join(skillSourcePath, '.claude-plugin', 'plugin.json'))
+
+    if (isPlugin) {
+      // Plugin: read plugin.json to get the name
+      try {
+        const pjRaw = await readFile(join(skillSourcePath, '.claude-plugin', 'plugin.json'), 'utf-8')
+        const pj = JSON.parse(pjRaw)
+        skillName = pj.name || draftName
+      } catch {}
+      // Copy entire skill/draft as a plugin: .claude/plugins/<pluginName>/
+      const pluginDest = join(tempDir, '.claude', 'plugins', skillName)
+      await mkdir(pluginDest, { recursive: true })
+      await cp(skillSourcePath, pluginDest, { recursive: true })
+    } else {
+      // Skill-only: find the skill directory containing SKILL.md and copy everything
+      let skillSourceDir = skillSourcePath
+      let foundSkillMd = existsSync(join(skillSourcePath, 'SKILL.md'))
+      if (!foundSkillMd) {
+        // Check skills/ subdirectory
+        try {
+          const entries = await readdir(join(skillSourcePath, 'skills'), { withFileTypes: true })
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const candidatePath = join(skillSourcePath, 'skills', entry.name, 'SKILL.md')
+              if (existsSync(candidatePath)) {
+                skillSourceDir = join(skillSourcePath, 'skills', entry.name)
+                skillName = entry.name
+                foundSkillMd = true
+                break
+              }
+            }
+          }
+        } catch {}
+      }
+      if (!foundSkillMd) {
+        await rm(tempDir, { recursive: true, force: true })
+        return res.status(400).json({ error: 'No SKILL.md found in skill' })
+      }
+      // Copy the entire skill directory (SKILL.md + scripts, references, templates, etc.)
+      const skillDest = join(tempDir, '.claude', 'skills', skillName)
+      await mkdir(skillDest, { recursive: true })
+      await cp(skillSourceDir, skillDest, { recursive: true })
+    }
+
+    const testSessionId = `test-${randomUUID()}`
+
+    // Store the session (SSE will connect separately)
+    SKILL_CREATOR_TEST_SESSIONS.set(testSessionId, {
+      process: null,
+      sseResponse: null,
+      tempDir,
+      skillName,
+      draftName,
+      createdAt: Date.now(),
+    })
+
+    // Spawn the isolated claude subprocess
+    // --setting-sources project: only load project-level skills/plugins from tempDir/.claude/,
+    // skip user-level ~/.claude/skills/ and ~/.claude/plugins/ for true isolation.
+    // Auth is separate from settings, so login still works.
+    const env = { ...process.env }
+    delete env.CLAUDECODE
+    const child = spawn(CLAUDE_BIN, [
+      '-p',
+      '--output-format', 'stream-json',
+      '--input-format', 'stream-json',
+      '--verbose',
+      '--include-partial-messages',
+      '--permission-mode', 'bypassPermissions',
+      '--model', 'sonnet',
+      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+      '--setting-sources', 'project'
+    ], {
+      cwd: tempDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env
+    })
+
+    const session = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+    session.process = child
+
+    // Read stdout line by line and forward as SSE
+    const rl = createInterface({ input: child.stdout })
+    rl.on('line', (line) => {
+      if (!line.trim()) return
+      try {
+        const event = JSON.parse(line)
+        const sseRes = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)?.sseResponse
+        if (!sseRes) return
+
+        if (event.type === 'stream_event') {
+          const inner = event.event
+          if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
+            sseRes.write(`data: ${JSON.stringify({ type: 'text', text: inner.delta.text })}\n\n`)
+          }
+          if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use') {
+            sseRes.write(`data: ${JSON.stringify({ type: 'tool_start', name: inner.content_block.name })}\n\n`)
+          }
+        } else if (event.type === 'assistant') {
+          const content = event.message?.content || []
+          const textBlocks = content.filter(b => b.type === 'text').map(b => b.text).join('')
+          const toolBlocks = content.filter(b => b.type === 'tool_use').map(b => ({
+            name: b.name,
+            input: b.input
+          }))
+          sseRes.write(`data: ${JSON.stringify({ type: 'assistant', text: textBlocks, tools: toolBlocks })}\n\n`)
+        } else if (event.type === 'result') {
+          sseRes.write(`data: ${JSON.stringify({ type: 'result', subtype: event.subtype, cost: event.total_cost_usd, duration: event.duration_ms })}\n\n`)
+        }
+      } catch {
+        // Skip unparseable lines
+      }
+    })
+
+    // Handle stderr
+    const stderrChunks = []
+    child.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()))
+
+    child.on('exit', (code) => {
+      const sess = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+      if (sess?.sseResponse) {
+        if (code !== 0) {
+          const stderr = stderrChunks.join('')
+          sess.sseResponse.write(`data: ${JSON.stringify({ type: 'error', message: `claude process exited with code ${code}`, stderr })}\n\n`)
+        }
+        sess.sseResponse.write(`data: ${JSON.stringify({ type: 'process_exit', code })}\n\n`)
+      }
+      if (sess) sess.process = null
+    })
+
+    res.json({ ok: true, testSessionId, skillName })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// SSE stream for test sessions
+app.get('/api/skill-creator/test/stream', (req, res) => {
+  const testSessionId = req.query.testSessionId
+  if (!testSessionId) return res.status(400).json({ error: 'testSessionId required' })
+
+  const session = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+  if (!session) return res.status(404).json({ error: 'Test session not found' })
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.write(':connected\n\n')
+
+  session.sseResponse = res
+
+  const heartbeat = setInterval(() => {
+    res.write(':keepalive\n\n')
+  }, 30000)
+
+  res.on('close', () => {
+    clearInterval(heartbeat)
+    const sess = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+    if (sess && sess.sseResponse === res) {
+      if (sess.process) {
+        try { sess.process.kill() } catch {}
+      }
+      if (sess.tempDir) {
+        rm(sess.tempDir, { recursive: true, force: true }).catch(() => {})
+      }
+      SKILL_CREATOR_TEST_SESSIONS.delete(testSessionId)
+    }
+  })
+})
+
+// Send a message to the test subprocess
+app.post('/api/skill-creator/test/message', (req, res) => {
+  const { testSessionId, message } = req.body
+  if (!testSessionId) return res.status(400).json({ error: 'testSessionId required' })
+  if (!message || !message.trim()) return res.status(400).json({ error: 'message required' })
+
+  const session = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+  if (!session) return res.status(404).json({ error: 'Test session not found' })
+  if (!session.process) return res.status(400).json({ error: 'No active test process' })
+
+  session.process.stdin.write(JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: message.trim() }
+  }) + '\n')
+
+  res.json({ ok: true })
+})
+
+// Stop and clean up a test session
+app.delete('/api/skill-creator/test/:testSessionId', async (req, res) => {
+  const { testSessionId } = req.params
+  const session = SKILL_CREATOR_TEST_SESSIONS.get(testSessionId)
+  if (!session) return res.status(404).json({ error: 'Test session not found' })
+
+  if (session.process) {
+    try { session.process.kill() } catch {}
+  }
+
+  // Clean up the temp directory
+  if (session.tempDir) {
+    try { await rm(session.tempDir, { recursive: true, force: true }) } catch {}
+  }
+
+  SKILL_CREATOR_TEST_SESSIONS.delete(testSessionId)
+  res.json({ ok: true })
+})
+
 // Delete session endpoint
 app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   const { sessionId } = req.params
@@ -5080,6 +5330,47 @@ app.post('/api/skill-tester/run', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'no_skill_md', skillName, message: `SKILL.md not found in ${skillDir}` })}\n\n`)
   }
 
+  // Create temp working directory with CLAUDE.md so Claude naturally discovers skill instructions
+  const tempDir = await mkdtemp(join(tmpdir(), 'skill-test-'))
+  let skillLoaded = false
+
+  try {
+    // Init as git repo so Claude discovers CLAUDE.md as project context
+    execFileSync('git', ['init', '-q'], { cwd: tempDir })
+
+    if (skillMdExists) {
+      const skillMdRaw = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
+      // Strip YAML frontmatter (everything between --- delimiters)
+      const body = skillMdRaw.replace(/^---[\s\S]*?---\s*/, '').trim()
+      if (body) {
+        await writeFile(join(tempDir, 'CLAUDE.md'), body, 'utf-8')
+        skillLoaded = true
+      }
+    }
+
+    // Copy scripts directory so relative paths work
+    const scriptsDir = join(skillDir, 'scripts')
+    try {
+      await stat(scriptsDir)
+      await cp(scriptsDir, join(tempDir, 'scripts'), { recursive: true })
+      // Make scripts executable
+      const scriptFiles = await readdir(join(tempDir, 'scripts'))
+      for (const f of scriptFiles) {
+        await chmod(join(tempDir, 'scripts', f), 0o755)
+      }
+    } catch {}
+
+    if (skillLoaded) {
+      res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName, path: skillDir })}\n\n`)
+    }
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ type: 'error', message: `Failed to set up temp dir: ${err.message}` })}\n\n`)
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
+    res.end()
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {})
+    return
+  }
+
   const env = { ...process.env }
   delete env.CLAUDECODE
 
@@ -5087,11 +5378,11 @@ app.post('/api/skill-tester/run', async (req, res) => {
     '-p',
     '--dangerously-skip-permissions',
     '--output-format', 'stream-json',
-    '--verbose',
-    '--plugin-dir', skillDir
+    '--verbose'
   ], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env
+    env,
+    cwd: tempDir
   })
 
   // Single-turn: write prompt to stdin and close
@@ -5108,18 +5399,6 @@ app.post('/api/skill-tester/run', async (req, res) => {
     if (!line.trim()) return
     try {
       const event = JSON.parse(line)
-
-      // Parse system init event for plugin load confirmation
-      if (event.type === 'system' && event.subtype === 'init') {
-        const plugins = event.plugins || []
-        const loaded = plugins.find(p => p.name === skillName)
-        if (loaded) {
-          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName: loaded.name, path: loaded.path })}\n\n`)
-        } else {
-          res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'not_loaded', skillName, message: 'Plugin directory exists but was not loaded by Claude' })}\n\n`)
-        }
-        return
-      }
 
       if (event.type === 'stream_event') {
         const inner = event.event
@@ -5195,11 +5474,14 @@ app.post('/api/skill-tester/run', async (req, res) => {
     }
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
     res.end()
+    // Clean up temp directory
+    rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
 
-  // Clean up child process on client disconnect
+  // Clean up child process and temp dir on client disconnect
   res.on('close', () => {
     try { child.kill() } catch {}
+    rm(tempDir, { recursive: true, force: true }).catch(() => {})
   })
 })
 

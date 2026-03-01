@@ -87,6 +87,7 @@ function toolDisplayName(name: string): string {
     Bash: 'Running command',
     Glob: 'Finding files',
     Grep: 'Searching code',
+    Skill: 'Skill invoked',
   }
   return map[name] || name
 }
@@ -96,10 +97,25 @@ function ToolIndicator({ tools }: { tools: { name: string; input: Record<string,
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
       {tools.map((tool, i) => {
-        const detail = tool.input?.file_path || tool.input?.pattern || tool.input?.command || ''
+        const isSkill = tool.name === 'Skill'
+        const detail = isSkill
+          ? (tool.input?.skill || '')
+          : (tool.input?.file_path || tool.input?.pattern || tool.input?.command || '')
         const shortDetail = typeof detail === 'string' && detail.length > 60
           ? '...' + detail.slice(-57)
           : detail
+        if (isSkill) {
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-xs font-medium text-emerald-300"
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              <span>Skill invoked</span>
+              {shortDetail && <span className="text-emerald-400/70 font-normal">{String(shortDetail)}</span>}
+            </span>
+          )
+        }
         return (
           <span
             key={i}
@@ -309,7 +325,16 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill 
                       : 'hover:bg-surface/40 border border-transparent'
                   }`}
                 >
-                  <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{skill.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{skill.name}</p>
+                    <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                      skill.source === 'drafts'
+                        ? 'bg-amber-500/15 text-amber-400/80'
+                        : 'bg-emerald-500/15 text-emerald-400/80'
+                    }`}>
+                      {skill.source === 'drafts' ? 'Draft' : 'Active'}
+                    </span>
+                  </div>
                   {skill.description && (
                     <p className="text-xs text-stone/60 mt-0.5 line-clamp-2">{skill.description}</p>
                   )}
@@ -676,7 +701,7 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             rows={2}
             className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleSend()
               }
@@ -700,275 +725,421 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               onClick={handleSend}
               disabled={!input.trim()}
               className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-              title="Send (Cmd+Enter)"
+              title="Send (Enter)"
             >
               <Send className="h-4 w-4" />
             </button>
           )}
         </div>
-        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Cmd+Enter to send</p>
+        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Enter to send, Shift+Enter for new line</p>
       </div>
     </div>
   )
 }
 
-type OutputSegment =
-  | { type: 'text'; text: string }
-  | { type: 'tool_call'; tool: string; input: string }
-  | { type: 'tool_result'; tool: string; success: boolean }
+interface TestMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  tools?: { name: string; input: Record<string, unknown> }[]
+}
 
 function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
-  const [prompt, setPrompt] = useState('')
-  const [segments, setSegments] = useState<OutputSegment[]>([])
-  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [skillStatus, setSkillStatus] = useState<{ status: string; skillName?: string; message?: string; path?: string } | null>(null)
-  const outputRef = useRef<HTMLDivElement>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const [testSessionId, setTestSessionId] = useState<string | null>(null)
+  const [testMessages, setTestMessages] = useState<TestMessage[]>([])
+  const [testStreamText, setTestStreamText] = useState('')
+  const [testInput, setTestInput] = useState('')
+  const [testStatus, setTestStatus] = useState<'idle' | 'starting' | 'ready' | 'processing' | 'error'>('idle')
+  const [testSkillName, setTestSkillName] = useState<string | null>(null)
+  const testChatRef = useRef<HTMLDivElement>(null)
+  const testInputRef = useRef<HTMLTextAreaElement>(null)
+  const testEventSourceRef = useRef<EventSource | null>(null)
+  const testPendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
+  const testStreamTextRef = useRef('')
+  const testSessionIdRef = useRef(testSessionId)
 
-  // Auto-scroll output
+  useEffect(() => { testSessionIdRef.current = testSessionId }, [testSessionId])
+
+  // Auto-scroll test chat
   useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight
+    const el = testChatRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150
+    if (nearBottom) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+  }, [testMessages, testStreamText])
+
+  // Clean up test session on unmount or when skill changes
+  useEffect(() => {
+    return () => {
+      const sid = testSessionIdRef.current
+      if (sid) {
+        testEventSourceRef.current?.close()
+        testEventSourceRef.current = null
+        fetch(`/api/skill-creator/test/${sid}`, { method: 'DELETE' }).catch(() => {})
+        setTestSessionId(null)
+        setTestMessages([])
+        setTestStreamText('')
+        setTestSkillName(null)
+        setTestStatus('idle')
+      }
     }
-  }, [segments])
+  }, [selectedSkill?.id])
 
-  const handleRun = async () => {
-    if (!selectedSkill || !prompt.trim() || status === 'running') return
+  // Start a new isolated test session
+  const startTestSession = useCallback(async () => {
+    if (!selectedSkill) return
 
-    setSegments([])
-    setStatus('running')
-    setSkillStatus(null)
+    // Clean up any existing test session
+    if (testSessionIdRef.current) {
+      testEventSourceRef.current?.close()
+      fetch(`/api/skill-creator/test/${testSessionIdRef.current}`, { method: 'DELETE' }).catch(() => {})
+    }
 
-    const controller = new AbortController()
-    abortRef.current = controller
+    setTestStatus('starting')
+    setTestMessages([])
+    testStreamTextRef.current = ''
+    setTestStreamText('')
+    testPendingToolsRef.current = []
 
     try {
-      const response = await fetch('/api/skill-tester/run', {
+      const res = await fetch('/api/skill-creator/test/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillName: selectedSkill.id, prompt: prompt.trim(), source: selectedSkill.source }),
-        signal: controller.signal,
+        body: JSON.stringify({ draftName: selectedSkill.id, source: selectedSkill.source }),
       })
-
-      if (!response.ok || !response.body) {
-        setStatus('error')
-        setSegments([{ type: 'text', text: 'Failed to connect to skill tester' }])
+      const data = await res.json()
+      if (!data.ok) {
+        setTestStatus('error')
+        setTestMessages([{ id: crypto.randomUUID(), role: 'system', content: `Failed to start: ${data.error}` }])
         return
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+      setTestSessionId(data.testSessionId)
+      setTestSkillName(data.skillName)
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+      // Connect SSE
+      const es = new EventSource(`/api/skill-creator/test/stream?testSessionId=${data.testSessionId}`)
+      testEventSourceRef.current = es
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+      es.onopen = () => setTestStatus('ready')
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.type === 'skill_status') {
-              setSkillStatus(data)
-            } else if (data.type === 'chunk') {
-              // Append text to last text segment, or create new one
-              setSegments(prev => {
-                const last = prev[prev.length - 1]
-                if (last && last.type === 'text') {
-                  return [...prev.slice(0, -1), { type: 'text', text: last.text + data.text }]
-                }
-                return [...prev, { type: 'text', text: data.text }]
-              })
-            } else if (data.type === 'tool_call') {
-              setSegments(prev => [...prev, { type: 'tool_call', tool: data.tool, input: data.input }])
-            } else if (data.type === 'tool_result') {
-              setSegments(prev => [...prev, { type: 'tool_result', tool: data.tool, success: data.success }])
-            } else if (data.type === 'done') {
-              setStatus('done')
-            } else if (data.type === 'error') {
-              setStatus('error')
-              setSegments(prev => [...prev, { type: 'text', text: '\n\n--- Error ---\n' + data.message }])
+      es.onmessage = (event) => {
+        try {
+          const d = JSON.parse(event.data)
+          if (d.type === 'text') {
+            testStreamTextRef.current += d.text
+            setTestStreamText(testStreamTextRef.current)
+          } else if (d.type === 'tool_start') {
+            testPendingToolsRef.current = [...testPendingToolsRef.current, { name: d.name, input: {} }]
+            // Prominent skill invocation banner
+            if (d.name === 'Skill') {
+              setTestMessages(msgs => [...msgs, {
+                id: crypto.randomUUID(),
+                role: 'system',
+                content: '__skill_invoked__',
+              }])
             }
-          } catch {}
-        }
+          } else if (d.type === 'assistant') {
+            // Update streaming text with the complete snapshot for display accuracy.
+            // Don't create a message — multiple assistant snapshots fire per turn
+            // (after thinking, after text) which causes duplicate messages.
+            // Message creation is deferred to the single 'result' event.
+            if (d.text && d.text.trim()) {
+              testStreamTextRef.current = d.text
+              setTestStreamText(d.text)
+            }
+            if (d.tools && d.tools.length > 0) {
+              testPendingToolsRef.current = d.tools
+            }
+          } else if (d.type === 'result') {
+            // Read from ref to avoid nesting setTestMessages inside a
+            // setTestStreamText functional updater — React StrictMode
+            // double-invokes functional updaters, which would create
+            // duplicate messages.
+            const text = testStreamTextRef.current
+            const tools = testPendingToolsRef.current
+            testPendingToolsRef.current = []
+            testStreamTextRef.current = ''
+            setTestStreamText('')
+            if (tools.length > 0) {
+              // Tool-use turn: suppress text to avoid duplicate output.
+              // Claude often outputs the same answer before the tool call
+              // and again after — only the final text-only turn matters.
+              // Tool activity is already shown by banners/indicators.
+            } else if (text.trim()) {
+              // Text-only turn: this is the actual response.
+              setTestMessages(msgs => [...msgs, {
+                id: crypto.randomUUID(),
+                role: 'assistant',
+                content: text,
+              }])
+            }
+            setTestStatus('ready')
+          } else if (d.type === 'error') {
+            setTestMessages(msgs => [...msgs, { id: crypto.randomUUID(), role: 'system', content: `Error: ${d.message}` }])
+            setTestStatus('ready')
+          } else if (d.type === 'process_exit') {
+            if (d.code !== 0) {
+              setTestMessages(msgs => [...msgs, { id: crypto.randomUUID(), role: 'system', content: `Process exited with code ${d.code}` }])
+            }
+            setTestStatus('ready')
+          }
+        } catch {}
       }
 
-      // If stream ended without a 'done' event
-      setStatus(prev => prev === 'running' ? 'done' : prev)
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        setStatus('error')
-        setSegments(prev => [...prev, { type: 'text', text: '\n\nConnection error' }])
+      es.onerror = () => {
+        // SSE will auto-reconnect
       }
+    } catch {
+      setTestStatus('error')
+      setTestMessages([{ id: crypto.randomUUID(), role: 'system', content: 'Failed to connect to test server' }])
     }
-  }
+  }, [selectedSkill])
 
-  const handleStop = () => {
-    if (abortRef.current) abortRef.current.abort()
-    setStatus('done')
-  }
+  // Send a test message
+  const handleTestSend = useCallback(async () => {
+    const text = testInput.trim()
+    if (!text || !testSessionId || testStatus === 'processing') return
 
-  const handleClear = () => {
-    if (abortRef.current) abortRef.current.abort()
-    setSegments([])
-    setSkillStatus(null)
-    setStatus('idle')
-  }
+    setTestMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content: text }])
+    setTestInput('')
+    setTestStatus('processing')
+    testStreamTextRef.current = ''
+    setTestStreamText('')
+    testPendingToolsRef.current = []
 
-  const hasOutput = segments.length > 0
+    try {
+      const res = await fetch('/api/skill-creator/test/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ testSessionId, message: text }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setTestMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: `Send failed: ${err.error}` }])
+        setTestStatus('ready')
+      }
+    } catch {
+      setTestMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'system', content: 'Failed to send message' }])
+      setTestStatus('ready')
+    }
+  }, [testInput, testSessionId, testStatus])
 
-  return (
-    <div className="flex-1 flex flex-col min-h-0 p-4 gap-3">
-      {/* Selected skill indicator */}
-      <div className="shrink-0 px-1">
-        {selectedSkill ? (
-          <p className="text-xs text-stone/70">
-            Testing: <span className="text-parchment font-medium">{selectedSkill.name}</span>
-            <span className="text-stone/40 ml-1.5">({selectedSkill.source})</span>
-          </p>
-        ) : (
+  // Close the test session
+  const closeTestSession = useCallback(() => {
+    if (testSessionId) {
+      testEventSourceRef.current?.close()
+      testEventSourceRef.current = null
+      fetch(`/api/skill-creator/test/${testSessionId}`, { method: 'DELETE' }).catch(() => {})
+    }
+    setTestSessionId(null)
+    setTestMessages([])
+    setTestStreamText('')
+    setTestSkillName(null)
+    setTestStatus('idle')
+    testPendingToolsRef.current = []
+  }, [testSessionId])
+
+  // No skill selected — empty state
+  if (!selectedSkill) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
           <p className="text-xs text-stone/40">Select a skill from the sidebar to test</p>
-        )}
+        </div>
+      </div>
+    )
+  }
+
+  // Idle — show start button
+  if (testStatus === 'idle') {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-3" />
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <p className="text-sm text-parchment/80">{selectedSkill.name}</p>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+              selectedSkill.source === 'drafts'
+                ? 'bg-amber-500/15 text-amber-400/80'
+                : 'bg-emerald-500/15 text-emerald-400/80'
+            }`}>
+              {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
+            </span>
+          </div>
+          <p className="text-xs text-stone/40 mb-4">Spin up an isolated Claude session with only this skill loaded</p>
+          <button
+            onClick={startTestSession}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors border border-sand/20"
+          >
+            <Play className="h-3.5 w-3.5" /> Start Test Session
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Starting — loading state
+  if (testStatus === 'starting') {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-6 w-6 text-sand/50 animate-spin mx-auto mb-3" />
+          <p className="text-xs text-stone/50">Starting isolated test session...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Active test session — chat UI
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Header */}
+      <div className="px-4 py-2.5 border-b border-border-custom shrink-0 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-parchment/80">
+            Testing: <span className="font-medium">{testSkillName}</span>
+            <span className="text-stone/40 ml-1">(isolated)</span>
+          </p>
+          <p className="text-[10px] text-stone/40">Type a trigger phrase to test if the skill fires correctly</p>
+        </div>
+        <button
+          onClick={closeTestSession}
+          className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/50 transition-colors"
+          title="Close test session"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* Prompt input */}
-      <textarea
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        placeholder="Ask the skill something..."
-        rows={4}
-        className="w-full text-sm bg-ink/50 text-parchment border border-border-custom rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-sand/50 placeholder:text-stone/30 shrink-0"
-        onKeyDown={e => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleRun()
-        }}
-      />
-
-      {/* Actions row */}
-      <div className="flex items-center gap-2 shrink-0">
-        {status === 'running' ? (
-          <button
-            onClick={handleStop}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-ember/20 text-ember rounded-lg hover:bg-ember/30 transition-colors"
-          >
-            <Square className="h-3 w-3" /> Stop
-          </button>
-        ) : (
-          <button
-            onClick={handleRun}
-            disabled={!selectedSkill || !prompt.trim()}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <Play className="h-3 w-3" /> Run
-          </button>
-        )}
-        {hasOutput && (
-          <button
-            onClick={handleClear}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-stone/50 hover:text-parchment transition-colors"
-          >
-            <X className="h-3 w-3" /> Clear
-          </button>
-        )}
-        {/* Status indicator */}
-        <span className={`text-[10px] ml-auto ${
-          status === 'running' ? 'text-sand/70' :
-          status === 'done' ? 'text-moss/70' :
-          status === 'error' ? 'text-ember/70' :
-          'text-stone/40'
-        }`}>
-          {status === 'running' && <><Loader2 className="h-3 w-3 animate-spin inline mr-1" />Running...</>}
-          {status === 'done' && 'Done'}
-          {status === 'error' && 'Error'}
-        </span>
-      </div>
-
-      {/* Output area */}
-      <div
-        ref={outputRef}
-        className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-ink/80 border border-border-custom p-3 text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words"
-      >
-        {hasOutput || skillStatus || status === 'running' ? (
-          <>
-            {/* Skill load status — compact line at top */}
-            {status === 'running' && !skillStatus && (
-              <div className="text-[10px] text-stone/40 mb-1.5 flex items-center gap-1">
-                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                <span>loading...</span>
-              </div>
-            )}
-            {skillStatus?.status === 'loaded' && (
-              <div className="text-[10px] text-moss/50 mb-1.5 flex items-center gap-1">
-                <Check className="h-2.5 w-2.5" />
-                <span>{skillStatus.skillName} loaded</span>
-              </div>
-            )}
-            {skillStatus?.status === 'not_found' && (
-              <div className="text-[10px] text-ember/60 mb-1.5 flex items-center gap-1">
-                <XCircle className="h-2.5 w-2.5" />
-                <span>not found: {skillStatus.message?.split(': ')[1]}</span>
-              </div>
-            )}
-            {skillStatus?.status === 'no_skill_md' && (
-              <div className="text-[10px] text-sand/50 mb-1.5 flex items-center gap-1">
-                <AlertTriangle className="h-2.5 w-2.5" />
-                <span>SKILL.md missing</span>
-              </div>
-            )}
-            {skillStatus?.status === 'not_loaded' && (
-              <div className="text-[10px] text-ember/60 mb-1.5 flex items-center gap-1">
-                <XCircle className="h-2.5 w-2.5" />
-                <span>skill not loaded</span>
-              </div>
-            )}
-            {/* Output segments — text chunks interleaved with tool call annotations */}
-            {segments.map((seg, i) => {
-              if (seg.type === 'text') {
-                return <span key={i}>{seg.text}</span>
-              }
-              if (seg.type === 'tool_call') {
-                return (
-                  <div key={i} className="my-1.5 pl-2 border-l-2 border-sand/20 text-[11px] text-sand/60 font-mono flex items-start gap-1.5">
-                    <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
-                    <span>{seg.tool}(<span className="text-sand/40">{seg.input}</span>)</span>
-                  </div>
-                )
-              }
-              if (seg.type === 'tool_result') {
-                return (
-                  <div key={i} className="my-1 pl-2 border-l-2 border-sand/20 text-[10px] font-mono flex items-center gap-1.5">
-                    {seg.success ? (
-                      <span className="text-moss/50"><Check className="h-2.5 w-2.5 inline mr-0.5" />{seg.tool} done</span>
-                    ) : (
-                      <span className="text-ember/50"><XCircle className="h-2.5 w-2.5 inline mr-0.5" />{seg.tool} failed</span>
-                    )}
-                  </div>
-                )
-              }
-              return null
-            })}
-            {status === 'running' && (
-              <span className="inline-block w-1.5 h-3.5 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
-            )}
-          </>
-        ) : (
+      {/* Messages */}
+      <div ref={testChatRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {testMessages.length === 0 && !testStreamText ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-              {selectedSkill ? (
-                <>
-                  <p className="text-xs text-stone/40">Enter a prompt to test {selectedSkill.name}</p>
-                  <p className="text-[10px] text-stone/30 mt-1">Ctrl+Enter to run</p>
-                </>
-              ) : (
-                <p className="text-xs text-stone/40">Select a skill from the sidebar to test</p>
-              )}
+            <div className="text-center max-w-sm">
+              <FlaskConical className="h-7 w-7 text-stone/20 mx-auto mb-2" />
+              <p className="text-xs text-stone/50">Session ready. Type a trigger phrase below.</p>
+              <p className="text-[10px] text-stone/30 mt-1">The skill is discoverable but not pre-injected</p>
             </div>
           </div>
+        ) : (
+          <>
+            {testMessages.map(msg => {
+              if (msg.role === 'system') {
+                if (msg.content === '__skill_invoked__') {
+                  return (
+                    <div key={msg.id} className="flex justify-center my-2">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+                        <FlaskConical className="h-4 w-4 text-emerald-400" />
+                        <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
+                        {testSkillName && <span className="text-xs text-emerald-400/60">{testSkillName}</span>}
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{msg.content}</span>
+                  </div>
+                )
+              }
+              if (msg.role === 'user') {
+                return (
+                  <div key={msg.id} className="flex justify-end">
+                    <div className="max-w-[75%]">
+                      <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
+                        <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+              // assistant
+              return (
+                <div key={msg.id} className="flex justify-start">
+                  <div className="max-w-[85%] overflow-hidden">
+                    <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
+                    <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
+                      <MarkdownContent content={msg.content} className="text-parchment/80" />
+                    </div>
+                    {msg.tools && msg.tools.length > 0 && <ToolIndicator tools={msg.tools} />}
+                  </div>
+                </div>
+              )
+            })}
+            {testStreamText && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] overflow-hidden">
+                  <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
+                  <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
+                    <MarkdownContent content={testStreamText} className="text-parchment/80" />
+                    <span className="inline-block w-1.5 h-4 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
+                  </div>
+                </div>
+              </div>
+            )}
+            {testStatus === 'processing' && !testStreamText && (
+              <div className="flex justify-start">
+                <div>
+                  <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
+                  <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-[rgba(120,140,160,0.12)]">
+                    <div className="flex gap-1.5 items-center">
+                      <span className="typing-dot" />
+                      <span className="typing-dot" style={{ animationDelay: '0.15s' }} />
+                      <span className="typing-dot" style={{ animationDelay: '0.3s' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0 px-4 pb-4 pt-2 border-t border-border-custom">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={testInputRef}
+            value={testInput}
+            onChange={e => setTestInput(e.target.value)}
+            placeholder="Type a trigger phrase..."
+            rows={2}
+            disabled={testStatus !== 'ready'}
+            className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar disabled:opacity-50"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleTestSend()
+              }
+            }}
+            onInput={e => {
+              const target = e.currentTarget
+              target.style.height = 'auto'
+              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+            }}
+          />
+          {testStatus === 'processing' ? (
+            <button
+              className="shrink-0 p-2.5 rounded-xl text-stone/30 cursor-not-allowed"
+              disabled
+              title="Processing..."
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </button>
+          ) : (
+            <button
+              onClick={handleTestSend}
+              disabled={!testInput.trim() || testStatus !== 'ready'}
+              className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
+              title="Send (Enter)"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-[10px] text-stone/30 mt-1.5 ml-1">Enter to send, Shift+Enter for new line</p>
       </div>
     </div>
   )
