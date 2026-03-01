@@ -4763,11 +4763,11 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
     })
 
     // Spawn the isolated claude subprocess
-    // Override HOME so Claude only discovers skills/plugins from tempDir/.claude/,
-    // not from the user's global ~/.claude/ directory
+    // --setting-sources project: only load project-level skills/plugins from tempDir/.claude/,
+    // skip user-level ~/.claude/skills/ and ~/.claude/plugins/ for true isolation.
+    // Auth is separate from settings, so login still works.
     const env = { ...process.env }
     delete env.CLAUDECODE
-    env.HOME = tempDir
     const child = spawn(CLAUDE_BIN, [
       '-p',
       '--output-format', 'stream-json',
@@ -4776,7 +4776,8 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
       '--include-partial-messages',
       '--permission-mode', 'bypassPermissions',
       '--model', 'sonnet',
-      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep'
+      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+      '--setting-sources', 'project'
     ], {
       cwd: tempDir,
       stdio: ['pipe', 'pipe', 'pipe'],
