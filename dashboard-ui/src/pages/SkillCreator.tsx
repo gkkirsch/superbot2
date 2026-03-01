@@ -87,6 +87,7 @@ function toolDisplayName(name: string): string {
     Bash: 'Running command',
     Glob: 'Finding files',
     Grep: 'Searching code',
+    Skill: 'Skill invoked',
   }
   return map[name] || name
 }
@@ -96,10 +97,25 @@ function ToolIndicator({ tools }: { tools: { name: string; input: Record<string,
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
       {tools.map((tool, i) => {
-        const detail = tool.input?.file_path || tool.input?.pattern || tool.input?.command || ''
+        const isSkill = tool.name === 'Skill'
+        const detail = isSkill
+          ? (tool.input?.skill || '')
+          : (tool.input?.file_path || tool.input?.pattern || tool.input?.command || '')
         const shortDetail = typeof detail === 'string' && detail.length > 60
           ? '...' + detail.slice(-57)
           : detail
+        if (isSkill) {
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-xs font-medium text-emerald-300"
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              <span>Skill invoked</span>
+              {shortDetail && <span className="text-emerald-400/70 font-normal">{String(shortDetail)}</span>}
+            </span>
+          )
+        }
         return (
           <span
             key={i}
@@ -812,6 +828,14 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             setTestStreamText(prev => prev + d.text)
           } else if (d.type === 'tool_start') {
             testPendingToolsRef.current = [...testPendingToolsRef.current, { name: d.name, input: {} }]
+            // Prominent skill invocation banner
+            if (d.name === 'Skill') {
+              setTestMessages(msgs => [...msgs, {
+                id: crypto.randomUUID(),
+                role: 'system',
+                content: '__skill_invoked__',
+              }])
+            }
           } else if (d.type === 'assistant') {
             // Update streaming text with the complete snapshot for display accuracy.
             // Don't create a message — multiple assistant snapshots fire per turn
@@ -989,6 +1013,17 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
           <>
             {testMessages.map(msg => {
               if (msg.role === 'system') {
+                if (msg.content === '__skill_invoked__') {
+                  return (
+                    <div key={msg.id} className="flex justify-center my-2">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+                        <FlaskConical className="h-4 w-4 text-emerald-400" />
+                        <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
+                        {testSkillName && <span className="text-xs text-emerald-400/60">{testSkillName}</span>}
+                      </div>
+                    </div>
+                  )
+                }
                 return (
                   <div key={msg.id} className="flex justify-center">
                     <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{msg.content}</span>
