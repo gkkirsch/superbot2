@@ -4720,9 +4720,9 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
       await mkdir(pluginDest, { recursive: true })
       await cp(skillSourcePath, pluginDest, { recursive: true })
     } else {
-      // Skill-only: find SKILL.md and copy to .claude/skills/<skillName>/SKILL.md
-      let skillMdPath = join(skillSourcePath, 'SKILL.md')
-      let foundSkillMd = existsSync(skillMdPath)
+      // Skill-only: find the skill directory containing SKILL.md and copy everything
+      let skillSourceDir = skillSourcePath
+      let foundSkillMd = existsSync(join(skillSourcePath, 'SKILL.md'))
       if (!foundSkillMd) {
         // Check skills/ subdirectory
         try {
@@ -4731,7 +4731,7 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
             if (entry.isDirectory()) {
               const candidatePath = join(skillSourcePath, 'skills', entry.name, 'SKILL.md')
               if (existsSync(candidatePath)) {
-                skillMdPath = candidatePath
+                skillSourceDir = join(skillSourcePath, 'skills', entry.name)
                 skillName = entry.name
                 foundSkillMd = true
                 break
@@ -4744,10 +4744,10 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
         await rm(tempDir, { recursive: true, force: true })
         return res.status(400).json({ error: 'No SKILL.md found in skill' })
       }
+      // Copy the entire skill directory (SKILL.md + scripts, references, templates, etc.)
       const skillDest = join(tempDir, '.claude', 'skills', skillName)
       await mkdir(skillDest, { recursive: true })
-      const skillMdContent = await readFile(skillMdPath, 'utf-8')
-      await writeFile(join(skillDest, 'SKILL.md'), skillMdContent)
+      await cp(skillSourceDir, skillDest, { recursive: true })
     }
 
     const testSessionId = `test-${randomUUID()}`
