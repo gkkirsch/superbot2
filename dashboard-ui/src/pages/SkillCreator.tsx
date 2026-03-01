@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Wrench } from 'lucide-react'
+import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Wrench, Trash2 } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -744,9 +744,38 @@ interface TestMessage {
   tools?: { name: string; input: Record<string, unknown> }[]
 }
 
+function getTestStorageKey(skill: TesterSkill): string {
+  return `skill-test-${skill.source}-${skill.id}`
+}
+
+function loadPersistedTestMessages(skill: TesterSkill): TestMessage[] {
+  try {
+    const raw = localStorage.getItem(getTestStorageKey(skill))
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+    }
+  } catch { /* ignore corrupt data */ }
+  return []
+}
+
+function saveTestMessages(skill: TesterSkill, messages: TestMessage[]) {
+  try {
+    localStorage.setItem(getTestStorageKey(skill), JSON.stringify(messages))
+  } catch { /* ignore quota errors */ }
+}
+
+function clearTestMessages(skill: TesterSkill) {
+  try {
+    localStorage.removeItem(getTestStorageKey(skill))
+  } catch { /* ignore */ }
+}
+
 function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [testSessionId, setTestSessionId] = useState<string | null>(null)
-  const [testMessages, setTestMessages] = useState<TestMessage[]>([])
+  const [testMessages, setTestMessages] = useState<TestMessage[]>(() =>
+    selectedSkill ? loadPersistedTestMessages(selectedSkill) : []
+  )
   const [testStreamText, setTestStreamText] = useState('')
   const [testInput, setTestInput] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'starting' | 'ready' | 'processing' | 'error'>('idle')
@@ -757,8 +786,28 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const testPendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
   const testStreamTextRef = useRef('')
   const testSessionIdRef = useRef(testSessionId)
+  const testMessagesSkillRef = useRef<TesterSkill | null>(selectedSkill)
 
   useEffect(() => { testSessionIdRef.current = testSessionId }, [testSessionId])
+
+  // Load persisted messages when skill changes
+  useEffect(() => {
+    testMessagesSkillRef.current = selectedSkill
+    if (selectedSkill) {
+      const persisted = loadPersistedTestMessages(selectedSkill)
+      setTestMessages(persisted)
+    } else {
+      setTestMessages([])
+    }
+  }, [selectedSkill?.id, selectedSkill?.source])
+
+  // Persist test messages to localStorage (only when messages change, not on skill switch)
+  useEffect(() => {
+    const skill = testMessagesSkillRef.current
+    if (skill && testMessages.length > 0) {
+      saveTestMessages(skill, testMessages)
+    }
+  }, [testMessages])
 
   // Auto-scroll test chat
   useEffect(() => {
@@ -777,7 +826,6 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
         testEventSourceRef.current = null
         fetch(`/api/skill-creator/test/${sid}`, { method: 'DELETE' }).catch(() => {})
         setTestSessionId(null)
-        setTestMessages([])
         setTestStreamText('')
         setTestSkillName(null)
         setTestStatus('idle')
@@ -796,7 +844,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     }
 
     setTestStatus('starting')
-    setTestMessages([])
+    // Don't clear messages — keep persisted history
     testStreamTextRef.current = ''
     setTestStreamText('')
     testPendingToolsRef.current = []
@@ -929,7 +977,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     }
   }, [testInput, testSessionId, testStatus])
 
-  // Close the test session
+  // Close the test session — keeps message history persisted
   const closeTestSession = useCallback(() => {
     if (testSessionId) {
       testEventSourceRef.current?.close()
@@ -937,12 +985,19 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
       fetch(`/api/skill-creator/test/${testSessionId}`, { method: 'DELETE' }).catch(() => {})
     }
     setTestSessionId(null)
-    setTestMessages([])
     setTestStreamText('')
     setTestSkillName(null)
     setTestStatus('idle')
     testPendingToolsRef.current = []
   }, [testSessionId])
+
+  // Clear persisted chat history
+  const clearTestHistory = useCallback(() => {
+    if (selectedSkill) {
+      clearTestMessages(selectedSkill)
+    }
+    setTestMessages([])
+  }, [selectedSkill])
 
   // No skill selected — empty state
   if (!selectedSkill) {
@@ -956,30 +1011,108 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     )
   }
 
-  // Idle — show start button
+  // Idle — show start button (and persisted messages if any)
   if (testStatus === 'idle') {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-3" />
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <p className="text-sm text-parchment/80">{selectedSkill.name}</p>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-              selectedSkill.source === 'drafts'
-                ? 'bg-amber-500/15 text-amber-400/80'
-                : 'bg-emerald-500/15 text-emerald-400/80'
-            }`}>
-              {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
-            </span>
+      <div className="flex-1 flex flex-col min-h-0">
+        {testMessages.length > 0 ? (
+          <>
+            {/* Header with clear button */}
+            <div className="px-4 py-2.5 border-b border-border-custom shrink-0 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-parchment/80">
+                  Previous: <span className="font-medium">{selectedSkill.name}</span>
+                  <span className="text-stone/40 ml-1">(session ended)</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={clearTestHistory}
+                  className="p-1.5 rounded-md text-stone/50 hover:text-ember hover:bg-ember/10 transition-colors"
+                  title="Clear chat history"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            {/* Persisted messages */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+              {testMessages.map(msg => {
+                if (msg.role === 'system') {
+                  if (msg.content === '__skill_invoked__') {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-2">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+                          <FlaskConical className="h-4 w-4 text-emerald-400" />
+                          <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={msg.id} className="flex justify-center">
+                      <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{msg.content}</span>
+                    </div>
+                  )
+                }
+                if (msg.role === 'user') {
+                  return (
+                    <div key={msg.id} className="flex justify-end">
+                      <div className="max-w-[75%]">
+                        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
+                          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div key={msg.id} className="flex justify-start">
+                    <div className="max-w-[85%] overflow-hidden">
+                      <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
+                      <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
+                        <MarkdownContent content={msg.content} className="text-parchment/80" />
+                      </div>
+                      {msg.tools && msg.tools.length > 0 && <ToolIndicator tools={msg.tools} />}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Start new session button */}
+            <div className="shrink-0 px-4 pb-4 pt-2 border-t border-border-custom flex justify-center">
+              <button
+                onClick={startTestSession}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors border border-sand/20"
+              >
+                <Play className="h-3.5 w-3.5" /> Resume Test Session
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-3" />
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <p className="text-sm text-parchment/80">{selectedSkill.name}</p>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                  selectedSkill.source === 'drafts'
+                    ? 'bg-amber-500/15 text-amber-400/80'
+                    : 'bg-emerald-500/15 text-emerald-400/80'
+                }`}>
+                  {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
+                </span>
+              </div>
+              <p className="text-xs text-stone/40 mb-4">Spin up an isolated Claude session with only this skill loaded</p>
+              <button
+                onClick={startTestSession}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors border border-sand/20"
+              >
+                <Play className="h-3.5 w-3.5" /> Start Test Session
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-stone/40 mb-4">Spin up an isolated Claude session with only this skill loaded</p>
-          <button
-            onClick={startTestSession}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors border border-sand/20"
-          >
-            <Play className="h-3.5 w-3.5" /> Start Test Session
-          </button>
-        </div>
+        )}
       </div>
     )
   }
@@ -1008,13 +1141,22 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
           </p>
           <p className="text-[10px] text-stone/40">Type a trigger phrase to test if the skill fires correctly</p>
         </div>
-        <button
-          onClick={closeTestSession}
-          className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/50 transition-colors"
-          title="Close test session"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={clearTestHistory}
+            className="p-1.5 rounded-md text-stone/50 hover:text-ember hover:bg-ember/10 transition-colors"
+            title="Clear chat history"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={closeTestSession}
+            className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/50 transition-colors"
+            title="Close test session"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
