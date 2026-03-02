@@ -273,16 +273,18 @@ The heartbeat message includes a **Running Workers** section (real process list 
 SendMessage: type shutdown_request → recipient: <worker-name>
 ```
 
-**What counts as stale:**
-- Worker whose project is 100% complete
+**What counts as stale (be conservative — default to keeping workers alive):**
+- Worker whose project is 100% complete AND has no pending escalations
 - Worker with a `-2` or later suffix when the original is still running
 - Planner worker after plan.md exists and tasks are created
-- Any worker running 60+ minutes without a completion or status message
+- Any worker running 90+ minutes without any message at all
 
 **Check-in thresholds for silent workers:**
-- 30+ min silent → send a check-in message asking for status
-- 60+ min silent → stronger nudge
+- 45+ min silent → send a check-in message asking for status
+- 75+ min silent → stronger nudge
 - 90+ min silent → consider killing and re-spawning
+
+**Default: leave workers running.** Only send a shutdown_request when you are certain there is no more work for them and no escalations they might need to follow up on. A worker that finishes and sits idle costs nothing. A worker killed too early means lost work.
 
 Then execute the rest of the heartbeat tasks: triage escalations, check portfolio state, spawn workers as needed.
 

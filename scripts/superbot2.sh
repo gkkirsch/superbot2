@@ -169,8 +169,12 @@ trap 'stop_dashboard; rm -f "$LAUNCHER_PID_FILE"' EXIT
 
 start_dashboard
 
-# Start iMessage watcher (self-exits if not configured)
-bash "$SCRIPT_DIR/imessage-watcher.sh" &
+# Start iMessage watcher (self-exits if not configured, guard against duplicates)
+if pgrep -f "imessage-watcher.sh" > /dev/null 2>&1; then
+  echo "imessage-watcher already running (PID $(pgrep -f imessage-watcher.sh | head -1)), skipping."
+else
+  bash "$SCRIPT_DIR/imessage-watcher.sh" &
+fi
 
 echo "Starting superbot2 orchestrator..."
 
