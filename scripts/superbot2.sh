@@ -224,7 +224,7 @@ while true; do
   # || true: bypass set -e so bash continues to the restart check even when claude
   # exits with a non-zero code (e.g. 143 from SIGTERM). Without this, set -e would
   # kill the bash script before the restart loop runs.
-  claude "${CLAUDE_ARGS[@]}" "$INITIAL_MSG" || true
+  ENABLE_CLAUDEAI_MCP_SERVERS=false claude "${CLAUDE_ARGS[@]}" "$INITIAL_MSG" || true
 
   # Claude exited — clean up watchdog
   kill $WATCHDOG_PID 2>/dev/null
