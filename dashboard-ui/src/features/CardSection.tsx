@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, X, PenLine, Loader2 } from 'lucide-react'
+import { Check, X, PenLine, Loader2, ExternalLink } from 'lucide-react'
 import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem } from '@/lib/types'
 
@@ -106,12 +106,26 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
         </p>
       )}
 
-      {/* Meta: excerpt */}
-      {metaField && item[metaField] && (
-        <div className="text-[10px] text-stone/50 mb-2 italic border-l-2 border-stone/20 pl-2">
-          {String(item[metaField])}
+      {/* Meta: excerpt + post link */}
+      {(metaField && item[metaField]) || item.postUrl ? (
+        <div className="flex items-start justify-between gap-2 mb-2">
+          {metaField && item[metaField] && (
+            <div className="text-[10px] text-stone/50 italic border-l-2 border-stone/20 pl-2 min-w-0">
+              {String(item[metaField])}
+            </div>
+          )}
+          {item.postUrl && (
+            <a
+              href={String(item.postUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-0.5 text-[10px] text-stone/40 hover:text-sand transition-colors shrink-0"
+            >
+              View post <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
         </div>
-      )}
+      ) : null}
 
       {/* Context */}
       {item.context && (
