@@ -35,6 +35,9 @@ import {
   fetchAutoTriageRules,
   deleteAutoTriageRule,
   updateAutoTriageRule,
+  fetchCards,
+  fetchCardItems,
+  updateCardItem,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -356,6 +359,36 @@ export function useUploadKnowledge() {
       uploadKnowledgeFile(source, file),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
+    },
+  })
+}
+
+// --- Dashboard cards ---
+
+export function useCards() {
+  return useQuery({ queryKey: ['cards'], queryFn: fetchCards, staleTime: 60_000 })
+}
+
+export function useCardItems(skillId: string) {
+  return useQuery({
+    queryKey: ['card-items', skillId],
+    queryFn: () => fetchCardItems(skillId),
+    enabled: !!skillId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+}
+
+export function useUpdateCardItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ skillId, itemId, update }: { skillId: string; itemId: string; update: { status?: string; draft?: string } }) =>
+      updateCardItem(skillId, itemId, update),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['card-items'] })
+    },
+    onError: (err: Error) => {
+      console.error('Card item update failed:', err.message)
     },
   })
 }

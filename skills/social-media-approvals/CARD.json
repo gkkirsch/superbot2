@@ -1,0 +1,43 @@
+{
+  "name": "Social Media Approvals",
+  "description": "Review and approve social media drafts before posting",
+  "dataSource": "social-posts.jsonl",
+  "itemSchema": {
+    "platform": "string",
+    "draft": "string",
+    "target": "string",
+    "postUrl": "string",
+    "excerpt": "string",
+    "context": "string",
+    "space": "string"
+  },
+  "display": {
+    "title": "platform",
+    "body": "draft",
+    "subtitle": "target",
+    "meta": "excerpt"
+  },
+  "actions": [
+    {
+      "id": "approve",
+      "label": "Approve",
+      "style": "primary",
+      "handler": "set-status",
+      "params": { "status": "approved" }
+    },
+    {
+      "id": "reject",
+      "label": "Reject",
+      "style": "danger",
+      "handler": "set-status",
+      "params": { "status": "rejected" }
+    },
+    {
+      "id": "rewrite",
+      "label": "Rewrite",
+      "style": "secondary",
+      "handler": "edit-field",
+      "params": { "field": "draft" }
+    }
+  ]
+}

@@ -16,6 +16,8 @@ import { TodoSection } from '@/features/TodoSection'
 import { SpacesSection } from '@/features/SpacesSection'
 import { KnowledgeSection } from '@/features/KnowledgeSection'
 import { ChatSection } from '@/features/ChatSection'
+import { CardSection } from '@/features/CardSection'
+import { Send } from 'lucide-react'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Section wrapper components ---
@@ -258,6 +260,15 @@ function ExtensionsDashboardSection() {
   )
 }
 
+function CardsDashboardSection() {
+  return (
+    <section className="group" data-section="cards">
+      <SectionHeader title="Approvals" icon={Send} />
+      <CardSection />
+    </section>
+  )
+}
+
 // --- Section registry ---
 
 export interface SectionDef {
@@ -298,6 +309,10 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'spaces',
     Component: SpacesDashboardSection,
   },
+  'cards': {
+    id: 'cards',
+    Component: CardsDashboardSection,
+  },
   'chat': {
     id: 'chat',
     Component: ChatSection,
@@ -307,7 +322,7 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  leftColumn: ['escalations', 'spaces'],
+  leftColumn: ['cards', 'escalations', 'spaces'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['recent-activity'],
