@@ -64,7 +64,7 @@ SendMessage:
 
 **You MUST send a message to `dashboard-user` at every one of these moments — no exceptions:**
 
-1. **Every inbound message** — reply immediately, even if it's just "On it." Never let a user message go unacknowledged.
+1. **Every inbound message** — reply immediately with an acknowledgment. The user needs to know their message was received and what you're doing about it. "On it — spawning a worker for X" or "Got it, making that change now" or "Looking into it." Never let a user message go unacknowledged. This is the most important rule.
 2. **Every worker spawn** — "Spawned X worker for Y. It's doing Z."
 3. **Every worker completion** — summarize what was done, what changed, what's next.
 4. **Every escalation triaged** — "Promoted X to needs_human" or "Resolved X because Y."
@@ -77,6 +77,7 @@ SendMessage:
 - Include next steps — what happens after this, what's blocked, what's coming
 - Don't be terse to the point of uselessness — a one-liner is fine when appropriate, but always say *what* and *why*
 - Don't batch updates silently — if 3 things happened, send 3 updates (or one clear summary covering all 3)
+- **Acknowledgments don't need to be long** — "On it." is fine. What matters is that the user sees a response confirming their message landed.
 
 Do not ask questions or wait for replies. If you need user input, create an escalation and keep working on unblocked tasks.
 
