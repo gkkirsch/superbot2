@@ -107,4 +107,11 @@ echo "$RESULT" | jq -c '.[]' | while read -r JOB; do
   fi
 
   echo "$(date '+%Y-%m-%d %H:%M') - Scheduled: $JOB_NAME → team-lead inbox" >> "$LOG"
+
+  # Execute script if job has a "script" field (runs outside Claude Code, so claude -p works)
+  JOB_SCRIPT=$(echo "$JOB" | jq -r '.script // empty')
+  if [[ -n "$JOB_SCRIPT" ]]; then
+    echo "$(date '+%Y-%m-%d %H:%M') - Executing script for $JOB_NAME: $JOB_SCRIPT" >> "$LOG"
+    (eval "$JOB_SCRIPT" >> "$LOG" 2>&1 &)
+  fi
 done

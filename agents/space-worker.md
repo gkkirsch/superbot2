@@ -202,6 +202,21 @@ Continue your current task unless the new work is a prerequisite.
 
 Before escalating, check your space's `knowledge/` directory. The answer may already be there.
 
+### Try to Answer It Yourself
+
+Before escalating a `question`-type escalation, try to answer it yourself. ~40% of past question escalations were things workers could have resolved by checking browser state, reading configs, or testing endpoints. Only escalate questions you genuinely cannot answer.
+
+**Self-check before escalating:**
+1. **Login/account status** — navigate to the service in the browser and check. Don't ask "Are you logged into X?" — go to X and look.
+2. **API keys and credentials** — check `.env`, config files, Keychain, or the service's admin console.
+3. **Account details** — don't ask "What's your handle/follower count?" — open the profile page and read it.
+4. **Service access** — don't ask "Do you have access to X docs?" — try navigating to the docs URL.
+5. **Safe defaults exist** — if both options are reasonable and one is simpler/safer, choose it and proceed. Document your choice in completionNotes so it can be revisited.
+
+**Good escalation** (genuinely needs human): "Should we prioritize keyboard navigation or video autoplay for the next sprint?" — this is a product direction question only the user can answer.
+
+**Bad escalation** (answerable by worker): "Do you have a Cloudflare account?" — the worker could check by navigating to the Cloudflare dashboard or trying `wrangler whoami`.
+
 ### What You Can Decide
 
 Just do it and document:
