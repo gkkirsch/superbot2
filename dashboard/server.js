@@ -1585,7 +1585,7 @@ const DEFAULT_DASHBOARD_CONFIG = {
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
@@ -3278,6 +3278,95 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
     const skillDir = join(SUPERBOT_SKILLS_DIR, id)
     await rm(skillDir, { recursive: true, force: true })
     res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Dashboard cards ---
+// Card data lives within the skill directory (self-contained).
+// dataSource in CARD.json is relative to the skill dir.
+
+async function getCardDefinitions() {
+  const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
+  const cards = []
+  for (const entry of entries) {
+    const cardPath = join(SUPERBOT_SKILLS_DIR, entry, 'CARD.json')
+    try {
+      const content = await readFile(cardPath, 'utf-8')
+      const card = JSON.parse(content)
+      // Only include if the skill is enabled (SKILL.md exists, not .disabled)
+      const skillEnabled = existsSync(join(SUPERBOT_SKILLS_DIR, entry, 'SKILL.md'))
+      if (skillEnabled) {
+        cards.push({ ...card, skillId: entry })
+      }
+    } catch { /* no CARD.json or parse error — skip */ }
+  }
+  return cards
+}
+
+function resolveCardDataPath(skillId, dataSource) {
+  // dataSource is relative to the skill directory
+  return join(SUPERBOT_SKILLS_DIR, skillId, dataSource)
+}
+
+async function readCardItems(skillId, dataSource) {
+  const filePath = resolveCardDataPath(skillId, dataSource)
+  try {
+    const content = await readFile(filePath, 'utf-8')
+    const lines = content.trim().split('\n').filter(Boolean)
+    return lines.map(line => JSON.parse(line))
+  } catch {
+    return []
+  }
+}
+
+async function writeCardItems(skillId, dataSource, items) {
+  const filePath = resolveCardDataPath(skillId, dataSource)
+  const content = items.map(item => JSON.stringify(item)).join('\n') + (items.length ? '\n' : '')
+  await writeFile(filePath, content)
+}
+
+app.get('/api/cards', async (_req, res) => {
+  try {
+    const cards = await getCardDefinitions()
+    res.json({ cards })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/cards/:skillId/items', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+    const items = await readCardItems(card.skillId, card.dataSource)
+    res.json({ items, card })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
+  try {
+    const { skillId, itemId } = req.params
+    const { status, draft } = req.body
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    const items = await readCardItems(card.skillId, card.dataSource)
+    const idx = items.findIndex(item => item.id === itemId)
+    if (idx === -1) return res.status(404).json({ error: 'Item not found' })
+
+    if (status) items[idx].status = status
+    if (draft !== undefined) items[idx].draft = draft
+    items[idx].updatedAt = new Date().toISOString()
+
+    await writeCardItems(card.skillId, card.dataSource, items)
+    res.json({ item: items[idx] })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

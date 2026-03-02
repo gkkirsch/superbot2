@@ -296,6 +296,46 @@ export interface KnowledgeGroup {
   files: KnowledgeFile[]
 }
 
+// --- Dashboard cards ---
+
+export interface CardAction {
+  id: string
+  label: string
+  style: 'primary' | 'danger' | 'secondary'
+  handler: string
+  params?: Record<string, string>
+}
+
+export interface CardDefinition {
+  skillId: string
+  name: string
+  description: string
+  dataSource: string
+  itemSchema: Record<string, string>
+  display: {
+    title: string
+    body: string
+    subtitle?: string
+    meta?: string
+  }
+  actions: CardAction[]
+}
+
+export interface CardItem {
+  id: string
+  status: string
+  createdAt: string
+  updatedAt?: string
+  platform?: string
+  draft?: string
+  target?: string
+  postUrl?: string
+  excerpt?: string
+  context?: string
+  space?: string
+  [key: string]: unknown
+}
+
 export interface Escalation {
   id: string
   type: 'decision' | 'blocker' | 'question' | 'approval' | 'improvement' | 'agent_plan'

@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem } from './types'
 
 export type { PluginDetail }
 
@@ -821,4 +821,26 @@ export async function uploadKnowledgeFile(source: string, file: File): Promise<{
   })
   if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
   return response.json()
+}
+
+// --- Dashboard cards ---
+
+export async function fetchCards(): Promise<CardDefinition[]> {
+  const data = await fetchJson<{ cards: CardDefinition[] }>('/cards')
+  return data.cards
+}
+
+export async function fetchCardItems(skillId: string): Promise<{ items: CardItem[]; card: CardDefinition }> {
+  return fetchJson<{ items: CardItem[]; card: CardDefinition }>(`/cards/${encodeURIComponent(skillId)}/items`)
+}
+
+export async function updateCardItem(skillId: string, itemId: string, update: { status?: string; draft?: string }): Promise<CardItem> {
+  const response = await fetch(`${API_BASE}/cards/${encodeURIComponent(skillId)}/items/${encodeURIComponent(itemId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(update),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.item
 }
