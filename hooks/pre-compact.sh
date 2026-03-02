@@ -36,20 +36,11 @@ if [[ "$TRIGGER" == "manual" ]]; then
   TEXT="$TEXT (manual)"
 fi
 
-# Append message to dashboard-user inbox
-python3 -c "
-import json, os
-from datetime import datetime, timezone
-inbox_path = '$DASHBOARD_INBOX'
-msgs = json.load(open(inbox_path)) if os.path.exists(inbox_path) else []
-msgs.append({
-    'from': 'system',
-    'type': 'compact',
-    'text': '$TEXT',
-    'timestamp': datetime.now(timezone.utc).isoformat(),
-    'read': False
-})
-json.dump(msgs, open(inbox_path, 'w'), indent=2)
-" 2>/dev/null || true
+# Append message to dashboard-user inbox using jq
+INBOX_TMP="${DASHBOARD_INBOX}.tmp"
+TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+jq --arg text "$TEXT" --arg ts "$TS" \
+  '. + [{from: "system", type: "compact", text: $text, timestamp: $ts, read: false}]' \
+  "$DASHBOARD_INBOX" > "$INBOX_TMP" 2>/dev/null && mv "$INBOX_TMP" "$DASHBOARD_INBOX" || true
 
 exit 0

@@ -22,7 +22,7 @@ fi
 IMAGE_PATH="$(cd "$(dirname "$IMAGE_PATH")" && pwd)/$(basename "$IMAGE_PATH")"
 
 # Read the superbot2 Apple ID from config for service lookup
-APPLE_ID=$(python3 -c "import json; c=json.load(open('$CONFIG_FILE')); print(c.get('imessage',{}).get('appleId',''))" 2>/dev/null || echo "")
+APPLE_ID=$(jq -r '.imessage.appleId // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
 
 # Escape double quotes for AppleScript string
 ESCAPED_RECIPIENT="${RECIPIENT//\"/\\\"}"

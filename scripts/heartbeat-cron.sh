@@ -537,7 +537,7 @@ summary=$(IFS=', '; echo "${actions[*]}")
 
 # --- Write message to team-lead inbox ---
 # Escape the action text for JSON
-json_text=$(echo -n "$action_text" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))' 2>/dev/null || echo "\"$action_text\"")
+json_text=$(echo -n "$action_text" | jq -Rs . 2>/dev/null || echo "\"$action_text\"")
 
 message=$(jq -n \
   --arg from "heartbeat" \

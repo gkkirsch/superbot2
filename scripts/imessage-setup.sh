@@ -25,27 +25,14 @@ header() { echo -e "\n${BOLD}$*${RESET}"; }
 
 get_config() {
   local key="$1"
-  python3 -c "
-import json, sys
-try:
-  c = json.load(open('$CONFIG'))
-  val = c.get('imessage', {}).get('$key', '')
-  print(val if val else '')
-except:
-  print('')
-" 2>/dev/null
+  jq -r --arg key "$key" '.imessage[$key] // ""' "$CONFIG" 2>/dev/null || echo ""
 }
 
 set_config() {
   local key="$1" val="$2"
-  python3 -c "
-import json
-with open('$CONFIG', 'r') as f:
-  c = json.load(f)
-c.setdefault('imessage', {})['$key'] = '$val'
-with open('$CONFIG', 'w') as f:
-  json.dump(c, f, indent=2)
-" 2>/dev/null
+  local tmp="${CONFIG}.tmp"
+  jq --arg key "$key" --arg val "$val" '.imessage[$key] = $val' \
+    "$CONFIG" > "$tmp" 2>/dev/null && mv "$tmp" "$CONFIG"
 }
 
 # ─── Status check ───
@@ -177,15 +164,9 @@ run_reset() {
     info "Watcher was not running"
   fi
 
-  python3 -c "
-import json
-with open('$CONFIG', 'r') as f:
-  c = json.load(f)
-c['imessage'] = {'enabled': False, 'appleId': '', 'phoneNumber': ''}
-with open('$CONFIG', 'w') as f:
-  json.dump(c, f, indent=2)
-print('Config reset.')
-" 2>/dev/null
+  local tmp="${CONFIG}.tmp"
+  jq '.imessage = {"enabled": false, "appleId": "", "phoneNumber": ""}' \
+    "$CONFIG" > "$tmp" 2>/dev/null && mv "$tmp" "$CONFIG"
   ok "iMessage config cleared"
 
   rm -f "$DIR/imessage-last-rowid.txt"
@@ -283,14 +264,8 @@ run_setup() {
   fi
 
   # Enable in config
-  python3 -c "
-import json
-with open('$CONFIG', 'r') as f:
-  c = json.load(f)
-c.setdefault('imessage', {})['enabled'] = True
-with open('$CONFIG', 'w') as f:
-  json.dump(c, f, indent=2)
-" 2>/dev/null
+  local tmp="${CONFIG}.tmp"
+  jq '.imessage.enabled = true' "$CONFIG" > "$tmp" 2>/dev/null && mv "$tmp" "$CONFIG"
   ok "iMessage enabled in config"
 
   # Start watcher

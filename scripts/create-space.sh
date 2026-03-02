@@ -76,25 +76,24 @@ if [[ -n "$DEV_SERVER" ]]; then
   fi
 fi
 
-# Write space.json using python for safe JSON encoding
-python3 -c "
-import json, sys
-space = {
-    'name': sys.argv[1],
-    'slug': sys.argv[2],
-    'status': 'active'
-}
-if sys.argv[3]:
-    space['codeDir'] = sys.argv[3]
-if sys.argv[4]:
-    space['devServer'] = {
-        'command': 'npm run dev',
-        'port': int(sys.argv[5]),
-        'cwd': sys.argv[6]
-    }
-json.dump(space, open(sys.argv[7], 'w'), indent=2)
-print()
-" "$NAME" "$SLUG" "$CODE_DIR" "$DEV_SERVER" "${PORT:-0}" "${DEV_CWD:-}" "$DIR/space.json"
+# Write space.json using jq for safe JSON encoding
+SPACE_JSON=$(jq -n \
+  --arg name "$NAME" \
+  --arg slug "$SLUG" \
+  '{name: $name, slug: $slug, status: "active"}')
+
+if [[ -n "$CODE_DIR" ]]; then
+  SPACE_JSON=$(echo "$SPACE_JSON" | jq --arg dir "$CODE_DIR" '. + {codeDir: $dir}')
+fi
+
+if [[ -n "$DEV_SERVER" ]]; then
+  SPACE_JSON=$(echo "$SPACE_JSON" | jq \
+    --argjson port "${PORT:-0}" \
+    --arg cwd "${DEV_CWD:-}" \
+    '. + {devServer: {command: "npm run dev", port: $port, cwd: $cwd}}')
+fi
+
+echo "$SPACE_JSON" > "$DIR/space.json"
 
 if [[ -n "$DESCRIPTION" ]]; then
   cat > "$DIR/OVERVIEW.md" << EOF

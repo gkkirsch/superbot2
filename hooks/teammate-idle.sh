@@ -222,38 +222,35 @@ if [[ -z "$existing" ]]; then
     SUMMARY="Worker $TEAMMATE completed work on $SPACE/$PROJECT"
   fi
 
-  # Write session JSON — use python for safe JSON encoding to avoid escaping issues
-  python3 -c "
-import json, sys
-session = {
-    'id': 'session-${TIMESTAMP}',
-    'space': '''$SPACE''',
-    'project': '''$PROJECT''',
-    'summary': sys.stdin.read().strip(),
-    'filesChanged': [],
-    'completedAt': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
-    'worker': '''$TEAMMATE'''
-}
-json.dump(session, open('$SESSION_FILE', 'w'), indent=2)
-" <<< "$SUMMARY"
+  # Write session JSON using jq for safe encoding
+  jq -n \
+    --arg id "session-${TIMESTAMP}" \
+    --arg space "$SPACE" \
+    --arg project "$PROJECT" \
+    --arg summary "$SUMMARY" \
+    --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg worker "$TEAMMATE" \
+    '{
+      id: $id,
+      space: $space,
+      project: $project,
+      summary: $summary,
+      filesChanged: [],
+      completedAt: $completedAt,
+      worker: $worker
+    }' > "$SESSION_FILE"
 
   # Also post to dashboard chat inbox
   DASHBOARD_INBOX="$HOME/.claude/teams/superbot2/inboxes/dashboard-user.json"
   if [[ -f "$DASHBOARD_INBOX" ]]; then
-    # Append message using python for safe JSON manipulation
-    python3 -c "
-import json, os
-from datetime import datetime, timezone
-inbox_path = '$DASHBOARD_INBOX'
-msgs = json.load(open(inbox_path)) if os.path.exists(inbox_path) else []
-msgs.append({
-    'from': 'team-lead',
-    'text': 'Worker completed: $SPACE/$PROJECT — $(echo "$SUMMARY" | sed "s/'/\\\\'/g" | cut -c1-150)',
-    'timestamp': datetime.now(timezone.utc).isoformat(),
-    'read': False
-})
-json.dump(msgs, open(inbox_path, 'w'), indent=2)
-" 2>/dev/null || true
+    local inbox_tmp="${DASHBOARD_INBOX}.tmp"
+    local summary_short
+    summary_short=$(echo "$SUMMARY" | cut -c1-150)
+    jq --arg from "team-lead" \
+       --arg text "Worker completed: ${SPACE}/${PROJECT} — ${summary_short}" \
+       --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+       '. + [{from: $from, text: $text, timestamp: $ts, read: false}]' \
+       "$DASHBOARD_INBOX" > "$inbox_tmp" 2>/dev/null && mv "$inbox_tmp" "$DASHBOARD_INBOX" || true
   fi
 fi
 
