@@ -631,16 +631,21 @@ app.delete('/api/auto-triage-rules/:index', async (req, res) => {
   try {
     const idx = parseInt(req.params.index, 10)
     const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
-    const { readFile, writeFile } = await import('node:fs/promises')
-    let content = ''
-    try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
-    const lines = content.split('\n').filter(l => l.trim())
-    if (idx < 0 || idx >= lines.length) {
-      return res.status(404).json({ error: 'Rule not found' })
+    const release = await acquireFileLock(rulesFile)
+    try {
+      const { readFile, writeFile } = await import('node:fs/promises')
+      let content = ''
+      try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
+      const lines = content.split('\n').filter(l => l.trim())
+      if (idx < 0 || idx >= lines.length) {
+        return res.status(404).json({ error: 'Rule not found' })
+      }
+      lines.splice(idx, 1)
+      await writeFile(rulesFile, lines.join('\n') + (lines.length ? '\n' : ''), 'utf-8')
+      res.json({ ok: true })
+    } finally {
+      release()
     }
-    lines.splice(idx, 1)
-    await writeFile(rulesFile, lines.join('\n') + (lines.length ? '\n' : ''), 'utf-8')
-    res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -656,18 +661,23 @@ app.put('/api/auto-triage-rules/:index', async (req, res) => {
       return res.status(400).json({ error: 'rule is required' })
     }
     const rulesFile = join(SUPERBOT_DIR, 'auto-triage-rules.jsonl')
-    const { readFile, writeFile } = await import('node:fs/promises')
-    let content = ''
-    try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
-    const lines = content.split('\n').filter(l => l.trim())
-    if (idx < 0 || idx >= lines.length) {
-      return res.status(404).json({ error: 'Rule not found' })
+    const release = await acquireFileLock(rulesFile)
+    try {
+      const { readFile, writeFile } = await import('node:fs/promises')
+      let content = ''
+      try { content = await readFile(rulesFile, 'utf-8') } catch { /* empty */ }
+      const lines = content.split('\n').filter(l => l.trim())
+      if (idx < 0 || idx >= lines.length) {
+        return res.status(404).json({ error: 'Rule not found' })
+      }
+      const existing = JSON.parse(lines[idx])
+      existing.rule = rule.trim()
+      lines[idx] = JSON.stringify(existing)
+      await writeFile(rulesFile, lines.join('\n') + '\n', 'utf-8')
+      res.json({ ...existing, index: idx })
+    } finally {
+      release()
     }
-    const existing = JSON.parse(lines[idx])
-    existing.rule = rule.trim()
-    lines[idx] = JSON.stringify(existing)
-    await writeFile(rulesFile, lines.join('\n') + '\n', 'utf-8')
-    res.json({ ...existing, index: idx })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -3305,9 +3315,29 @@ async function getCardDefinitions() {
   return cards
 }
 
+// Per-file mutex for JSONL read-modify-write operations
+const _fileLocks = new Map()
+function acquireFileLock(filePath) {
+  if (!_fileLocks.has(filePath)) {
+    let resolve
+    const initial = new Promise(r => { resolve = r })
+    resolve()
+    _fileLocks.set(filePath, initial)
+  }
+  const prev = _fileLocks.get(filePath)
+  let release
+  const next = new Promise(r => { release = r })
+  _fileLocks.set(filePath, next)
+  return prev.then(() => release)
+}
+
 function resolveCardDataPath(skillId, dataSource) {
-  // dataSource is relative to the skill directory
-  return join(SUPERBOT_SKILLS_DIR, skillId, dataSource)
+  const base = resolve(SUPERBOT_SKILLS_DIR, skillId)
+  const resolved = resolve(base, dataSource)
+  if (!resolved.startsWith(base + '/')) {
+    throw new Error('Invalid dataSource path')
+  }
+  return resolved
 }
 
 async function readCardItems(skillId, dataSource) {
@@ -3349,24 +3379,37 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
   }
 })
 
+const VALID_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending'])
+
 app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
   try {
     const { skillId, itemId } = req.params
     const { status, draft } = req.body
+
+    if (status !== undefined && !VALID_CARD_STATUSES.has(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${[...VALID_CARD_STATUSES].join(', ')}` })
+    }
+
     const cards = await getCardDefinitions()
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
 
-    const items = await readCardItems(card.skillId, card.dataSource)
-    const idx = items.findIndex(item => item.id === itemId)
-    if (idx === -1) return res.status(404).json({ error: 'Item not found' })
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    const release = await acquireFileLock(filePath)
+    try {
+      const items = await readCardItems(card.skillId, card.dataSource)
+      const idx = items.findIndex(item => item.id === itemId)
+      if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
-    if (status) items[idx].status = status
-    if (draft !== undefined) items[idx].draft = draft
-    items[idx].updatedAt = new Date().toISOString()
+      if (status) items[idx].status = status
+      if (draft !== undefined) items[idx].draft = draft
+      items[idx].updatedAt = new Date().toISOString()
 
-    await writeCardItems(card.skillId, card.dataSource, items)
-    res.json({ item: items[idx] })
+      await writeCardItems(card.skillId, card.dataSource, items)
+      res.json({ item: items[idx] })
+    } finally {
+      release()
+    }
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

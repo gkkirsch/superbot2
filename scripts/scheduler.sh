@@ -111,7 +111,18 @@ echo "$RESULT" | jq -c '.[]' | while read -r JOB; do
   # Execute script if job has a "script" field (runs outside Claude Code, so claude -p works)
   JOB_SCRIPT=$(echo "$JOB" | jq -r '.script // empty')
   if [[ -n "$JOB_SCRIPT" ]]; then
-    echo "$(date '+%Y-%m-%d %H:%M') - Executing script for $JOB_NAME: $JOB_SCRIPT" >> "$LOG"
-    (eval "$JOB_SCRIPT" >> "$LOG" 2>&1 &)
+    # Validate script path: must be non-empty, resolve within SUPERBOT2_HOME, and exist
+    ALLOWED_BASE="$(cd "$DIR" && pwd)"
+    RESOLVED_SCRIPT="$(cd "$DIR" && realpath -m "$JOB_SCRIPT" 2>/dev/null || echo "")"
+    if [[ -z "$RESOLVED_SCRIPT" ]]; then
+      echo "$(date '+%Y-%m-%d %H:%M') - REJECTED script for $JOB_NAME: could not resolve path" >> "$LOG"
+    elif [[ "$RESOLVED_SCRIPT" != "$ALLOWED_BASE"/* ]]; then
+      echo "$(date '+%Y-%m-%d %H:%M') - REJECTED script for $JOB_NAME: path escapes $ALLOWED_BASE ($RESOLVED_SCRIPT)" >> "$LOG"
+    elif [[ ! -f "$RESOLVED_SCRIPT" ]]; then
+      echo "$(date '+%Y-%m-%d %H:%M') - REJECTED script for $JOB_NAME: file not found ($RESOLVED_SCRIPT)" >> "$LOG"
+    else
+      echo "$(date '+%Y-%m-%d %H:%M') - Executing script for $JOB_NAME: $RESOLVED_SCRIPT" >> "$LOG"
+      (bash "$RESOLVED_SCRIPT" >> "$LOG" 2>&1 &)
+    fi
   fi
 done
