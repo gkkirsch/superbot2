@@ -834,7 +834,7 @@ export async function fetchCardItems(skillId: string): Promise<{ items: CardItem
   return fetchJson<{ items: CardItem[]; card: CardDefinition }>(`/cards/${encodeURIComponent(skillId)}/items`)
 }
 
-export async function updateCardItem(skillId: string, itemId: string, update: { status?: string; draft?: string }): Promise<CardItem> {
+export async function updateCardItem(skillId: string, itemId: string, update: Record<string, unknown>): Promise<CardItem> {
   const response = await fetch(`${API_BASE}/cards/${encodeURIComponent(skillId)}/items/${encodeURIComponent(itemId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

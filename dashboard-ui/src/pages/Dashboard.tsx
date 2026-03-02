@@ -42,6 +42,7 @@ const SECTION_LABELS: Record<string, string> = {
   'extensions': 'Plugins',
   'spaces': 'Spaces & Projects',
   'cards': 'Approvals',
+  'goals': 'Goals',
   'chat': 'Chat',
 }
 

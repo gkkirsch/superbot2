@@ -262,13 +262,16 @@ export function CardSection() {
     )
   }
 
-  if (!cards || cards.length === 0) {
+  // Filter out goals — they have their own dedicated GoalSection
+  const filteredCards = cards?.filter(c => c.skillId !== 'goals') || []
+
+  if (filteredCards.length === 0) {
     return null
   }
 
   return (
     <div className="space-y-3">
-      {cards.map(card => (
+      {filteredCards.map(card => (
         <CardSkillSection key={card.skillId} card={card} />
       ))}
     </div>

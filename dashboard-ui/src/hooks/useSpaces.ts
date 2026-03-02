@@ -382,7 +382,7 @@ export function useCardItems(skillId: string) {
 export function useUpdateCardItem() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ skillId, itemId, update }: { skillId: string; itemId: string; update: { status?: string; draft?: string } }) =>
+    mutationFn: ({ skillId, itemId, update }: { skillId: string; itemId: string; update: Record<string, unknown> }) =>
       updateCardItem(skillId, itemId, update),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['card-items'] })

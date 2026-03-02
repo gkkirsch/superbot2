@@ -17,7 +17,9 @@ import { SpacesSection } from '@/features/SpacesSection'
 import { KnowledgeSection } from '@/features/KnowledgeSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSection } from '@/features/CardSection'
+import { GoalSection } from '@/features/GoalSection'
 import { Send } from 'lucide-react'
+import { Target } from 'lucide-react'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Section wrapper components ---
@@ -269,6 +271,15 @@ function CardsDashboardSection() {
   )
 }
 
+function GoalsDashboardSection() {
+  return (
+    <section className="group" data-section="goals">
+      <SectionHeader title="Goals" icon={Target} />
+      <GoalSection />
+    </section>
+  )
+}
+
 // --- Section registry ---
 
 export interface SectionDef {
@@ -313,6 +324,10 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'cards',
     Component: CardsDashboardSection,
   },
+  'goals': {
+    id: 'goals',
+    Component: GoalsDashboardSection,
+  },
   'chat': {
     id: 'chat',
     Component: ChatSection,
@@ -322,7 +337,7 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  leftColumn: ['cards', 'escalations', 'spaces'],
+  leftColumn: ['goals', 'cards', 'escalations', 'spaces'],
   centerColumn: ['chat'],
   rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['recent-activity'],

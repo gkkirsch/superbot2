@@ -1595,7 +1595,7 @@ const DEFAULT_DASHBOARD_CONFIG = {
   hidden: [],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
@@ -3379,14 +3379,15 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
   }
 })
 
-const VALID_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending'])
+const VALID_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending', 'active', 'completed', 'paused', 'abandoned'])
+const IMMUTABLE_CARD_FIELDS = new Set(['id', 'createdAt', 'skillId'])
 
 app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
   try {
     const { skillId, itemId } = req.params
-    const { status, draft } = req.body
+    const updates = req.body
 
-    if (status !== undefined && !VALID_CARD_STATUSES.has(status)) {
+    if (updates.status !== undefined && !VALID_CARD_STATUSES.has(updates.status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${[...VALID_CARD_STATUSES].join(', ')}` })
     }
 
@@ -3401,8 +3402,11 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       const idx = items.findIndex(item => item.id === itemId)
       if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
-      if (status) items[idx].status = status
-      if (draft !== undefined) items[idx].draft = draft
+      for (const [key, value] of Object.entries(updates)) {
+        if (!IMMUTABLE_CARD_FIELDS.has(key)) {
+          items[idx][key] = value
+        }
+      }
       items[idx].updatedAt = new Date().toISOString()
 
       await writeCardItems(card.skillId, card.dataSource, items)

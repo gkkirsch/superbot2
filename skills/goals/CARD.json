@@ -1,0 +1,42 @@
+{
+  "name": "Goals",
+  "description": "Track and manage goals across all spaces",
+  "dataSource": "data.jsonl",
+  "itemSchema": {
+    "title": "string",
+    "status": "string",
+    "progress": "string",
+    "dueDate": "string",
+    "notes": "string",
+    "space": "string"
+  },
+  "display": {
+    "title": "title",
+    "body": "notes",
+    "subtitle": "space",
+    "meta": "progress"
+  },
+  "actions": [
+    {
+      "id": "complete",
+      "label": "Complete",
+      "style": "primary",
+      "handler": "set-status",
+      "params": { "status": "completed" }
+    },
+    {
+      "id": "pause",
+      "label": "Pause",
+      "style": "secondary",
+      "handler": "set-status",
+      "params": { "status": "paused" }
+    },
+    {
+      "id": "update",
+      "label": "Update",
+      "style": "secondary",
+      "handler": "edit-field",
+      "params": { "field": "notes" }
+    }
+  ]
+}
