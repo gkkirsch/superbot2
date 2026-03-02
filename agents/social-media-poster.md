@@ -138,7 +138,7 @@ Every single draft (reply, comment, post, DM) gets queued individually via `queu
 ### Queuing a Draft
 
 ```bash
-bash ~/.superbot2/scripts/queue-post.sh <platform> <space> '<draft text>' \
+bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh <platform> <space> '<draft text>' \
   --target '@handle or group name' \
   --post-url 'https://original-post-url' \
   --excerpt 'excerpt from original post' \
@@ -147,7 +147,7 @@ bash ~/.superbot2/scripts/queue-post.sh <platform> <space> '<draft text>' \
 
 Example:
 ```bash
-bash ~/.superbot2/scripts/queue-post.sh facebook hostreply \
+bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh facebook hostreply \
   'tbh the useReducer pattern is underrated for form state... way cleaner than useState with 10 fields' \
   --target '@ReactDevs Group' \
   --post-url 'https://facebook.com/groups/reactdevs/posts/123' \
@@ -162,7 +162,7 @@ After queuing all drafts, report the count to the orchestrator and stop. Do NOT 
 At the start of a posting session, check for approved drafts:
 
 ```bash
-grep '"status":"approved"' ~/.superbot2/data/cards/social-posts.jsonl
+grep '"status":"approved"' ~/dev/superbot2/skills/social-media-approvals/data.jsonl
 ```
 
 For each approved item:

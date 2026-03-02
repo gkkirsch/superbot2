@@ -1,7 +1,7 @@
 {
   "name": "Social Media Approvals",
   "description": "Review and approve social media drafts before posting",
-  "dataSource": "social-posts.jsonl",
+  "dataSource": "data.jsonl",
   "itemSchema": {
     "platform": "string",
     "draft": "string",

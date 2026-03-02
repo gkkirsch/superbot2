@@ -49,11 +49,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Ensure data directory exists
-DATA_DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}/data/cards"
-mkdir -p "$DATA_DIR"
-
-JSONL_FILE="$DATA_DIR/social-posts.jsonl"
+# Write to JSONL in the skill directory (self-contained)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+JSONL_FILE="$SCRIPT_DIR/data.jsonl"
 
 # Generate unique ID
 ID="post-$(date -u +%Y%m%d%H%M%S)-$$"

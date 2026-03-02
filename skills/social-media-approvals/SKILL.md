@@ -1,39 +1,60 @@
 ---
 name: social-media-approvals
-description: Dashboard card for reviewing and approving social media post drafts. Workers queue drafts via queue-post.sh, users approve/reject/rewrite in the dashboard.
+description: Dashboard card for reviewing and approving social media post drafts. Workers queue drafts via the skill's queue-post.sh, users approve/reject/rewrite in the dashboard.
 version: 0.1.0
 ---
 
 # Social Media Approvals
 
-This skill provides a dashboard card for reviewing social media drafts before posting.
+This skill provides a dashboard card for reviewing social media drafts before posting. Everything is self-contained within this skill directory.
 
 ## How It Works
 
-1. Social media workers draft posts and queue them via `queue-post.sh`
-2. Drafts appear as cards in the dashboard
-3. User reviews and approves, rejects, or rewrites each draft
+1. Social media workers draft posts and queue them via `queue-post.sh` (in this skill's directory)
+2. Drafts are stored in `data.jsonl` (in this skill's directory)
+3. The dashboard reads `CARD.json` and renders items with approve/reject/rewrite buttons
 4. Approved drafts are picked up by the next worker session and posted
 
 ## Worker API
 
-Queue a draft:
+Queue a draft using the skill's built-in script:
 
 ```bash
-bash ~/.superbot2/scripts/queue-post.sh <platform> <space> '<draft text>' \
+bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh <platform> <space> '<draft text>' \
   --target '@handle or group name' \
   --post-url 'https://...' \
   --excerpt 'original post excerpt' \
   --context 'why this reply is relevant'
 ```
 
+Arguments:
+- `platform` (required) — facebook, x, instagram, linkedin, etc.
+- `space` (required) — space name the worker is in
+- `draft` (required) — the draft post/reply text
+
+Options:
+- `--target` — who/where the post targets
+- `--post-url` — URL of the post being replied to
+- `--excerpt` — excerpt from the original post
+- `--context` — context for why this engagement
+
 ## Reading Approved Items
 
 Workers check for approved items at session start:
 
 ```bash
-# Read all approved items from the JSONL
-grep '"status":"approved"' ~/.superbot2/data/cards/social-posts.jsonl
+grep '"status":"approved"' ~/dev/superbot2/skills/social-media-approvals/data.jsonl
 ```
 
-After posting, update the item status to "posted" via the dashboard API or by rewriting the line.
+After posting, update the item status to "posted" via the dashboard API.
+
+## File Structure
+
+```
+social-media-approvals/
+├── SKILL.md          ← this file (skill instructions)
+├── CARD.json         ← card definition for dashboard
+├── queue-post.sh     ← worker script to queue drafts
+├── data.jsonl        ← runtime data (gitignored)
+└── .gitignore        ← excludes data.jsonl
+```
