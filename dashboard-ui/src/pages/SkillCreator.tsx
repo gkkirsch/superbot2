@@ -417,7 +417,7 @@ interface SkillFileEntry {
   content: string
 }
 
-function SkillFileViewer({ skill }: { skill: TesterSkill }) {
+function SkillFileViewer({ skill, onPromote, isPromoting }: { skill: TesterSkill; onPromote?: () => void; isPromoting?: boolean }) {
   const [files, setFiles] = useState<SkillFileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeFile, setActiveFile] = useState<string | null>(null)
@@ -478,6 +478,17 @@ function SkillFileViewer({ skill }: { skill: TesterSkill }) {
         }`}>
           {skill.source === 'active' ? 'Active' : 'Draft'}
         </span>
+        {skill.source === 'drafts' && onPromote && (
+          <button
+            onClick={onPromote}
+            disabled={isPromoting}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Copy this draft to ~/.superbot2/skills/ and make it active"
+          >
+            <Upload className="h-3 w-3" />
+            {isPromoting ? 'Promoting…' : 'Promote to Active'}
+          </button>
+        )}
       </div>
 
       {/* File tabs */}
@@ -2068,7 +2079,7 @@ export function SkillCreator() {
                 <h2 className="text-sm font-medium text-parchment">Files</h2>
               </div>
               {selectedSkill ? (
-                <SkillFileViewer skill={selectedSkill} />
+                <SkillFileViewer skill={selectedSkill} onPromote={handlePromote} isPromoting={isPromoting} />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
                   <div className="text-center">
