@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Sun, Moon } from 'lucide-react'
 import { topNavItems, docsNavItem } from '@/lib/navigation'
 import { usePlugins } from '@/hooks/useSpaces'
+import { useTheme } from '@/hooks/useTheme'
 
 export function Nav() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const { data: plugins } = usePlugins()
+  const { theme, toggleTheme } = useTheme()
 
   const hasPluginWarnings = plugins?.some(p => p.installed && (p.hasUnconfiguredCredentials || p.hasMissingBins)) ?? false
 
@@ -48,6 +50,15 @@ export function Nav() {
         </div>
 
         <div className="flex-1" />
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-md text-stone hover:text-parchment hover:bg-surface transition-colors"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
 
         {/* Docs link — far right */}
         <NavLink

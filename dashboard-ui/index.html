@@ -8,6 +8,19 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
     <title>Superbot</title>
+    <script>
+      // Prevent flash of wrong theme (runs before paint)
+      (function() {
+        var stored = localStorage.getItem('superbot-theme');
+        if (stored === 'dark' || stored === 'light') {
+          if (stored === 'dark') document.documentElement.classList.add('dark');
+        } else {
+          // No stored preference: respect system, default to dark
+          var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+          if (!prefersLight) document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

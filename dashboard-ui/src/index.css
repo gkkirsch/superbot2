@@ -3,6 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
+  /* Dark mode values — defines Tailwind token names */
   --color-ink: #0a0a0a;
   --color-surface: #141414;
   --color-parchment: #d4cdc4;
@@ -22,7 +23,64 @@
   --radius-sm: calc(var(--radius-lg) - 4px);
 }
 
-:root {
+/* Light mode color overrides */
+:root:not(.dark) {
+  --color-ink: #faf9f7;
+  --color-surface: #f0eeea;
+  --color-parchment: #1c1a17;
+  --color-stone: #6d6862;
+  --color-sand: #8a6b45;
+  --color-ember: #c7413c;
+  --color-moss: #5d7550;
+  --color-border-custom: #ddd9d3;
+  --color-codebg: #ece9e3;
+
+  /* Scrollbar colors */
+  --scrollbar-track: #faf9f7;
+  --scrollbar-thumb: #d0ccc6;
+  --scrollbar-thumb-hover: #bab5ae;
+
+  /* shadcn HSL variables */
+  --background: 40 15% 98%;
+  --foreground: 30 10% 10%;
+  --card: 30 12% 94%;
+  --card-foreground: 30 10% 10%;
+  --popover: 30 12% 94%;
+  --popover-foreground: 30 10% 10%;
+  --primary: 2 55% 51%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 30 30% 42%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 30 10% 92%;
+  --muted-foreground: 30 8% 40%;
+  --accent: 100 15% 40%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 10% 87%;
+  --input: 30 10% 87%;
+  --ring: 2 55% 51%;
+  --chart-1: 2 55% 51%;
+  --chart-2: 30 30% 42%;
+  --chart-3: 100 15% 40%;
+  --chart-4: 30 8% 40%;
+  --chart-5: 30 10% 10%;
+  --sidebar-background: 40 15% 97%;
+  --sidebar-foreground: 30 10% 10%;
+  --sidebar-primary: 2 55% 51%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 30 12% 93%;
+  --sidebar-accent-foreground: 30 10% 10%;
+  --sidebar-border: 30 10% 87%;
+  --sidebar-ring: 2 55% 51%;
+}
+
+/* Dark mode — shadcn HSL variables */
+.dark {
+  --scrollbar-track: #0a0a0a;
+  --scrollbar-thumb: #2a2a28;
+  --scrollbar-thumb-hover: #3a3a38;
+
   --background: 0 0% 4%;
   --foreground: 30 10% 80%;
   --card: 0 0% 8%;
@@ -70,10 +128,10 @@ body {
 }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0a0a; }
-::-webkit-scrollbar-thumb { background: #2a2a28; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a38; }
-::selection { background: rgba(196, 168, 130, 0.25); color: #d4cdc4; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track, #0a0a0a); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #2a2a28); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #3a3a38); }
+::selection { background: color-mix(in srgb, var(--color-sand) 25%, transparent); color: var(--color-parchment); }
 
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(20px); }
@@ -90,41 +148,41 @@ body {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Docs content styles (for HTML injected from docs API) */
-.docs-content h1 { font-family: var(--font-heading); font-size: 1.75rem; color: #d4cdc4; margin-bottom: 1rem; }
-.docs-content h2 { font-family: var(--font-heading); font-size: 1.25rem; color: #d4cdc4; margin-top: 1.5rem; margin-bottom: 0.75rem; }
-.docs-content h3 { font-family: var(--font-heading); font-size: 1.1rem; color: #d4cdc4; margin-top: 1rem; margin-bottom: 0.5rem; }
-.docs-content p { font-size: 0.875rem; color: #706b63; line-height: 1.7; margin-bottom: 0.75rem; }
-.docs-content ul, .docs-content ol { font-size: 0.875rem; color: #706b63; margin-left: 1rem; margin-bottom: 0.75rem; }
+.docs-content h1 { font-family: var(--font-heading); font-size: 1.75rem; color: var(--color-parchment); margin-bottom: 1rem; }
+.docs-content h2 { font-family: var(--font-heading); font-size: 1.25rem; color: var(--color-parchment); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+.docs-content h3 { font-family: var(--font-heading); font-size: 1.1rem; color: var(--color-parchment); margin-top: 1rem; margin-bottom: 0.5rem; }
+.docs-content p { font-size: 0.875rem; color: var(--color-stone); line-height: 1.7; margin-bottom: 0.75rem; }
+.docs-content ul, .docs-content ol { font-size: 0.875rem; color: var(--color-stone); margin-left: 1rem; margin-bottom: 0.75rem; }
 .docs-content li { line-height: 1.7; margin-bottom: 0.25rem; }
-.docs-content code { background: #111110; border-radius: 0.25rem; padding: 0.125rem 0.375rem; font-size: 0.75rem; font-family: var(--font-mono); color: #c4a882; }
-.docs-content pre { background: #111110; border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 0.75rem; }
-.docs-content pre code { padding: 0; background: none; color: #d4cdc4; }
-.docs-content a { color: #c4a882; text-decoration: underline; }
-.docs-content a:hover { color: rgba(196, 168, 130, 0.8); }
+.docs-content code { background: var(--color-codebg); border-radius: 0.25rem; padding: 0.125rem 0.375rem; font-size: 0.75rem; font-family: var(--font-mono); color: var(--color-sand); }
+.docs-content pre { background: var(--color-codebg); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 0.75rem; }
+.docs-content pre code { padding: 0; background: none; color: var(--color-parchment); }
+.docs-content a { color: var(--color-sand); text-decoration: underline; }
+.docs-content a:hover { opacity: 0.8; }
 .docs-content table { width: 100%; font-size: 0.875rem; border-collapse: collapse; margin-bottom: 0.75rem; }
-.docs-content th { text-align: left; padding: 0.5rem 0.75rem; color: #d4cdc4; font-family: var(--font-heading); font-size: 0.75rem; border-bottom: 1px solid #1f1f1e; }
-.docs-content td { padding: 0.5rem 0.75rem; color: #706b63; font-size: 0.75rem; border-bottom: 1px solid #1f1f1e; }
-.docs-content strong { color: #d4cdc4; font-weight: 600; }
-.docs-content hr { border-color: #1f1f1e; margin: 1.5rem 0; }
-.docs-content blockquote { border-left: 2px solid rgba(196, 168, 130, 0.4); padding-left: 1rem; color: rgba(112, 107, 99, 0.8); font-style: italic; margin-bottom: 0.75rem; }
+.docs-content th { text-align: left; padding: 0.5rem 0.75rem; color: var(--color-parchment); font-family: var(--font-heading); font-size: 0.75rem; border-bottom: 1px solid var(--color-border-custom); }
+.docs-content td { padding: 0.5rem 0.75rem; color: var(--color-stone); font-size: 0.75rem; border-bottom: 1px solid var(--color-border-custom); }
+.docs-content strong { color: var(--color-parchment); font-weight: 600; }
+.docs-content hr { border-color: var(--color-border-custom); margin: 1.5rem 0; }
+.docs-content blockquote { border-left: 2px solid color-mix(in srgb, var(--color-sand) 40%, transparent); padding-left: 1rem; color: color-mix(in srgb, var(--color-stone) 80%, transparent); font-style: italic; margin-bottom: 0.75rem; }
 
 /* Compact markdown for escalation context (text-xs scale) */
 .markdown-compact { font-size: 0.75rem; line-height: 1.6; overflow-wrap: anywhere; }
-.markdown-compact h1, .markdown-compact h2 { font-family: var(--font-heading); font-size: 0.8125rem; color: #d4cdc4; margin-top: 0.75rem; margin-bottom: 0.375rem; }
-.markdown-compact h3, .markdown-compact h4 { font-family: var(--font-heading); font-size: 0.75rem; color: #d4cdc4; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+.markdown-compact h1, .markdown-compact h2 { font-family: var(--font-heading); font-size: 0.8125rem; color: var(--color-parchment); margin-top: 0.75rem; margin-bottom: 0.375rem; }
+.markdown-compact h3, .markdown-compact h4 { font-family: var(--font-heading); font-size: 0.75rem; color: var(--color-parchment); margin-top: 0.5rem; margin-bottom: 0.25rem; }
 .markdown-compact h1:first-child, .markdown-compact h2:first-child, .markdown-compact h3:first-child { margin-top: 0; }
 .markdown-compact p { margin-bottom: 0.5rem; }
 .markdown-compact p:last-child { margin-bottom: 0; }
 .markdown-compact ul, .markdown-compact ol { margin-left: 1rem; margin-bottom: 0.5rem; }
 .markdown-compact li { margin-bottom: 0.125rem; }
-.markdown-compact li::marker { color: #706b63; }
-.markdown-compact strong { color: #d4cdc4; font-weight: 600; }
-.markdown-compact code { background: #111110; border-radius: 0.1875rem; padding: 0.0625rem 0.25rem; font-size: 0.6875rem; font-family: var(--font-mono); color: #c4a882; }
-.markdown-compact pre { background: #111110; border-radius: 0.375rem; padding: 0.625rem; overflow-x: auto; margin-bottom: 0.5rem; max-width: 100%; }
-.markdown-compact pre code { padding: 0; background: none; color: #d4cdc4; font-size: 0.6875rem; }
-.markdown-compact hr { border-color: #1f1f1e; margin: 0.75rem 0; }
-.markdown-compact a { color: #c4a882; text-decoration: underline; }
-.markdown-compact blockquote { border-left: 2px solid rgba(196, 168, 130, 0.3); padding-left: 0.625rem; color: rgba(112, 107, 99, 0.8); font-style: italic; margin-bottom: 0.5rem; }
+.markdown-compact li::marker { color: var(--color-stone); }
+.markdown-compact strong { color: var(--color-parchment); font-weight: 600; }
+.markdown-compact code { background: var(--color-codebg); border-radius: 0.1875rem; padding: 0.0625rem 0.25rem; font-size: 0.6875rem; font-family: var(--font-mono); color: var(--color-sand); }
+.markdown-compact pre { background: var(--color-codebg); border-radius: 0.375rem; padding: 0.625rem; overflow-x: auto; margin-bottom: 0.5rem; max-width: 100%; }
+.markdown-compact pre code { padding: 0; background: none; color: var(--color-parchment); font-size: 0.6875rem; }
+.markdown-compact hr { border-color: var(--color-border-custom); margin: 0.75rem 0; }
+.markdown-compact a { color: var(--color-sand); text-decoration: underline; }
+.markdown-compact blockquote { border-left: 2px solid color-mix(in srgb, var(--color-sand) 30%, transparent); padding-left: 0.625rem; color: color-mix(in srgb, var(--color-stone) 80%, transparent); font-style: italic; margin-bottom: 0.5rem; }
 .markdown-compact img { max-height: 5rem; width: auto; border-radius: 0.375rem; margin: 0.5rem 0; cursor: pointer; transition: opacity 0.15s; }
 .markdown-compact img:hover { opacity: 0.9; }
 
@@ -138,7 +196,7 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #706b63;
+  background: var(--color-stone);
   animation: typingPulse 1.2s ease-in-out infinite;
 }
 
@@ -148,12 +206,12 @@ body {
   to { opacity: 1; transform: translateX(0); }
 }
 
-/* Chrome autofill override for dark theme */
+/* Chrome autofill override */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0px 1000px #141414 inset !important;
-  -webkit-text-fill-color: #d4cdc4 !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--color-surface) inset !important;
+  -webkit-text-fill-color: var(--color-parchment) !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
