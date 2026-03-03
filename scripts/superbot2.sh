@@ -169,6 +169,9 @@ trap 'stop_dashboard; rm -f "$LAUNCHER_PID_FILE"' EXIT
 
 start_dashboard
 
+# Open dashboard in browser (after a short delay to let server start)
+sleep 1 && open "http://localhost:3274" &
+
 # Start iMessage watcher (self-exits if not configured, guard against duplicates)
 if pgrep -f "imessage-watcher.sh" > /dev/null 2>&1; then
   echo "imessage-watcher already running (PID $(pgrep -f imessage-watcher.sh | head -1)), skipping."
