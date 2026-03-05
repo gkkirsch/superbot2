@@ -35,8 +35,8 @@ interface GoalItemProps {
 
 function GoalItem({ item, onAction, isPending }: GoalItemProps) {
   const [editing, setEditing] = useState(false)
-  const [editNotes, setEditNotes] = useState(item.notes as string || '')
-  const [editProgress, setEditProgress] = useState(item.progress as string || '')
+  const [editNotes, setEditNotes] = useState(item.notes || '')
+  const [editProgress, setEditProgress] = useState(item.progress || '')
 
   const handleComplete = () => onAction(item.id, { status: 'completed' })
   const handlePause = () => onAction(item.id, { status: 'paused' })
@@ -64,17 +64,17 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
     <div className={`rounded-lg border p-3 transition-all ${borderColor}`}>
       {/* Title */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-sm text-parchment font-medium leading-snug">{String(item.title || '')}</p>
+        <p className="text-sm text-parchment font-medium leading-snug">{item.title || ''}</p>
       </div>
 
       {/* Badges row */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <StatusBadge status={item.status} />
-        {item.space && <SpaceBadge space={String(item.space)} />}
-        {item.progress && (
+        {!!item.space && <SpaceBadge space={String(item.space)} />}
+        {!!item.progress && (
           <span className="text-[10px] text-stone/60">{String(item.progress)}</span>
         )}
-        {item.dueDate && (
+        {!!item.dueDate && (
           <span className="text-[10px] text-stone/50">due {String(item.dueDate)}</span>
         )}
       </div>
@@ -111,7 +111,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
               <Check className="h-3 w-3" /> Save
             </button>
             <button
-              onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(false) }}
+              onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(false) }}
               className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
             >
               Cancel
@@ -120,7 +120,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
         </div>
       ) : (
         item.notes && (
-          <p className="text-xs text-stone/60 leading-relaxed mb-2">{String(item.notes)}</p>
+          <p className="text-xs text-stone/60 leading-relaxed mb-2">{item.notes}</p>
         )
       )}
 
@@ -144,7 +144,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
             Pause
           </button>
           <button
-            onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(true) }}
+            onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(true) }}
             disabled={isPending}
             className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors disabled:opacity-50"
           >
@@ -165,7 +165,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
             Resume
           </button>
           <button
-            onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(true) }}
+            onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(true) }}
             disabled={isPending}
             className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors disabled:opacity-50"
           >
