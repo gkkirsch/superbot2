@@ -1220,7 +1220,6 @@ export function SkillCreator() {
   const [, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
-  const [fileLoading] = useState(false)
   const [, setFrontmatter] = useState<Record<string, unknown> | null>(null)
   const [fileSheetOpen, setFileSheetOpen] = useState(false)
   const [fileEditing, setFileEditing] = useState(false)
@@ -1870,13 +1869,7 @@ export function SkillCreator() {
             </div>
           </SheetHeader>
           <SheetBody className="flex flex-col h-[calc(100vh-65px)]">
-            {fileLoading ? (
-              <div className="space-y-3 py-4">
-                <div className="h-4 w-3/4 rounded bg-surface/50 animate-pulse" />
-                <div className="h-4 w-1/2 rounded bg-surface/50 animate-pulse" />
-                <div className="h-4 w-2/3 rounded bg-surface/50 animate-pulse" />
-              </div>
-            ) : fileEditing ? (
+            {fileEditing ? (
               <div className="flex flex-col flex-1">
                 <textarea
                   value={fileDraft}
