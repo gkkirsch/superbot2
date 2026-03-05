@@ -5,6 +5,20 @@ DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
 export PATH="$HOME/.local/bin:$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Singleton guard — skip if a previous scheduler run is still in progress
+PID_FILE="$DIR/.pids/scheduler.pid"
+mkdir -p "$(dirname "$PID_FILE")"
+if [ -f "$PID_FILE" ]; then
+  OLD_PID=$(cat "$PID_FILE")
+  if kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "scheduler: previous run still in progress (PID $OLD_PID), skipping"
+    exit 0
+  fi
+  rm -f "$PID_FILE"
+fi
+echo $$ > "$PID_FILE"
+trap "rm -f '$PID_FILE'" EXIT
+
 # Source file locking helper
 source "$SCRIPT_DIR/lock-helper.sh"
 SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
