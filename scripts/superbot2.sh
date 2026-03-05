@@ -17,8 +17,8 @@ DASHBOARD_PID=""
 PID_FILE="$DIR/.pids/superbot2.pid"
 mkdir -p "$(dirname "$PID_FILE")"
 if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [[ "$OLD_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "Killing existing superbot2 orchestrator (PID $OLD_PID)"
     kill "$OLD_PID"
     sleep 1
@@ -30,7 +30,8 @@ if [ -f "$PID_FILE" ]; then
   fi
   rm -f "$PID_FILE"
 fi
-echo $$ > "$PID_FILE"
+echo $$ > "$PID_FILE.$$"
+mv "$PID_FILE.$$" "$PID_FILE"
 
 LAUNCHER_PID=$$
 LAUNCHER_PID_FILE="$DIR/.launcher.pid"

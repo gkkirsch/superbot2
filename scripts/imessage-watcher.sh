@@ -6,8 +6,8 @@ set -euo pipefail
 PID_FILE="$HOME/.superbot2/.pids/imessage-watcher.pid"
 mkdir -p "$(dirname "$PID_FILE")"
 if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [[ "$OLD_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "Killing existing imessage-watcher (PID $OLD_PID)"
     kill "$OLD_PID"
     sleep 1
@@ -18,8 +18,9 @@ if [ -f "$PID_FILE" ]; then
   fi
   rm -f "$PID_FILE"
 fi
-echo $$ > "$PID_FILE"
-trap "rm -f '$PID_FILE'" EXIT
+echo $$ > "$PID_FILE.$$"
+mv "$PID_FILE.$$" "$PID_FILE"
+trap 'rm -f "$PID_FILE"' EXIT
 
 CONFIG_FILE="$HOME/.superbot2/config.json"
 ROWID_FILE="$HOME/.superbot2/imessage-last-rowid.txt"

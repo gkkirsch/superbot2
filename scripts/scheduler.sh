@@ -9,15 +9,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$DIR/.pids/scheduler.pid"
 mkdir -p "$(dirname "$PID_FILE")"
 if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [[ "$OLD_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "scheduler: previous run still in progress (PID $OLD_PID), skipping"
     exit 0
   fi
   rm -f "$PID_FILE"
 fi
-echo $$ > "$PID_FILE"
-trap "rm -f '$PID_FILE'" EXIT
+echo $$ > "$PID_FILE.$$"
+mv "$PID_FILE.$$" "$PID_FILE"
+_cleanup() { rm -f "$PID_FILE" "${SCHEDULE:-}"; }
+trap _cleanup EXIT
 
 # Source file locking helper
 source "$SCRIPT_DIR/lock-helper.sh"
@@ -41,7 +43,6 @@ SCHEDULE_DATA=$(jq -r '.schedule // []' "$CONFIG")
 
 SCHEDULE=$(mktemp)
 echo "$SCHEDULE_DATA" > "$SCHEDULE"
-trap "rm -f $SCHEDULE" EXIT
 
 # Ensure last-run tracker exists
 [[ ! -f "$LAST_RUN" ]] && echo '{}' > "$LAST_RUN"

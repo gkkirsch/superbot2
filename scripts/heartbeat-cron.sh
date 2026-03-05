@@ -7,15 +7,16 @@ shopt -s nullglob
 PID_FILE="$HOME/.superbot2/.pids/heartbeat.pid"
 mkdir -p "$(dirname "$PID_FILE")"
 if [ -f "$PID_FILE" ]; then
-  OLD_PID=$(cat "$PID_FILE")
-  if kill -0 "$OLD_PID" 2>/dev/null; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [[ "$OLD_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PID" 2>/dev/null; then
     echo "heartbeat: previous run still in progress (PID $OLD_PID), skipping"
     exit 0
   fi
   rm -f "$PID_FILE"
 fi
-echo $$ > "$PID_FILE"
-trap "rm -f '$PID_FILE'" EXIT
+echo $$ > "$PID_FILE.$$"
+mv "$PID_FILE.$$" "$PID_FILE"
+trap 'rm -f "$PID_FILE"' EXIT
 
 # Source file locking helper for safe concurrent inbox writes
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
