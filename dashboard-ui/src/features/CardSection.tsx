@@ -67,7 +67,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           {item.platform && <PlatformBadge platform={item.platform} />}
-          {subtitleField && item[subtitleField] && (
+          {subtitleField && !!item[subtitleField] && (
             <span className="text-xs text-stone/60 truncate">{String(item[subtitleField])}</span>
           )}
         </div>
@@ -109,7 +109,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
       {/* Meta: excerpt + post link */}
       {(metaField && item[metaField]) || item.postUrl ? (
         <div className="flex items-start justify-between gap-2 mb-2">
-          {metaField && item[metaField] && (
+          {metaField && !!item[metaField] && (
             <div className="text-[10px] text-stone/50 italic border-l-2 border-stone/20 pl-2 min-w-0">
               {String(item[metaField])}
             </div>
