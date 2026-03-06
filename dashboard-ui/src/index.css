@@ -125,6 +125,7 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scrollbar-gutter: stable;
 }
 
 ::-webkit-scrollbar { width: 6px; }
