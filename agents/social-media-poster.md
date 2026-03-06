@@ -137,8 +137,16 @@ Every single draft (reply, comment, post, DM) gets queued individually via `queu
 
 ### Queuing a Draft
 
+First, find the queue-post.sh script (installed from marketplace plugin):
+
 ```bash
-bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh <platform> <space> '<draft text>' \
+QUEUE_SCRIPT=$(ls ~/.claude/plugins/cache/*/social-media-approvals/*/skills/social-media-approvals/queue-post.sh 2>/dev/null | head -1)
+```
+
+Then queue each draft:
+
+```bash
+bash "$QUEUE_SCRIPT" <platform> <space> '<draft text>' \
   --target '@handle or group name' \
   --post-url 'https://original-post-url' \
   --excerpt 'excerpt from original post' \
@@ -147,7 +155,8 @@ bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh <platform> <spa
 
 Example:
 ```bash
-bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh facebook hostreply \
+QUEUE_SCRIPT=$(ls ~/.claude/plugins/cache/*/social-media-approvals/*/skills/social-media-approvals/queue-post.sh 2>/dev/null | head -1)
+bash "$QUEUE_SCRIPT" facebook hostreply \
   'tbh the useReducer pattern is underrated for form state... way cleaner than useState with 10 fields' \
   --target '@ReactDevs Group' \
   --post-url 'https://facebook.com/groups/reactdevs/posts/123' \
@@ -162,7 +171,8 @@ After queuing all drafts, report the count to the orchestrator and stop. Do NOT 
 At the start of a posting session, check for approved drafts:
 
 ```bash
-grep '"status":"approved"' ~/dev/superbot2/skills/social-media-approvals/data.jsonl
+DATA_FILE=$(ls ~/.claude/plugins/cache/*/social-media-approvals/*/skills/social-media-approvals/data.jsonl 2>/dev/null | head -1)
+grep '"status":"approved"' "$DATA_FILE"
 ```
 
 For each approved item:

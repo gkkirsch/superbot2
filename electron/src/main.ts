@@ -156,6 +156,11 @@ function createMainWindow(): BrowserWindow {
     },
   });
 
+  // Show the window once it has content ready to display.
+  win.once('ready-to-show', () => {
+    showDashboard();
+  });
+
   // Dashboard URL depends on mode: Vite dev server or production Express server.
   const dashboardUrl = app.isPackaged
     ? `http://localhost:${DASHBOARD_API_PORT}`
@@ -405,7 +410,12 @@ app.on('ready', () => {
   tray.setToolTip('Superbot2');
   tray.setContextMenu(buildContextMenu());
 
-  // Create the dashboard BrowserWindow (hidden initially).
+  // Clicking the tray icon also shows/focuses the dashboard window.
+  tray.on('click', () => {
+    showDashboard();
+  });
+
+  // Create the dashboard BrowserWindow (shows automatically once content loads).
   mainWindow = createMainWindow();
 
   // Start managed processes.
