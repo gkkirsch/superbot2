@@ -96,8 +96,19 @@ export function Sidebar() {
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
+      {/* Collapse toggle — above the logo */}
+      <div className="hidden md:flex items-center justify-center px-3 pt-3 pb-0 shrink-0">
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="p-1.5 rounded-md text-stone/40 hover:text-parchment hover:bg-surface transition-colors"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+      </div>
+
       {/* Logo / Icon */}
-      <div className="flex items-center justify-center px-3 pt-5 pb-4 shrink-0">
+      <div className="flex items-center justify-center px-3 pt-2 pb-4 shrink-0">
         {collapsed ? (
           <NavLink to="/" className="block hover:opacity-80 transition-opacity">
             <img src="/logo.png" alt="SB" className="h-8 w-8" />
@@ -262,15 +273,6 @@ export function Sidebar() {
           )}
         </button>
 
-        {/* Collapse/Expand button — hidden on mobile */}
-        <button
-          onClick={() => setCollapsed(c => !c)}
-          className="hidden md:flex items-center gap-3 w-full rounded-md text-sm text-stone hover:text-parchment hover:bg-surface transition-colors justify-center px-2 py-2.5"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span className="flex-1 text-left">Collapse</span>}
-        </button>
       </div>
     </div>
   )

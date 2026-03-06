@@ -355,7 +355,7 @@ export function Dashboard() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-[4fr_1fr] gap-8">
             {/* Left column — chat (wider, sticky full-height) */}
-            <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden min-w-0">
+            <div className="lg:sticky lg:top-0 lg:h-[calc(100vh-0.5rem)] lg:overflow-hidden min-w-0">
               {layout.leftColumn.map((sectionId) => {
                 const def = SECTION_REGISTRY[sectionId]
                 if (!def) return null
@@ -364,7 +364,7 @@ export function Dashboard() {
             </div>
 
             {/* Right column — sections (narrower, scrollable, draggable) */}
-            <div className="min-w-[280px] pt-8">
+            <div className="min-w-[280px] pt-8 flex flex-col min-h-screen">
               {/* Hidden sections toolbar — shown only when editing */}
               {isEditing && layout.hidden.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap mb-6">
@@ -384,8 +384,10 @@ export function Dashboard() {
 
               <DroppableColumn id="rightColumn" sectionIds={layout.rightColumn} isEditing={isEditing} onHide={handleHideSection} />
 
-              {/* Section controls — bottom of right column */}
-              <div className="flex items-center gap-2 mt-8 pb-6 justify-end">
+              <div className="flex-1" />
+
+              {/* Section controls — pinned to bottom of page */}
+              <div className="flex items-center gap-2 mt-8 pb-6 justify-end sticky bottom-0">
                 {isEditing && (
                   <button
                     onClick={handleResetDefaults}
