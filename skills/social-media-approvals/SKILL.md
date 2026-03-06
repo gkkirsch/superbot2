@@ -1,6 +1,11 @@
 ---
 name: social-media-approvals
-description: Dashboard card for reviewing and approving social media post drafts. Workers queue drafts via the skill's queue-post.sh, users approve/reject/rewrite in the dashboard.
+description: >
+  Use when queuing social media post drafts for human approval before publishing.
+  Triggers: "queue post for approval", "draft social media post", "submit post for review",
+  "social media approval workflow", "review social media drafts".
+  Provides a dashboard card for reviewing, approving, rejecting, or rewriting
+  social media drafts across Facebook, X/Twitter, Instagram, LinkedIn, and other platforms.
 version: 0.1.0
 ---
 
