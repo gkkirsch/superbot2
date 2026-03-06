@@ -11,10 +11,31 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMPLATE="$DIR/templates/orchestrator-system-prompt-override.md"
 RESTART_FLAG="$DIR/.restart"
+DASHBOARD_PID=""
+
+# Singleton guard — kill any existing superbot2 orchestrator before starting
+PID_FILE="$DIR/.pids/superbot2.pid"
+mkdir -p "$(dirname "$PID_FILE")"
+if [ -f "$PID_FILE" ]; then
+  OLD_PID=$(cat "$PID_FILE" 2>/dev/null)
+  if [[ "$OLD_PID" =~ ^[0-9]+$ ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    echo "Killing existing superbot2 orchestrator (PID $OLD_PID)"
+    kill "$OLD_PID"
+    sleep 1
+    # Force kill if still alive
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+      kill -9 "$OLD_PID" 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+  rm -f "$PID_FILE"
+fi
+echo $$ > "$PID_FILE.$$"
+mv "$PID_FILE.$$" "$PID_FILE"
+
 LAUNCHER_PID=$$
 LAUNCHER_PID_FILE="$DIR/.launcher.pid"
 echo "$LAUNCHER_PID" > "$LAUNCHER_PID_FILE"
-DASHBOARD_PID=""
 
 # Check for required files
 if [[ ! -d "$DIR" ]]; then
@@ -165,19 +186,15 @@ stop_dashboard() {
 }
 
 # Clean up dashboard on exit
-trap 'stop_dashboard; rm -f "$LAUNCHER_PID_FILE"' EXIT
+trap 'stop_dashboard; rm -f "$LAUNCHER_PID_FILE"; rm -f "$PID_FILE"' EXIT
 
 start_dashboard
 
 # Open dashboard in browser (after a short delay to let server start)
 sleep 1 && open "http://localhost:3274" &
 
-# Start iMessage watcher (self-exits if not configured, guard against duplicates)
-if pgrep -f "imessage-watcher.sh" > /dev/null 2>&1; then
-  echo "imessage-watcher already running (PID $(pgrep -f imessage-watcher.sh | head -1)), skipping."
-else
-  bash "$SCRIPT_DIR/imessage-watcher.sh" &
-fi
+# Start iMessage watcher (self-exits if not configured, has its own singleton guard)
+bash "$SCRIPT_DIR/imessage-watcher.sh" &
 
 echo "Starting superbot2 orchestrator..."
 
