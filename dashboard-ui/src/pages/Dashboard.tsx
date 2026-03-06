@@ -344,7 +344,7 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-ink">
-      <div className="mx-auto max-w-[1600px] px-6 py-4">
+      <div className="mx-auto max-w-[1600px] px-6">
         {saveError && (
           <p className="text-xs text-ember mb-2">Failed to save layout: {saveError.message}</p>
         )}
@@ -358,7 +358,7 @@ export function Dashboard() {
         >
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
             {/* Left column — chat (wider, sticky full-height) */}
-            <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden min-w-0 py-2">
+            <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden min-w-0">
               {layout.leftColumn.map((sectionId) => {
                 const def = SECTION_REGISTRY[sectionId]
                 if (!def) return null
