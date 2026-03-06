@@ -1589,19 +1589,19 @@ app.put('/api/user', async (req, res) => {
 // --- Dashboard config ---
 
 const DEFAULT_DASHBOARD_CONFIG = {
-  leftColumn: ['workers', 'escalations', 'orchestrator-resolved', 'recent-activity'],
-  centerColumn: ['chat'],
-  rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
-  hidden: [],
+  leftColumn: ['chat'],
+  centerColumn: [],
+  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
+  hidden: ['recent-activity'],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals', 'tips']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
     const config = await readJsonFile(join(SUPERBOT_DIR, 'dashboard-config.json'))
     if (config && !config.centerColumn) {
-      config.centerColumn = ['chat']
+      config.centerColumn = []
     }
     res.json({ config: config || DEFAULT_DASHBOARD_CONFIG })
   } catch (err) {
