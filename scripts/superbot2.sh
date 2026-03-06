@@ -204,7 +204,6 @@ while true; do
   # Build claude args with team registration
   CLAUDE_ARGS=(
     --system-prompt "$PROMPT"
-    --session-id "$SESSION_ID"
     --team-name superbot2
     --agent-name team-lead
     --agent-id team-lead@superbot2
@@ -214,10 +213,14 @@ while true; do
     --no-chrome
   )
 
+  # On restart, use --resume (which identifies the session by itself).
+  # Do NOT combine --session-id with --resume (Claude Code rejects this
+  # unless --fork-session is also specified).
   if [[ "$IS_RESTART" == true ]]; then
     CLAUDE_ARGS+=(--resume "$SESSION_ID")
     INITIAL_MSG="Session restarted with fresh context. Begin your cycle."
   else
+    CLAUDE_ARGS+=(--session-id "$SESSION_ID")
     INITIAL_MSG="Begin your cycle."
   fi
 

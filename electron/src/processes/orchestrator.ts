@@ -5,6 +5,7 @@ import * as crypto from 'node:crypto';
 import { Notification } from 'electron';
 import { ProcessManager, type SpawnOptions } from './manager.js';
 import { logger } from '../logger.js';
+import { getEnrichedPath } from '../resolve-node.js';
 
 // ── Defaults ────────────────────────────────────────────────────────────
 
@@ -123,7 +124,6 @@ export class OrchestratorProcess extends ProcessManager {
 
     const args: string[] = [
       '--system-prompt', prompt,
-      '--session-id', this.sessionId!,
       '--team-name', this.superbotName,
       '--agent-name', 'team-lead',
       '--agent-id', `team-lead@${this.superbotName}`,
@@ -133,11 +133,14 @@ export class OrchestratorProcess extends ProcessManager {
       '--no-chrome',
     ];
 
-    // On restart, add --resume with same session ID
+    // On restart, use --resume to continue the same session.
+    // Do NOT combine --session-id with --resume (Claude Code rejects this
+    // unless --fork-session is also specified).
     if (shouldResume) {
       args.push('--resume', this.sessionId!);
       args.push('--', 'Session restarted with fresh context. Begin your cycle.');
     } else {
+      args.push('--session-id', this.sessionId!);
       args.push('--', INITIAL_MESSAGE);
     }
 
@@ -145,6 +148,7 @@ export class OrchestratorProcess extends ProcessManager {
       command: 'claude',
       args,
       env: {
+        PATH: getEnrichedPath(),
         CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
         ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
       },

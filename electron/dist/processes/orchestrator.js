@@ -140,7 +140,6 @@ class OrchestratorProcess extends manager_js_1.ProcessManager {
         const mpcConfigPath = path.join(this.superbotHome, 'mcp-config.json');
         const args = [
             '--system-prompt', prompt,
-            '--session-id', this.sessionId,
             '--team-name', this.superbotName,
             '--agent-name', 'team-lead',
             '--agent-id', `team-lead@${this.superbotName}`,
@@ -149,12 +148,15 @@ class OrchestratorProcess extends manager_js_1.ProcessManager {
             '--dangerously-skip-permissions',
             '--no-chrome',
         ];
-        // On restart, add --resume with same session ID
+        // On restart, use --resume to continue the same session.
+        // Do NOT combine --session-id with --resume (Claude Code rejects this
+        // unless --fork-session is also specified).
         if (shouldResume) {
             args.push('--resume', this.sessionId);
             args.push('--', 'Session restarted with fresh context. Begin your cycle.');
         }
         else {
+            args.push('--session-id', this.sessionId);
             args.push('--', INITIAL_MESSAGE);
         }
         return {
