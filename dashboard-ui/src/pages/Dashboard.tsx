@@ -25,10 +25,9 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Check, X, Plus, RotateCcw } from 'lucide-react'
 import { useDashboardConfig } from '@/hooks/useSpaces'
 import { SECTION_REGISTRY, DEFAULT_DASHBOARD_CONFIG } from '@/features/DashboardSections'
-import { TipsRotator } from '@/features/TipsRotator'
 import type { DashboardConfig } from '@/lib/types'
 
-type ColumnId = 'leftColumn' | 'centerColumn' | 'rightColumn'
+type ColumnId = 'leftColumn' | 'rightColumn'
 
 // Human-readable section names for UI
 const SECTION_LABELS: Record<string, string> = {
@@ -38,12 +37,10 @@ const SECTION_LABELS: Record<string, string> = {
   'recent-activity': 'Recent Activity',
   'pulse': 'Pulse',
   'schedule': 'Schedule',
-  'knowledge': 'Knowledge',
-  'extensions': 'Plugins',
-  'spaces': 'Spaces & Projects',
-  'cards': 'Approvals',
+  'cards': 'Social Drafts',
   'goals': 'Goals',
   'chat': 'Chat',
+  'tips': 'Tips',
 }
 
 // --- Sortable section item ---
@@ -138,7 +135,21 @@ function DroppableColumn({ id, sectionIds, isEditing, onHide }: {
   )
 }
 
-// --- Hidden sections (now inlined in header) ---
+// Migrate old 3-column configs to 2-column layout (chat=left, sections=right)
+function migrateConfig(config: DashboardConfig): DashboardConfig {
+  if (!config.centerColumn || config.centerColumn.length === 0) return config
+  // Collect all items from all columns
+  const allItems = [...config.leftColumn, ...config.centerColumn, ...config.rightColumn]
+  // Chat goes to leftColumn (wider), everything else to rightColumn (narrower)
+  const chatItems = allItems.filter(id => id === 'chat')
+  const sectionItems = allItems.filter(id => id !== 'chat')
+  return {
+    leftColumn: chatItems,
+    centerColumn: [],
+    rightColumn: sectionItems,
+    hidden: config.hidden,
+  }
+}
 
 // --- Main Dashboard ---
 
@@ -158,17 +169,16 @@ export function Dashboard() {
       setLocalLayout(null)
     }
   }, [config])
-  // Migrate old configs that lack centerColumn
+
   const resolvedConfig = useMemo(() => {
     if (!config) return null
-    if (config.centerColumn) return config
-    return { ...config, centerColumn: ['chat'] }
+    return migrateConfig(config)
   }, [config])
   const baseLayout = localLayout || resolvedConfig || DEFAULT_DASHBOARD_CONFIG
 
   // Auto-discover new sections not yet in the saved config
   const layout = useMemo(() => {
-    const allKnown = new Set([...baseLayout.leftColumn, ...baseLayout.centerColumn, ...baseLayout.rightColumn, ...baseLayout.hidden])
+    const allKnown = new Set([...baseLayout.leftColumn, ...(baseLayout.centerColumn || []), ...baseLayout.rightColumn, ...baseLayout.hidden])
     const newSections = Object.keys(SECTION_REGISTRY).filter(id => !allKnown.has(id))
     if (newSections.length === 0) return baseLayout
     return { ...baseLayout, hidden: [...baseLayout.hidden, ...newSections] }
@@ -179,21 +189,17 @@ export function Dashboard() {
     useSensor(KeyboardSensor)
   )
 
-  // Custom collision detection: check columns first (before items), then use
-  // closestCenter for positioning within that column
+  // Only rightColumn participates in DnD
   const collisionDetectionStrategy: CollisionDetection = useCallback((args) => {
-    // Step 1: check if pointer is within any column bounds — do this before items
-    // so item rects don't interfere with cross-column detection
     const columnContainers = args.droppableContainers.filter(
-      (container) => container.id === 'leftColumn' || container.id === 'centerColumn' || container.id === 'rightColumn'
+      (container) => container.id === 'rightColumn'
     )
     const columnPointerCollisions = pointerWithin({ ...args, droppableContainers: columnContainers })
 
     if (columnPointerCollisions.length > 0) {
-      const overColumnId = columnPointerCollisions[0].id as ColumnId
-      const columnItems = layout[overColumnId] || []
+      const columnItems = layout.rightColumn || []
       const filtered = args.droppableContainers.filter(
-        (container) => container.id === overColumnId || columnItems.includes(container.id as string)
+        (container) => container.id === 'rightColumn' || columnItems.includes(container.id as string)
       )
       if (filtered.length > 0) {
         return closestCenter({ ...args, droppableContainers: filtered })
@@ -201,7 +207,6 @@ export function Dashboard() {
       return columnPointerCollisions
     }
 
-    // Fallback: try all droppables, then rectIntersection, then closestCenter
     const pointerCollisions = pointerWithin(args)
     if (pointerCollisions.length > 0) return pointerCollisions
     const rectCollisions = rectIntersection(args)
@@ -210,15 +215,12 @@ export function Dashboard() {
   }, [layout])
 
   const findContainerIn = (config: DashboardConfig, id: string): ColumnId | null => {
-    if (config.leftColumn.includes(id)) return 'leftColumn'
-    if (config.centerColumn.includes(id)) return 'centerColumn'
     if (config.rightColumn.includes(id)) return 'rightColumn'
     return null
   }
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string)
-    // Snapshot current layout for drag operations
     setLocalLayout({ ...layout })
   }, [layout])
 
@@ -229,13 +231,12 @@ export function Dashboard() {
     const activeItemId = active.id as string
     const overId = over.id as string
 
-    // Use functional updater to always read the latest state
     setLocalLayout((prev) => {
       const current = prev || layout
 
       const activeContainer = findContainerIn(current, activeItemId)
       let overContainer: ColumnId | null
-      if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
+      if (overId === 'rightColumn') {
         overContainer = overId
       } else {
         overContainer = findContainerIn(current, overId)
@@ -273,13 +274,12 @@ export function Dashboard() {
     const activeItemId = active.id as string
     const overId = over.id as string
 
-    // Use functional updater to read the latest state and save
     setLocalLayout((prev) => {
       const current = prev || layout
 
       const activeContainer = findContainerIn(current, activeItemId)
       let overContainer: ColumnId | null
-      if (overId === 'leftColumn' || overId === 'centerColumn' || overId === 'rightColumn') {
+      if (overId === 'rightColumn') {
         overContainer = overId
       } else {
         overContainer = findContainerIn(current, overId)
@@ -289,7 +289,6 @@ export function Dashboard() {
         return null
       }
 
-      // Same container reorder
       let finalLayout = current
       if (activeContainer === overContainer && activeItemId !== overId) {
         const items = [...current[activeContainer]]
@@ -302,8 +301,6 @@ export function Dashboard() {
 
       pendingSave.current = true
       saveConfig(finalLayout)
-      // Keep localLayout set to finalLayout — cleared by useEffect once server confirms.
-      // Returning null here causes a visual bounce as resolvedConfig hasn't updated yet.
       return finalLayout
     })
   }, [layout, saveConfig])
@@ -312,7 +309,7 @@ export function Dashboard() {
     const current = localLayout || config || DEFAULT_DASHBOARD_CONFIG
     const newConfig: DashboardConfig = {
       leftColumn: current.leftColumn.filter(id => id !== sectionId),
-      centerColumn: current.centerColumn.filter(id => id !== sectionId),
+      centerColumn: [],
       rightColumn: current.rightColumn.filter(id => id !== sectionId),
       hidden: [...current.hidden.filter(id => id !== sectionId), sectionId],
     }
@@ -324,7 +321,7 @@ export function Dashboard() {
     const current = localLayout || config || DEFAULT_DASHBOARD_CONFIG
     const newConfig: DashboardConfig = {
       leftColumn: current.leftColumn,
-      centerColumn: current.centerColumn,
+      centerColumn: [],
       rightColumn: [...current.rightColumn, sectionId],
       hidden: current.hidden.filter(id => id !== sectionId),
     }
@@ -344,53 +341,9 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-ink">
-      <div className="mx-auto max-w-[1600px] px-6 py-10">
-        {/* Header */}
-        <div className="mb-8 flex items-center gap-3 flex-wrap">
-          {/* Tips rotator — left side, hidden during edit mode */}
-          {!isEditing && <TipsRotator />}
-          {/* Hidden sections tray — inline with buttons, no layout jump */}
-          {isEditing && layout.hidden.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap flex-1">
-              <span className="text-xs text-stone/70 uppercase tracking-wider">Hidden:</span>
-              {layout.hidden.map((id) => (
-                <button
-                  key={id}
-                  onClick={() => handleRestoreSection(id)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/40 bg-surface/60 text-xs text-parchment/70 hover:text-sand hover:border-sand/50 hover:bg-surface transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                  {SECTION_LABELS[id] || id}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-2 shrink-0">
-            {isEditing && (
-              <button
-                onClick={handleResetDefaults}
-                className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-stone hover:text-parchment border border-stone/20 hover:border-stone/30 transition-colors"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset
-              </button>
-            )}
-            <button
-              onClick={toggleEditing}
-              className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all ${
-                isEditing
-                  ? 'bg-sand text-ink'
-                  : 'text-stone hover:text-sand border border-stone/20 hover:border-sand/30'
-              }`}
-              title={isEditing ? 'Done' : 'Customize layout'}
-            >
-              {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-            </button>
-          </div>
-        </div>
-
+      <div className="mx-auto max-w-[1600px] px-6">
         {saveError && (
-          <p className="text-xs text-ember">Failed to save layout: {saveError.message}</p>
+          <p className="text-xs text-ember mb-2">Failed to save layout: {saveError.message}</p>
         )}
 
         <DndContext
@@ -400,15 +353,63 @@ export function Dashboard() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-8 ${isEditing ? 'pl-6' : ''}`}>
-            {/* Left column */}
-            <DroppableColumn id="leftColumn" sectionIds={layout.leftColumn} isEditing={isEditing} onHide={handleHideSection} />
+          <div className="grid grid-cols-1 lg:grid-cols-[4fr_1fr] gap-8">
+            {/* Left column — chat (wider, sticky full-height) */}
+            <div className="lg:sticky lg:top-0 lg:h-[calc(100vh-0.5rem)] lg:overflow-hidden min-w-0">
+              {layout.leftColumn.map((sectionId) => {
+                const def = SECTION_REGISTRY[sectionId]
+                if (!def) return null
+                return <def.Component key={sectionId} />
+              })}
+            </div>
 
-            {/* Center column */}
-            <DroppableColumn id="centerColumn" sectionIds={layout.centerColumn} isEditing={isEditing} onHide={handleHideSection} />
+            {/* Right column — sections (narrower, scrollable, draggable) */}
+            <div className="min-w-[280px] pt-8 flex flex-col min-h-screen">
+              {/* Hidden sections toolbar — shown only when editing */}
+              {isEditing && layout.hidden.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-6">
+                  <span className="text-xs text-stone/70 uppercase tracking-wider">Hidden:</span>
+                  {layout.hidden.map((id) => (
+                    <button
+                      key={id}
+                      onClick={() => handleRestoreSection(id)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/40 bg-surface/60 text-xs text-parchment/70 hover:text-sand hover:border-sand/50 hover:bg-surface transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {SECTION_LABELS[id] || id}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            {/* Right column */}
-            <DroppableColumn id="rightColumn" sectionIds={layout.rightColumn} isEditing={isEditing} onHide={handleHideSection} />
+              <DroppableColumn id="rightColumn" sectionIds={layout.rightColumn} isEditing={isEditing} onHide={handleHideSection} />
+
+              <div className="flex-1" />
+
+              {/* Section controls — pinned to bottom of page */}
+              <div className="flex items-center gap-2 mt-8 pb-6 justify-end sticky bottom-0">
+                {isEditing && (
+                  <button
+                    onClick={handleResetDefaults}
+                    className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-stone hover:text-parchment border border-stone/20 hover:border-stone/30 transition-colors"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset
+                  </button>
+                )}
+                <button
+                  onClick={toggleEditing}
+                  className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all ${
+                    isEditing
+                      ? 'bg-sand text-ink'
+                      : 'text-stone hover:text-sand border border-stone/20 hover:border-sand/30'
+                  }`}
+                  title={isEditing ? 'Done' : 'Customize layout'}
+                >
+                  {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
           </div>
 
           <DragOverlay>

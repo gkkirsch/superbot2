@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
-import { Send, X, ChevronUp, Paperclip, FileText } from 'lucide-react'
+import { Send, X, ChevronUp, Paperclip, FileText, Sparkles } from 'lucide-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { sendMessageToOrchestrator, fetchMessages } from '@/lib/api'
+import { sendMessageToOrchestrator, fetchMessages, fetchSkills } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
-import type { InboxMessage } from '@/lib/types'
+import type { InboxMessage, SkillInfo } from '@/lib/types'
 
 // --- Inline image detection ---
 
@@ -307,6 +307,7 @@ export function ChatSection() {
   const [hasMore, setHasMore] = useState(false)
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [showSkills, setShowSkills] = useState(false)
   const lastOrchestratorReplyRef = useRef<string | null>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isLoadingEarlierRef = useRef(false)
@@ -314,6 +315,12 @@ export function ChatSection() {
   const initialScrollDoneRef = useRef(false)
   const pollRef = useRef<(() => Promise<void>) | null>(null)
   const showOnboarding = useOnboarding()
+
+  const { data: skills } = useQuery<SkillInfo[]>({
+    queryKey: ['skills'],
+    queryFn: fetchSkills,
+    staleTime: 60_000,
+  })
 
   // Initial load
   useEffect(() => {
@@ -602,7 +609,7 @@ export function ChatSection() {
 
   return (
     <div
-      className="flex flex-col h-[calc(100vh-11rem)] min-w-0"
+      className="flex flex-col h-[calc(100vh-0.5rem)] min-w-0 pt-1 pb-1"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -612,7 +619,7 @@ export function ChatSection() {
 
       <div
         ref={chatContainerRef}
-        className={`h-full overflow-y-auto overflow-x-hidden rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
+        className={`h-full overflow-y-auto overflow-x-hidden scrollbar-auto rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
           isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
         }`}
       >
@@ -628,7 +635,7 @@ export function ChatSection() {
             <p className="text-sm text-stone/50">No messages yet</p>
           </div>
         ) : (
-          <>
+          <div className="max-w-3xl mx-auto space-y-3">
             {hasEarlierMessages && (
               <button
                 onClick={loadEarlier}
@@ -651,7 +658,7 @@ export function ChatSection() {
               return <ActivityIndicator key={`a-${i}`} msgs={item.msgs} />
             })}
             {waitingForReply && <TypingIndicator />}
-          </>
+          </div>
         )}
       </div>
       </div>
@@ -685,7 +692,7 @@ export function ChatSection() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2">
+      <form onSubmit={handleSubmit} className="mt-2 max-w-3xl mx-auto w-full">
         <input
           ref={fileInputRef}
           type="file"
@@ -694,38 +701,84 @@ export function ChatSection() {
           onChange={handleFileSelect}
           className="hidden"
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors"
-          title="Attach files"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-        <textarea
-          ref={inputRef}
-          rows={3}
-          placeholder="Message superbot..."
-          className="flex-1 bg-ink/80 border border-border-custom rounded-xl px-4 py-2.5 text-sm text-parchment placeholder:text-stone/45 focus:outline-none focus:border-stone/30 transition-colors resize-none overflow-y-auto max-h-32 no-scrollbar"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              e.currentTarget.form?.requestSubmit()
-            }
-          }}
-          onInput={(e) => {
-            const target = e.currentTarget
-            target.style.height = 'auto'
-            target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-          }}
-        />
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="shrink-0 p-2.5 rounded-xl text-stone hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
-        >
-          <Send className="h-4 w-4" />
-        </button>
+        <div className="relative bg-ink/80 border border-border-custom rounded-xl focus-within:border-stone/30 transition-colors">
+          <textarea
+            ref={inputRef}
+            rows={2}
+            placeholder="Message superbot..."
+            className="w-full bg-transparent px-4 pt-2.5 pb-10 text-sm text-parchment placeholder:text-stone/45 focus:outline-none resize-none overflow-y-auto max-h-32 no-scrollbar"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                e.currentTarget.form?.requestSubmit()
+              }
+            }}
+            onInput={(e) => {
+              const target = e.currentTarget
+              target.style.height = 'auto'
+              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+            }}
+          />
+          <div className="absolute bottom-2 left-2 right-2 flex items-center">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 rounded-lg text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
+              {skills && skills.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowSkills(v => !v)}
+                    className="p-1.5 rounded-lg text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+                    title="Skills"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                  </button>
+                  {showSkills && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowSkills(false)} />
+                      <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-ink/95 border border-border-custom backdrop-blur-sm shadow-lg w-[28rem] z-20">
+                        <div className="px-3 pt-2.5 pb-1.5 text-[11px] font-medium text-stone/50 uppercase tracking-wider">Skills</div>
+                        <div className="px-3 pb-3 flex flex-wrap gap-1.5">
+                          {skills.map(skill => (
+                            <button
+                              key={skill.id}
+                              type="button"
+                              onClick={() => {
+                                if (inputRef.current) {
+                                  inputRef.current.value = `/${skill.name} `
+                                  inputRef.current.focus()
+                                }
+                                setShowSkills(false)
+                              }}
+                              className="px-2.5 py-1 rounded-full text-[11px] text-stone/60 bg-surface/20 border border-border-custom hover:text-parchment/80 hover:border-stone/30 transition-colors"
+                              title={skill.description}
+                            >
+                              /{skill.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex-1" />
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="p-1.5 rounded-lg text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors disabled:opacity-25"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </form>
       {mutation.isError && <span className="text-[10px] text-ember/70 mt-1 ml-1">Failed</span>}
     </div>
@@ -807,7 +860,7 @@ function UserBubble({ msg }: { msg: InboxMessage }) {
 
   return (
     <div className="flex justify-end">
-      <div className="max-w-[75%]">
+      <div className="max-w-[65%]">
         <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)] overflow-hidden min-w-0">
           <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{displayText}</p>
         </div>
@@ -839,14 +892,14 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] overflow-hidden">
+      <div className="max-w-[75%] overflow-hidden">
         <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">
           superbot{msg.to && msg.to !== 'dashboard-user' ? ` → ${msg.to}` : ''}
           {isFirstOnboarding && (
             <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] bg-sand/15 text-sand/70">Welcome</span>
           )}
         </span>
-        <div className={`rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
+        <div className={`px-1 py-1 overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
           <MarkdownContent content={processedText} className="text-parchment/80" />
         </div>
         {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}

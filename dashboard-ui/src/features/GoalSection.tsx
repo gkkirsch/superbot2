@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Check, Pause, PenLine, Loader2, Play } from 'lucide-react'
-import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
+import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X } from 'lucide-react'
+import { useCards, useCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem } from '@/hooks/useSpaces'
 import type { CardItem } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -30,13 +30,15 @@ function SpaceBadge({ space }: { space: string }) {
 interface GoalItemProps {
   item: CardItem
   onAction: (itemId: string, update: Record<string, unknown>) => void
+  onDelete: (itemId: string) => void
   isPending: boolean
 }
 
-function GoalItem({ item, onAction, isPending }: GoalItemProps) {
+function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
   const [editing, setEditing] = useState(false)
-  const [editNotes, setEditNotes] = useState(item.notes as string || '')
-  const [editProgress, setEditProgress] = useState(item.progress as string || '')
+  const [editNotes, setEditNotes] = useState(item.notes || '')
+  const [editProgress, setEditProgress] = useState(item.progress || '')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const handleComplete = () => onAction(item.id, { status: 'completed' })
   const handlePause = () => onAction(item.id, { status: 'paused' })
@@ -52,6 +54,15 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
     setEditing(false)
   }
 
+  const handleDelete = () => {
+    if (confirmingDelete) {
+      onDelete(item.id)
+      setConfirmingDelete(false)
+    } else {
+      setConfirmingDelete(true)
+    }
+  }
+
   const borderColor = item.status === 'completed'
     ? 'border-moss/30 bg-moss/[0.03]'
     : item.status === 'paused'
@@ -61,20 +72,46 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
         : 'border-border-custom'
 
   return (
-    <div className={`rounded-lg border p-3 transition-all ${borderColor}`}>
-      {/* Title */}
+    <div className={`group/goal rounded-lg border p-3 transition-all ${borderColor}`}>
+      {/* Title + Delete */}
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-sm text-parchment font-medium leading-snug">{String(item.title || '')}</p>
+        <p className="text-sm text-parchment font-medium leading-snug">{item.title || ''}</p>
+        {confirmingDelete ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleDelete}
+              disabled={isPending}
+              className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="p-0.5 text-stone/40 hover:text-stone transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleDelete}
+            disabled={isPending}
+            className="p-1 text-stone/30 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover/goal:opacity-100 focus:opacity-100"
+            title="Delete goal"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Badges row */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <StatusBadge status={item.status} />
-        {item.space && <SpaceBadge space={String(item.space)} />}
-        {item.progress && (
+        {!!item.space && <SpaceBadge space={String(item.space)} />}
+        {!!item.progress && (
           <span className="text-[10px] text-stone/60">{String(item.progress)}</span>
         )}
-        {item.dueDate && (
+        {!!item.dueDate && (
           <span className="text-[10px] text-stone/50">due {String(item.dueDate)}</span>
         )}
       </div>
@@ -111,7 +148,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
               <Check className="h-3 w-3" /> Save
             </button>
             <button
-              onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(false) }}
+              onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(false) }}
               className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
             >
               Cancel
@@ -120,7 +157,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
         </div>
       ) : (
         item.notes && (
-          <p className="text-xs text-stone/60 leading-relaxed mb-2">{String(item.notes)}</p>
+          <p className="text-xs text-stone/60 leading-relaxed mb-2">{item.notes}</p>
         )
       )}
 
@@ -144,7 +181,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
             Pause
           </button>
           <button
-            onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(true) }}
+            onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(true) }}
             disabled={isPending}
             className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors disabled:opacity-50"
           >
@@ -165,7 +202,7 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
             Resume
           </button>
           <button
-            onClick={() => { setEditNotes(item.notes as string || ''); setEditProgress(item.progress as string || ''); setEditing(true) }}
+            onClick={() => { setEditNotes(item.notes || ''); setEditProgress(item.progress || ''); setEditing(true) }}
             disabled={isPending}
             className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors disabled:opacity-50"
           >
@@ -185,11 +222,103 @@ function GoalItem({ item, onAction, isPending }: GoalItemProps) {
   )
 }
 
+function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, unknown>) => void; isPending: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [dueDate, setDueDate] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    const id = `goal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    onSubmit({
+      id,
+      title: title.trim(),
+      status: 'active',
+      progress: '',
+      dueDate: dueDate.trim(),
+      notes: notes.trim(),
+      space: '',
+    })
+    setTitle('')
+    setNotes('')
+    setDueDate('')
+    setOpen(false)
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md border border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/40 transition-colors w-full justify-center"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add goal
+      </button>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-lg border border-border-custom p-3 space-y-2">
+      <div>
+        <label className="text-[10px] text-stone/50 uppercase tracking-wider block mb-1">Title</label>
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="What do you want to achieve?"
+          className="w-full bg-surface/50 text-parchment text-xs rounded-md px-2 py-1.5 border border-sand/20 focus:border-sand/40 focus:outline-none"
+          autoFocus
+          required
+        />
+      </div>
+      <div>
+        <label className="text-[10px] text-stone/50 uppercase tracking-wider block mb-1">Notes <span className="normal-case">(optional)</span></label>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Add context or details..."
+          className="w-full bg-surface/50 text-parchment text-xs rounded-md p-2 border border-sand/20 focus:border-sand/40 focus:outline-none resize-none"
+          rows={2}
+        />
+      </div>
+      <div>
+        <label className="text-[10px] text-stone/50 uppercase tracking-wider block mb-1">Due date <span className="normal-case">(optional)</span></label>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className="bg-surface/50 text-parchment text-xs rounded-md px-2 py-1.5 border border-sand/20 focus:border-sand/40 focus:outline-none"
+        />
+      </div>
+      <div className="flex gap-1.5 pt-1">
+        <button
+          type="submit"
+          disabled={isPending || !title.trim()}
+          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 transition-colors disabled:opacity-50"
+        >
+          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+          Add goal
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTitle(''); setNotes(''); setDueDate(''); setOpen(false) }}
+          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function GoalSection() {
   const { data: cards, isLoading: cardsLoading } = useCards()
   const goalCard = cards?.find(c => c.skillId === 'goals')
   const { data, isLoading: itemsLoading } = useCardItems(goalCard?.skillId || '')
   const updateMutation = useUpdateCardItem()
+  const deleteMutation = useDeleteCardItem()
+  const createMutation = useCreateCardItem()
   const [showCompleted, setShowCompleted] = useState(false)
 
   const isLoading = cardsLoading || (goalCard && itemsLoading)
@@ -220,8 +349,12 @@ export function GoalSection() {
     updateMutation.mutate({ skillId: goalCard.skillId, itemId, update })
   }
 
-  if (items.length === 0) {
-    return <p className="text-xs text-stone/40 py-2 text-center">No goals yet</p>
+  const handleDelete = (itemId: string) => {
+    deleteMutation.mutate({ skillId: goalCard.skillId, itemId })
+  }
+
+  const handleCreate = (goal: Record<string, unknown>) => {
+    createMutation.mutate({ skillId: goalCard.skillId, item: goal })
   }
 
   return (
@@ -231,7 +364,8 @@ export function GoalSection() {
           key={item.id}
           item={item}
           onAction={handleAction}
-          isPending={updateMutation.isPending}
+          onDelete={handleDelete}
+          isPending={updateMutation.isPending || deleteMutation.isPending}
         />
       ))}
       {completedItems.length > 0 && (
@@ -242,6 +376,7 @@ export function GoalSection() {
           {showCompleted ? 'Hide completed' : `Show ${completedItems.length} completed`}
         </button>
       )}
+      <AddGoalForm onSubmit={handleCreate} isPending={createMutation.isPending} />
     </div>
   )
 }

@@ -38,6 +38,8 @@ import {
   fetchCards,
   fetchCardItems,
   updateCardItem,
+  deleteCardItem,
+  createCardItem,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -389,6 +391,28 @@ export function useUpdateCardItem() {
     },
     onError: (err: Error) => {
       console.error('Card item update failed:', err.message)
+    },
+  })
+}
+
+export function useDeleteCardItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ skillId, itemId }: { skillId: string; itemId: string }) =>
+      deleteCardItem(skillId, itemId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['card-items'] })
+    },
+  })
+}
+
+export function useCreateCardItem() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ skillId, item }: { skillId: string; item: Record<string, unknown> }) =>
+      createCardItem(skillId, item),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['card-items'] })
     },
   })
 }

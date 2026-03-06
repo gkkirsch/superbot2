@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, Paperclip, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, FolderOpen, Check, Upload, File, Package, Save, Pencil, AlertTriangle, RefreshCw, CheckCircle, XCircle, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Wrench, Trash2 } from 'lucide-react'
+import { Send, X, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, Upload, File, Package, Save, Pencil, RefreshCw, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2 } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
@@ -30,8 +30,6 @@ const ACCEPTED_FILE_TYPES = [
   'application/x-sh',
 ]
 
-const ACCEPTED_EXTENSIONS = '.png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.md,.json,.yaml,.yml,.js,.ts,.py,.sh'
-
 function isAcceptedFile(file: File): boolean {
   if (ACCEPTED_FILE_TYPES.includes(file.type)) return true
   const ext = '.' + file.name.split('.').pop()?.toLowerCase()
@@ -40,22 +38,6 @@ function isAcceptedFile(file: File): boolean {
 
 function isImageFile(file: File): boolean {
   return file.type.startsWith('image/')
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = reader.result as string
-      resolve(result.split(',')[1])
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatCost(cost: number): string {
@@ -126,94 +108,6 @@ function ToolIndicator({ tools }: { tools: { name: string; input: Record<string,
           </span>
         )
       })}
-    </div>
-  )
-}
-
-// --- Bubbles ---
-
-function UserBubble({ msg }: { msg: Message }) {
-  return (
-    <div className="flex justify-end">
-      <div className="max-w-[75%]">
-        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)] overflow-hidden min-w-0">
-          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">
-            {msg.content}
-          </p>
-        </div>
-        <span className="text-[10px] text-stone/50 block text-right mt-1 mr-1">
-          {formatTime(msg.timestamp)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function AssistantBubble({ msg }: { msg: Message }) {
-  const [expanded, setExpanded] = useState(false)
-  const isLong = msg.content.length > 500
-
-  return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] overflow-hidden">
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
-          {isLong && !expanded ? (
-            <>
-              <div className="max-h-64 overflow-hidden">
-                <MarkdownContent content={msg.content} className="text-parchment/80" />
-              </div>
-              <button onClick={() => setExpanded(true)} className="text-xs text-stone/50 mt-1.5 hover:text-stone/70">
-                Show more
-              </button>
-            </>
-          ) : (
-            <>
-              <MarkdownContent content={msg.content} className="text-parchment/80" />
-              {isLong && (
-                <button onClick={() => setExpanded(false)} className="text-xs text-stone/50 mt-1.5 hover:text-stone/70">
-                  Show less
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        {msg.tools && msg.tools.length > 0 && <ToolIndicator tools={msg.tools} />}
-        <span className="text-[10px] text-stone/50 block mt-1 ml-1">
-          {formatTime(msg.timestamp)}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function StreamingBubble({ text }: { text: string }) {
-  return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] overflow-hidden">
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
-          <MarkdownContent content={text} className="text-parchment/80" />
-          <span className="inline-block w-1.5 h-4 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TypingIndicator() {
-  return (
-    <div className="flex justify-start">
-      <div>
-        <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">plugin creator</span>
-        <div className="rounded-2xl rounded-bl-md px-4 py-3 bg-[rgba(120,140,160,0.12)]">
-          <div className="flex gap-1.5 items-center">
-            <span className="typing-dot" />
-            <span className="typing-dot" style={{ animationDelay: '0.15s' }} />
-            <span className="typing-dot" style={{ animationDelay: '0.3s' }} />
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -1311,40 +1205,33 @@ export function SkillCreator() {
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [totalCost, setTotalCost] = useState(0)
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+  const [, setAttachedFiles] = useState<AttachedFile[]>([])
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = useState<string | null>(null)
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
   const [draftName, setDraftName] = useState<string | null>(null)
   const [, setDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [isPromoting, setIsPromoting] = useState(false)
-  const [promoteStatus, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [selectedDraft, setSelectedDraft] = useState<string | null>(() => {
     try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
   })
   const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
-  const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
+  const [, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
-  const [fileLoading, setFileLoading] = useState(false)
-  const [frontmatter, setFrontmatter] = useState<Record<string, unknown> | null>(null)
-  const [isDraftDragging, setIsDraftDragging] = useState(false)
-  const [draftUploading, setDraftUploading] = useState(false)
+  const [, setFrontmatter] = useState<Record<string, unknown> | null>(null)
   const [fileSheetOpen, setFileSheetOpen] = useState(false)
   const [fileEditing, setFileEditing] = useState(false)
   const [fileDraft, setFileDraft] = useState('')
   const [fileSaving, setFileSaving] = useState(false)
-  const [validation, setValidation] = useState<ValidationResult | null>(null)
-  const [validating, setValidating] = useState(false)
-  const [validationExpanded, setValidationExpanded] = useState(false)
-  const [selectedDraftType, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
+  const [, setValidation] = useState<ValidationResult | null>(null)
+  const [, setValidating] = useState(false)
+  const [, setValidationExpanded] = useState(false)
+  const [, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
   const [activePanel, setActivePanel] = useState<'chat' | 'files' | 'test'>('chat')
-  const [pluginMeta, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
-  const [pluginMetaSaving, setPluginMetaSaving] = useState(false)
+  const [, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
 
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const draftFileInputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
@@ -1508,13 +1395,6 @@ export function SkillCreator() {
     setAttachedFiles(prev => [...prev, ...newFiles])
   }, [])
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      addFiles(Array.from(e.target.files))
-      e.target.value = ''
-    }
-  }, [addFiles])
-
   // Paste handler
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
@@ -1575,83 +1455,6 @@ export function SkillCreator() {
     }
     setIsPromoting(false)
   }, [selectedDraft, draftName, isPromoting])
-
-  // Send message
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    const value = inputRef.current?.value.trim()
-    if ((!value && attachedFiles.length === 0) || isProcessing) return
-
-    setError(null)
-
-    // Upload files first if any
-    let uploadedPaths: string[] = []
-    if (attachedFiles.length > 0) {
-      try {
-        const fileData = await Promise.all(
-          attachedFiles.map(async ({ file }) => ({
-            name: file.name,
-            data: await fileToBase64(file),
-          }))
-        )
-        const uploadRes = await fetch('/api/skill-creator/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, files: fileData }),
-        })
-        const uploadResult = await uploadRes.json()
-        if (uploadResult.ok) {
-          uploadedPaths = uploadResult.paths
-        }
-      } catch (err) {
-        setError('Failed to upload files')
-        return
-      }
-    }
-
-    // Build message text with file paths
-    let messageText = value || ''
-    if (uploadedPaths.length > 0) {
-      const pathList = uploadedPaths.map(p => `Uploaded file: ${p}`).join('\n')
-      messageText = messageText ? `${messageText}\n\n${pathList}` : pathList
-    }
-
-    // Add user message to display
-    setMessages(prev => [...prev, {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: value || (uploadedPaths.length > 0 ? `[${uploadedPaths.length} file${uploadedPaths.length > 1 ? 's' : ''} attached]` : ''),
-      timestamp: Date.now(),
-    }])
-
-    // Clear input
-    if (inputRef.current) {
-      inputRef.current.value = ''
-      inputRef.current.style.height = 'auto'
-    }
-    setAttachedFiles(prev => {
-      prev.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview) })
-      return []
-    })
-    setIsProcessing(true)
-
-    // Send to backend
-    try {
-      const res = await fetch('/api/skill-creator/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageText, sessionId, draftName: selectedDraft || draftName || undefined }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        setError(err.error || 'Failed to send message')
-        setIsProcessing(false)
-      }
-    } catch {
-      setError('Failed to connect to server')
-      setIsProcessing(false)
-    }
-  }, [attachedFiles, isProcessing, sessionId, selectedDraft, draftName])
 
   // New session
   const handleNewSession = useCallback(async () => {
@@ -1865,68 +1668,11 @@ export function SkillCreator() {
     return () => { cancelled = true; clearInterval(interval) }
   }, [selectedDraft])
 
-  // Fetch file content when a file is clicked — opens sliding tray
-  const handleFileClick = useCallback(async (filePath: string) => {
-    if (!selectedDraft) return
-    setSelectedFile(filePath)
-    setFileContent(null)
-    setFileEditing(false)
-    setFileSheetOpen(true)
-    setFileLoading(true)
-    try {
-      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${filePath}`)
-      const data = await res.json()
-      if (data.ok && data.binary) setFileContent(`[Binary file — ${(data.size / 1024).toFixed(1)} KB]`)
-      else if (data.ok) setFileContent(data.content)
-      else setFileContent(`Error: ${data.error}`)
-    } catch {
-      setFileContent('Failed to load file')
-    }
-    setFileLoading(false)
-  }, [selectedDraft])
-
   const closeFileSheet = useCallback(() => {
     setFileSheetOpen(false)
     setFileEditing(false)
   }, [])
 
-
-  // Upload files to the selected draft
-  const handleDraftUpload = useCallback(async (files: File[]) => {
-    if (!selectedDraft || files.length === 0) return
-    setDraftUploading(true)
-    try {
-      const fileData = await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          data: await fileToBase64(file),
-        }))
-      )
-      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: fileData }),
-      })
-      const result = await res.json()
-      if (!result.ok) setError(result.error || 'Upload failed')
-    } catch {
-      setError('Failed to upload files to draft')
-    }
-    setDraftUploading(false)
-  }, [selectedDraft])
-
-  const handleDraftDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDraftDragging(false)
-    handleDraftUpload(Array.from(e.dataTransfer.files))
-  }, [handleDraftUpload])
-
-  const handleDraftFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      handleDraftUpload(Array.from(e.target.files))
-      e.target.value = ''
-    }
-  }, [handleDraftUpload])
 
   // Validate a draft
   const runValidation = useCallback(async (draft: string) => {
@@ -1954,38 +1700,6 @@ export function SkillCreator() {
     }
   }, [selectedDraft, runValidation])
 
-  // Save plugin.json metadata
-  const handlePluginMetaSave = useCallback(async () => {
-    if (!selectedDraft || !pluginMeta) return
-    setPluginMetaSaving(true)
-    try {
-      const readRes = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/.claude-plugin/plugin.json`)
-      const readData = await readRes.json()
-      if (readData.ok) {
-        const pj = JSON.parse(readData.content)
-        pj.version = pluginMeta.version
-        pj.description = pluginMeta.description
-        if (pluginMeta.author) {
-          pj.author = typeof pj.author === 'object' ? { ...pj.author, name: pluginMeta.author } : pluginMeta.author
-        }
-        const saveRes = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/.claude-plugin/plugin.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: JSON.stringify(pj, null, 2) }),
-        })
-        const saveData = await saveRes.json()
-        if (saveData.ok) {
-          runValidation(selectedDraft)
-        } else {
-          setError(saveData.error || 'Save failed')
-        }
-      }
-    } catch {
-      setError('Failed to save plugin.json')
-    }
-    setPluginMetaSaving(false)
-  }, [selectedDraft, pluginMeta, runValidation])
-
   // Re-validate after file save
   const handleFileSaveWithValidation = useCallback(async () => {
     if (!selectedDraft || !selectedFile) return
@@ -2009,9 +1723,6 @@ export function SkillCreator() {
     }
     setFileSaving(false)
   }, [selectedDraft, selectedFile, fileDraft, runValidation])
-
-  // Memoize empty state check
-  const isEmpty = messages.length === 0 && !streamingText
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -2158,13 +1869,7 @@ export function SkillCreator() {
             </div>
           </SheetHeader>
           <SheetBody className="flex flex-col h-[calc(100vh-65px)]">
-            {fileLoading ? (
-              <div className="space-y-3 py-4">
-                <div className="h-4 w-3/4 rounded bg-surface/50 animate-pulse" />
-                <div className="h-4 w-1/2 rounded bg-surface/50 animate-pulse" />
-                <div className="h-4 w-2/3 rounded bg-surface/50 animate-pulse" />
-              </div>
-            ) : fileEditing ? (
+            {fileEditing ? (
               <div className="flex flex-col flex-1">
                 <textarea
                   value={fileDraft}

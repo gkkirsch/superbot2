@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently -n api,ui -c blue,green \"npm run dev:api\" \"npm run dev:ui\"",
     "dev:ui": "vite",
-    "dev:api": "node --watch ../dashboard/server.js --no-static",
+    "dev:api": "node --watch ../dashboard/server.js",
     "build": "tsc -b && vite build",
     "start": "node ../dashboard/server.js",
     "lint": "eslint .",

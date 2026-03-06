@@ -123,13 +123,9 @@ export function ActivitySection() {
             <Link
               key={w.agentId || w.name}
               to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
-              className="inline-flex items-center gap-1 rounded-full bg-stone/10 px-2 py-0.5 text-[10px] text-stone/70 hover:text-sand hover:bg-stone/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-stone/10 px-2.5 py-0.5 text-[10px] text-stone/70 hover:bg-stone/20 transition-colors"
             >
-              <span className="relative flex h-1.5 w-1.5 shrink-0">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              </span>
-              <span className="max-w-[120px] truncate">{w.name}</span>
+              <span className="max-w-[120px] truncate shimmer-text">{w.name}</span>
             </Link>
           ))}
         </div>

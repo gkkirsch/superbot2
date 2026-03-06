@@ -1589,19 +1589,19 @@ app.put('/api/user', async (req, res) => {
 // --- Dashboard config ---
 
 const DEFAULT_DASHBOARD_CONFIG = {
-  leftColumn: ['workers', 'escalations', 'orchestrator-resolved', 'recent-activity'],
-  centerColumn: ['chat'],
-  rightColumn: ['pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
-  hidden: [],
+  leftColumn: ['chat'],
+  centerColumn: [],
+  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
+  hidden: ['recent-activity'],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals', 'tips']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
     const config = await readJsonFile(join(SUPERBOT_DIR, 'dashboard-config.json'))
     if (config && !config.centerColumn) {
-      config.centerColumn = ['chat']
+      config.centerColumn = []
     }
     res.json({ config: config || DEFAULT_DASHBOARD_CONFIG })
   } catch (err) {
@@ -3297,9 +3297,15 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
 // Card data lives within the skill directory (self-contained).
 // dataSource in CARD.json is relative to the skill dir.
 
+// Map from skillId → base directory for cards not in SUPERBOT_SKILLS_DIR
+const _cardBaseDirs = new Map()
+
 async function getCardDefinitions() {
-  const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
   const cards = []
+  _cardBaseDirs.clear()
+
+  // 1. Scan repo skills (skills/ directory)
+  const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
   for (const entry of entries) {
     const cardPath = join(SUPERBOT_SKILLS_DIR, entry, 'CARD.json')
     try {
@@ -3312,6 +3318,63 @@ async function getCardDefinitions() {
       }
     } catch { /* no CARD.json or parse error — skip */ }
   }
+
+  // 2. Scan installed Claude Code plugins for CARD.json
+  // Structure: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+  // Check both superbot2's Claude config and user's personal Claude config
+  const pluginCacheDirs = [
+    PLUGINS_CACHE_DIR,                                    // ~/.superbot2/.claude/plugins/cache/
+    join(homedir(), '.claude', 'plugins', 'cache'),       // ~/.claude/plugins/cache/
+  ]
+  for (const cacheDir of pluginCacheDirs) {
+    try {
+      const marketplaces = await safeReaddir(cacheDir)
+      for (const marketplace of marketplaces) {
+        const marketplaceDir = join(cacheDir, marketplace)
+        try { if (!(await stat(marketplaceDir)).isDirectory()) continue } catch { continue }
+        const plugins = await safeReaddir(marketplaceDir)
+        for (const plugin of plugins) {
+          const pluginDir = join(marketplaceDir, plugin)
+          try { if (!(await stat(pluginDir)).isDirectory()) continue } catch { continue }
+          const versions = (await safeReaddir(pluginDir)).filter(v => !v.startsWith('.')).sort()
+          if (versions.length === 0) continue
+          const versionDir = join(pluginDir, versions[versions.length - 1])
+
+          // Check root-level CARD.json
+          try {
+            const content = await readFile(join(versionDir, 'CARD.json'), 'utf-8')
+            const card = JSON.parse(content)
+            const skillId = `plugin__${plugin}`
+            if (!cards.some(c => c.skillId === skillId)) {
+              _cardBaseDirs.set(skillId, versionDir)
+              cards.push({ ...card, skillId })
+            }
+          } catch { /* no root CARD.json */ }
+
+          // Check skills/<skill>/CARD.json
+          const skillsDir = join(versionDir, 'skills')
+          try {
+            const skills = await safeReaddir(skillsDir)
+            for (const skill of skills) {
+              if (skill.startsWith('.')) continue
+              const skillDir = join(skillsDir, skill)
+              try { if (!(await stat(skillDir)).isDirectory()) continue } catch { continue }
+              try {
+                const content = await readFile(join(skillDir, 'CARD.json'), 'utf-8')
+                const card = JSON.parse(content)
+                const skillId = plugin === skill ? `plugin__${plugin}` : `plugin__${plugin}__${skill}`
+                if (!cards.some(c => c.skillId === skillId)) {
+                  _cardBaseDirs.set(skillId, skillDir)
+                  cards.push({ ...card, skillId })
+                }
+              } catch { /* no CARD.json in this skill dir */ }
+            }
+          } catch { /* no skills dir */ }
+        }
+      }
+    } catch { /* no plugin cache dir */ }
+  }
+
   return cards
 }
 
@@ -3332,7 +3395,7 @@ function acquireFileLock(filePath) {
 }
 
 function resolveCardDataPath(skillId, dataSource) {
-  const base = resolve(SUPERBOT_SKILLS_DIR, skillId)
+  const base = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
   const resolved = resolve(base, dataSource)
   if (!resolved.startsWith(base + '/')) {
     throw new Error('Invalid dataSource path')
@@ -3372,7 +3435,8 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
     const cards = await getCardDefinitions()
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
-    const items = await readCardItems(card.skillId, card.dataSource)
+    const allItems = await readCardItems(card.skillId, card.dataSource)
+    const items = allItems.filter(i => !i.status || i.status === 'pending')
     res.json({ items, card })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -3411,6 +3475,60 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
 
       await writeCardItems(card.skillId, card.dataSource, items)
       res.json({ item: items[idx] })
+    } finally {
+      release()
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/cards/:skillId/items/:itemId', async (req, res) => {
+  try {
+    const { skillId, itemId } = req.params
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    const release = await acquireFileLock(filePath)
+    try {
+      const items = await readCardItems(card.skillId, card.dataSource)
+      const idx = items.findIndex(item => item.id === itemId)
+      if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
+
+      items.splice(idx, 1)
+      await writeCardItems(card.skillId, card.dataSource, items)
+      res.json({ success: true })
+    } finally {
+      release()
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/cards/:skillId/items', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    const newItem = req.body
+
+    if (!newItem.id || !newItem.title) {
+      return res.status(400).json({ error: 'id and title are required' })
+    }
+
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    const release = await acquireFileLock(filePath)
+    try {
+      const items = await readCardItems(card.skillId, card.dataSource)
+      newItem.createdAt = new Date().toISOString()
+      items.push(newItem)
+      await writeCardItems(card.skillId, card.dataSource, items)
+      res.json({ item: newItem })
     } finally {
       release()
     }
@@ -5065,53 +5183,50 @@ app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   res.json({ ok: true })
 })
 
-// --- Static files (production only — skipped when vite dev server handles frontend) ---
+// --- Static files ---
+// Always serve the built dashboard UI if it exists.
+// In dev mode the Vite HMR server on a separate port is the primary frontend,
+// but serving static here too means the API port works standalone (e.g. Electron).
 
-const DEV_MODE = process.argv.includes('--no-static')
+const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+const INDEX_HTML = resolve(DIST_DIR, 'index.html')
 
-if (!DEV_MODE) {
-  const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
-  const INDEX_HTML = resolve(DIST_DIR, 'index.html')
-
-  if (existsSync(DIST_DIR)) {
-    app.use(express.static(DIST_DIR))
-  }
-
-  // SPA fallback — only in production mode
-  app.get('/{*path}', (_req, res) => {
-    if (existsSync(INDEX_HTML)) {
-      res.sendFile(INDEX_HTML, (err) => {
-        if (err) {
-          console.error('Failed to serve index.html:', err.message)
-          res.status(503).send(`
-            <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
-              <h1>Dashboard Error</h1>
-              <p>Failed to serve the dashboard UI: ${err.message}</p>
-              <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
-            </body></html>
-          `)
-        }
-      })
-    } else {
-      res.status(503).send(`
-        <html>
-          <head><title>Dashboard Not Built</title></head>
-          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
-            <h1>Dashboard UI Not Built</h1>
-            <p>The dashboard server is running, but the UI hasn't been built yet.</p>
-            <p>Run this command to build it:</p>
-            <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
-            <p>Then refresh this page.</p>
-            <hr>
-            <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
-          </body>
-        </html>
-      `)
-    }
-  })
-} else {
-  console.log('Dev mode: static file serving disabled (vite dev server handles frontend)')
+if (existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR))
 }
+
+// SPA fallback — serve index.html for any non-API route
+app.get('/{*path}', (_req, res) => {
+  if (existsSync(INDEX_HTML)) {
+    res.sendFile(INDEX_HTML, (err) => {
+      if (err) {
+        console.error('Failed to serve index.html:', err.message)
+        res.status(503).send(`
+          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard Error</h1>
+            <p>Failed to serve the dashboard UI: ${err.message}</p>
+            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+          </body></html>
+        `)
+      }
+    })
+  } else {
+    res.status(503).send(`
+      <html>
+        <head><title>Dashboard Not Built</title></head>
+        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+          <h1>Dashboard UI Not Built</h1>
+          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+          <p>Run this command to build it:</p>
+          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+          <p>Then refresh this page.</p>
+          <hr>
+          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+        </body>
+      </html>
+    `)
+  }
+})
 
 // --- iMessage reply mirroring ---
 

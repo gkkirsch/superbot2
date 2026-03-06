@@ -333,6 +333,10 @@ export interface CardItem {
   excerpt?: string
   context?: string
   space?: string
+  title?: string
+  progress?: string
+  dueDate?: string
+  notes?: string
   [key: string]: unknown
 }
 

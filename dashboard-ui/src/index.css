@@ -125,6 +125,7 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scrollbar-gutter: stable;
 }
 
 ::-webkit-scrollbar { width: 6px; }
@@ -146,6 +147,14 @@ body {
 /* Hide scrollbar for secondary nav */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Auto-hiding scrollbar — only visible on hover/scroll */
+.scrollbar-auto { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.scrollbar-auto:hover { scrollbar-color: var(--scrollbar-thumb, #2a2a28) transparent; }
+.scrollbar-auto::-webkit-scrollbar { width: 6px; }
+.scrollbar-auto::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-auto::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.scrollbar-auto:hover::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #2a2a28); }
 
 /* Docs content styles (for HTML injected from docs API) */
 .docs-content h1 { font-family: var(--font-heading); font-size: 1.75rem; color: var(--color-parchment); margin-bottom: 1rem; }
@@ -219,4 +228,22 @@ input:-webkit-autofill:focus {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, var(--color-stone) 25%, var(--color-sand) 50%, var(--color-stone) 75%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-text { animation: none; }
 }

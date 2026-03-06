@@ -67,7 +67,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           {item.platform && <PlatformBadge platform={item.platform} />}
-          {subtitleField && item[subtitleField] && (
+          {subtitleField && !!item[subtitleField] && (
             <span className="text-xs text-stone/60 truncate">{String(item[subtitleField])}</span>
           )}
         </div>
@@ -109,7 +109,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
       {/* Meta: excerpt + post link */}
       {(metaField && item[metaField]) || item.postUrl ? (
         <div className="flex items-start justify-between gap-2 mb-2">
-          {metaField && item[metaField] && (
+          {metaField && !!item[metaField] && (
             <div className="text-[10px] text-stone/50 italic border-l-2 border-stone/20 pl-2 min-w-0">
               {String(item[metaField])}
             </div>
@@ -194,12 +194,9 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
 function CardSkillSection({ card }: { card: CardDefinition }) {
   const { data, isLoading } = useCardItems(card.skillId)
   const updateMutation = useUpdateCardItem()
-  const [showAll, setShowAll] = useState(false)
 
   const items = data?.items || []
-  const pendingItems = items.filter(i => i.status === 'pending')
-  const otherItems = items.filter(i => i.status !== 'pending')
-  const displayItems = showAll ? [...pendingItems, ...otherItems] : pendingItems
+  const pendingItems = items.filter(i => !i.status || i.status === 'pending')
 
   const handleAction = (itemId: string, update: { status?: string; draft?: string }) => {
     updateMutation.mutate({ skillId: card.skillId, itemId, update })
@@ -219,7 +216,7 @@ function CardSkillSection({ card }: { card: CardDefinition }) {
     )
   }
 
-  if (items.length === 0) {
+  if (pendingItems.length === 0) {
     return (
       <p className="text-xs text-stone/40 py-2 text-center">No drafts waiting for review</p>
     )
@@ -227,7 +224,7 @@ function CardSkillSection({ card }: { card: CardDefinition }) {
 
   return (
     <div className="space-y-2">
-      {displayItems.map(item => (
+      {pendingItems.map(item => (
         <CardItemRow
           key={item.id}
           item={item}
@@ -236,14 +233,6 @@ function CardSkillSection({ card }: { card: CardDefinition }) {
           isPending={updateMutation.isPending}
         />
       ))}
-      {otherItems.length > 0 && (
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-[10px] text-stone/50 hover:text-stone transition-colors w-full text-center py-1"
-        >
-          {showAll ? 'Hide resolved' : `Show ${otherItems.length} resolved`}
-        </button>
-      )}
     </div>
   )
 }

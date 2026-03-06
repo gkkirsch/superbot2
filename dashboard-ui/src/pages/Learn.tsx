@@ -597,7 +597,7 @@ export function Learn() {
         <div className="flex gap-8">
           {/* Left sidebar */}
           <nav className={`w-56 shrink-0 ${sidebarOpen ? 'block' : 'hidden'} md:block`}>
-            <div className="sticky top-24 space-y-0.5">
+            <div className="sticky top-6 space-y-0.5">
               {concepts.map(concept => (
                 <button
                   key={concept.id}
