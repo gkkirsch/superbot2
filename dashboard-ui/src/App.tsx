@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
@@ -9,6 +10,10 @@ import { Knowledge } from './pages/Knowledge'
 import { Skills } from './pages/Skills'
 import { SkillCreator } from './pages/SkillCreator'
 import { Learn } from './pages/Learn'
+import { SetupScreen } from './pages/SetupScreen'
+
+/** True when running inside the Electron shell (preload exposes window.superbot). */
+const isElectron = !!(window as unknown as { superbot?: unknown }).superbot
 
 function AppContent() {
   return (
@@ -32,6 +37,13 @@ function AppContent() {
 }
 
 function App() {
+  const [setupDone, setSetupDone] = useState(!isElectron)
+  const handleSetupComplete = useCallback(() => setSetupDone(true), [])
+
+  if (!setupDone) {
+    return <SetupScreen onComplete={handleSetupComplete} />
+  }
+
   return (
     <BrowserRouter>
       <AppContent />

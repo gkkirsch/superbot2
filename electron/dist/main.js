@@ -352,7 +352,60 @@ function ensureAutoLaunchOnFirstRun() {
         console.warn('superbot2: failed to configure auto-launch on first run:', err);
     }
 }
+// ── Setup check helpers ─────────────────────────────────────────────────
+const { execSync } = require('node:child_process');
+const SETUP_COMPLETE_PATH = path.join(electron_1.app.getPath('userData'), 'setup-complete.json');
+function isSetupComplete() {
+    try { return fs.existsSync(SETUP_COMPLETE_PATH); } catch { return false; }
+}
+function markSetupComplete() {
+    try {
+        fs.mkdirSync(path.dirname(SETUP_COMPLETE_PATH), { recursive: true });
+        fs.writeFileSync(SETUP_COMPLETE_PATH, JSON.stringify({ completedAt: new Date().toISOString() }), 'utf-8');
+    } catch (err) { console.warn('superbot2: failed to write setup-complete flag:', err); }
+}
+function runSetupCheck(cmd) {
+    try { execSync(cmd, { timeout: 5000, env: process.env, stdio: 'pipe' }); return true; } catch { return false; }
+}
+function getSetupChecks() {
+    return [
+        { id: 'claude', label: 'Claude CLI', found: runSetupCheck('which claude'), hint: 'Install: npm install -g @anthropic-ai/claude-code' },
+        { id: 'node', label: 'Node.js', found: runSetupCheck('which node'), hint: 'Install from https://nodejs.org' },
+        { id: 'npm', label: 'npm', found: runSetupCheck('which npm'), hint: 'Included with Node.js' },
+        { id: 'apikey', label: 'ANTHROPIC_API_KEY', found: !!process.env['ANTHROPIC_API_KEY'], hint: 'Set in your shell profile: export ANTHROPIC_API_KEY=sk-...' },
+        { id: 'superbot2dir', label: '~/.superbot2/ directory', found: fs.existsSync(path.join(os.homedir(), '.superbot2')), hint: 'Run superbot2 once to create it, or mkdir ~/.superbot2' },
+    ];
+}
+// ── Auto-launch Terminal with superbot2 ────────────────────────────────
+function launchSuperbot2InTerminal() {
+    const { exec } = require('node:child_process');
+    // Check if superbot2 orchestrator is already running
+    try {
+        execSync('pgrep -f "superbot2"', { stdio: 'pipe' });
+        console.log('superbot2: orchestrator already running, skipping Terminal launch');
+        return;
+    } catch { /* not running, proceed */ }
+    const scriptPath = path.join(os.homedir(), '.superbot2', 'scripts', 'superbot2.sh');
+    if (!fs.existsSync(scriptPath)) {
+        console.warn('superbot2: script not found at', scriptPath);
+        return;
+    }
+    exec(`osascript -e 'tell application "Terminal" to do script "${scriptPath}"'`, (err) => {
+        if (err) console.warn('superbot2: failed to launch Terminal:', err);
+        else console.log('superbot2: launched Terminal with superbot2.sh');
+    });
+}
 // ── IPC handlers ────────────────────────────────────────────────────────
+electron_1.ipcMain.handle('get-setup-status', () => {
+    return { complete: isSetupComplete(), checks: getSetupChecks() };
+});
+electron_1.ipcMain.handle('complete-setup', () => {
+    markSetupComplete();
+    return { ok: true };
+});
+electron_1.ipcMain.handle('rerun-setup-checks', () => {
+    return { checks: getSetupChecks() };
+});
 electron_1.ipcMain.handle('get-process-status', (_event, name) => {
     const processes = {
         dashboard: dashboardProcess,
@@ -395,6 +448,8 @@ electron_1.app.on('ready', () => {
     schedulerProcess.start();
     logger_js_1.logger.info('main', 'Superbot2 tray app started');
     console.log('superbot2: tray app is ready');
+    // Auto-launch superbot2 in Terminal (only if not already running)
+    launchSuperbot2InTerminal();
     // Initialize auto-updater (only in packaged builds)
     if (electron_1.app.isPackaged) {
         (0, updater_js_1.initAutoUpdater)();
