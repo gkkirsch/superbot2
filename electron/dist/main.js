@@ -372,7 +372,6 @@ function getSetupChecks() {
         { id: 'claude', label: 'Claude CLI', found: runSetupCheck('which claude'), hint: 'Install: npm install -g @anthropic-ai/claude-code' },
         { id: 'node', label: 'Node.js', found: runSetupCheck('which node'), hint: 'Install from https://nodejs.org' },
         { id: 'npm', label: 'npm', found: runSetupCheck('which npm'), hint: 'Included with Node.js' },
-        { id: 'apikey', label: 'ANTHROPIC_API_KEY', found: !!process.env['ANTHROPIC_API_KEY'], hint: 'Set in your shell profile: export ANTHROPIC_API_KEY=sk-...' },
         { id: 'superbot2dir', label: '~/.superbot2/ directory', found: fs.existsSync(path.join(os.homedir(), '.superbot2')), hint: 'Run superbot2 once to create it, or mkdir ~/.superbot2' },
     ];
 }
