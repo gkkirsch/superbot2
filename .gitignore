@@ -42,6 +42,22 @@ dashboard.log
 # Analysis artifacts
 analysis-history/
 
+# Electron build output
+electron/release/
+electron/dist/*.map
+electron/dist/**/*.map
+electron/dist/*.d.ts
+electron/dist/**/*.d.ts
+
+# Cloudflare Wrangler
+.wrangler/
+
+# Test output
+test-results/
+
+# Generated site content
+dashboard-ui/site-brief/
+
 # Lock files
 package-lock.json
 
