@@ -57,6 +57,7 @@
         "to": "scripts",
         "filter": [
           "heartbeat-cron.sh",
+          "lock-helper.sh",
           "scheduler.sh"
         ]
       }
