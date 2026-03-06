@@ -844,3 +844,21 @@ export async function updateCardItem(skillId: string, itemId: string, update: Re
   const data = await response.json()
   return data.item
 }
+
+export async function deleteCardItem(skillId: string, itemId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/cards/${encodeURIComponent(skillId)}/items/${encodeURIComponent(itemId)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function createCardItem(skillId: string, item: Record<string, unknown>): Promise<CardItem> {
+  const response = await fetch(`${API_BASE}/cards/${encodeURIComponent(skillId)}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.item
+}

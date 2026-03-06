@@ -43,14 +43,6 @@ const heartbeat_js_1 = require("./processes/heartbeat.js");
 const scheduler_js_1 = require("./processes/scheduler.js");
 const logger_js_1 = require("./logger.js");
 const updater_js_1 = require("./updater.js");
-const resolve_node_js_1 = require("./resolve-node.js");
-// ── Enrich PATH at startup ──────────────────────────────────────────────
-// Packaged Electron apps launched from Finder get a minimal PATH.
-// Enrich it with common binary locations so child processes can find
-// node, claude, bash, etc.
-process.env['PATH'] = resolve_node_js_1.getEnrichedPath();
-console.log(`superbot2: enriched PATH = ${process.env['PATH']}`);
-console.log(`superbot2: resolved node = ${resolve_node_js_1.resolvedNodePath}`);
 /**
  * superbot2 Electron main process.
  *
@@ -162,6 +154,10 @@ function createMainWindow() {
             nodeIntegration: false,
         },
     });
+    // Show the window once it has content ready to display.
+    win.once('ready-to-show', () => {
+        showDashboard();
+    });
     // Dashboard URL depends on mode: Vite dev server or production Express server.
     const dashboardUrl = electron_1.app.isPackaged
         ? `http://localhost:${DASHBOARD_API_PORT}`
@@ -176,13 +172,6 @@ function createMainWindow() {
         const req = http.get(dashboardUrl, (res) => {
             res.resume(); // drain
             win.loadURL(dashboardUrl);
-            // Show the window once the page finishes loading
-            win.webContents.once('did-finish-load', () => {
-                win.show();
-                if (electron_1.app.dock) {
-                    electron_1.app.dock.show();
-                }
-            });
         });
         req.on('error', () => {
             if (attempt < 30) {
@@ -352,59 +341,7 @@ function ensureAutoLaunchOnFirstRun() {
         console.warn('superbot2: failed to configure auto-launch on first run:', err);
     }
 }
-// ── Setup check helpers ─────────────────────────────────────────────────
-const { execSync } = require('node:child_process');
-const SETUP_COMPLETE_PATH = path.join(electron_1.app.getPath('userData'), 'setup-complete.json');
-function isSetupComplete() {
-    try { return fs.existsSync(SETUP_COMPLETE_PATH); } catch { return false; }
-}
-function markSetupComplete() {
-    try {
-        fs.mkdirSync(path.dirname(SETUP_COMPLETE_PATH), { recursive: true });
-        fs.writeFileSync(SETUP_COMPLETE_PATH, JSON.stringify({ completedAt: new Date().toISOString() }), 'utf-8');
-    } catch (err) { console.warn('superbot2: failed to write setup-complete flag:', err); }
-}
-function runSetupCheck(cmd) {
-    try { execSync(cmd, { timeout: 5000, env: process.env, stdio: 'pipe' }); return true; } catch { return false; }
-}
-function getSetupChecks() {
-    return [
-        { id: 'claude', label: 'Claude CLI', found: runSetupCheck('which claude'), hint: 'Install: npm install -g @anthropic-ai/claude-code' },
-        { id: 'node', label: 'Node.js', found: runSetupCheck('which node'), hint: 'Install from https://nodejs.org' },
-        { id: 'npm', label: 'npm', found: runSetupCheck('which npm'), hint: 'Included with Node.js' },
-        { id: 'superbot2dir', label: '~/.superbot2/ directory', found: fs.existsSync(path.join(os.homedir(), '.superbot2')), hint: 'Run superbot2 once to create it, or mkdir ~/.superbot2' },
-    ];
-}
-// ── Auto-launch Terminal with superbot2 ────────────────────────────────
-function launchSuperbot2InTerminal() {
-    const { exec } = require('node:child_process');
-    // Check if superbot2 orchestrator is already running
-    try {
-        execSync('pgrep -f "superbot2"', { stdio: 'pipe' });
-        console.log('superbot2: orchestrator already running, skipping Terminal launch');
-        return;
-    } catch { /* not running, proceed */ }
-    const scriptPath = path.join(os.homedir(), '.superbot2', 'scripts', 'superbot2.sh');
-    if (!fs.existsSync(scriptPath)) {
-        console.warn('superbot2: script not found at', scriptPath);
-        return;
-    }
-    exec(`osascript -e 'tell application "Terminal" to do script "${scriptPath}"'`, (err) => {
-        if (err) console.warn('superbot2: failed to launch Terminal:', err);
-        else console.log('superbot2: launched Terminal with superbot2.sh');
-    });
-}
 // ── IPC handlers ────────────────────────────────────────────────────────
-electron_1.ipcMain.handle('get-setup-status', () => {
-    return { complete: isSetupComplete(), checks: getSetupChecks() };
-});
-electron_1.ipcMain.handle('complete-setup', () => {
-    markSetupComplete();
-    return { ok: true };
-});
-electron_1.ipcMain.handle('rerun-setup-checks', () => {
-    return { checks: getSetupChecks() };
-});
 electron_1.ipcMain.handle('get-process-status', (_event, name) => {
     const processes = {
         dashboard: dashboardProcess,
@@ -438,7 +375,11 @@ electron_1.app.on('ready', () => {
     tray = new electron_1.Tray(icon);
     tray.setToolTip('Superbot2');
     tray.setContextMenu(buildContextMenu());
-    // Create the dashboard BrowserWindow (hidden initially).
+    // Clicking the tray icon also shows/focuses the dashboard window.
+    tray.on('click', () => {
+        showDashboard();
+    });
+    // Create the dashboard BrowserWindow (shows automatically once content loads).
     mainWindow = createMainWindow();
     // Start managed processes.
     dashboardProcess.start();
@@ -447,12 +388,9 @@ electron_1.app.on('ready', () => {
     schedulerProcess.start();
     logger_js_1.logger.info('main', 'Superbot2 tray app started');
     console.log('superbot2: tray app is ready');
-    // Auto-launch superbot2 in Terminal (only if not already running)
-    launchSuperbot2InTerminal();
     // Initialize auto-updater (only in packaged builds)
     if (electron_1.app.isPackaged) {
         (0, updater_js_1.initAutoUpdater)();
-        (0, updater_js_1.schedulePeriodicUpdates)();
     }
 });
 electron_1.app.on('second-instance', (_event, _commandLine, _workingDirectory) => {

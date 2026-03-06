@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initAutoUpdater = initAutoUpdater;
 exports.checkForUpdates = checkForUpdates;
-exports.schedulePeriodicUpdates = schedulePeriodicUpdates;
 const electron_updater_1 = require("electron-updater");
 const logger_js_1 = require("./logger.js");
 /**
@@ -45,15 +44,5 @@ function checkForUpdates() {
     electron_updater_1.autoUpdater.checkForUpdatesAndNotify().catch((err) => {
         logger_js_1.logger.warn('main', `Update check failed: ${err.message}`);
     });
-}
-/**
- * Schedule periodic update checks every 4 hours.
- */
-function schedulePeriodicUpdates() {
-    const FOUR_HOURS = 4 * 60 * 60 * 1000;
-    setInterval(() => {
-        checkForUpdates();
-    }, FOUR_HOURS);
-    logger_js_1.logger.info('main', 'Periodic update checks scheduled (every 4 hours)');
 }
 //# sourceMappingURL=updater.js.map

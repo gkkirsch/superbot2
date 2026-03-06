@@ -15,18 +15,6 @@ electron_1.contextBridge.exposeInMainWorld('superbot', {
     getProcessStatus: (name) => {
         return electron_1.ipcRenderer.invoke('get-process-status', name);
     },
-    /** Get setup status (complete flag + dependency checks). */
-    getSetupStatus: () => {
-        return electron_1.ipcRenderer.invoke('get-setup-status');
-    },
-    /** Mark setup as complete. */
-    completeSetup: () => {
-        return electron_1.ipcRenderer.invoke('complete-setup');
-    },
-    /** Re-run setup checks. */
-    rerunSetupChecks: () => {
-        return electron_1.ipcRenderer.invoke('rerun-setup-checks');
-    },
     /**
      * Subscribe to process status change events.
      * The callback receives an object with { name: string, status: string }.

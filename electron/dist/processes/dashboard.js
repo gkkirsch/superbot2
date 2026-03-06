@@ -38,7 +38,6 @@ const path = __importStar(require("node:path"));
 const os = __importStar(require("node:os"));
 const electron_1 = require("electron");
 const manager_js_1 = require("./manager.js");
-const resolve_node_js_1 = require("../resolve-node.js");
 /**
  * Default port the dashboard API server listens on.
  */
@@ -74,10 +73,10 @@ class DashboardProcess extends manager_js_1.ProcessManager {
     }
     getSpawnOptions() {
         return {
-            command: resolve_node_js_1.resolvedNodePath,
+            command: 'node',
             args: [this.serverScript],
             env: {
-                PATH: resolve_node_js_1.getEnrichedPath(),
+                PATH: process.env['PATH'] ?? '',
                 SUPERBOT2_API_PORT: this.apiPort,
                 SUPERBOT2_HOME: this.superbotHome,
             },
