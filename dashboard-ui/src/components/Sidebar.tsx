@@ -108,7 +108,7 @@ export function Sidebar() {
       </div>
 
       {/* Logo / Icon */}
-      <div className="flex items-center justify-center px-3 pt-2 pb-4 shrink-0">
+      <div className="flex items-center justify-center px-3 pt-2 pb-6 shrink-0">
         {collapsed ? (
           <NavLink to="/" className="block hover:opacity-80 transition-opacity">
             <img src="/logo.png" alt="SB" className="h-8 w-8" />
