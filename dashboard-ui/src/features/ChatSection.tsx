@@ -612,7 +612,7 @@ export function ChatSection() {
 
       <div
         ref={chatContainerRef}
-        className={`h-full overflow-y-auto overflow-x-hidden rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
+        className={`h-full overflow-y-auto overflow-x-hidden scrollbar-auto rounded-xl bg-ink/60 p-4 space-y-4 transition-colors ${
           isDragging ? 'ring-2 ring-sand/50 bg-sand/5' : ''
         }`}
       >

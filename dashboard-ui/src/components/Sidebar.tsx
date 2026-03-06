@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Sun, Moon, Menu, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Sun, Moon, Menu, X, Star } from 'lucide-react'
 import { topNavItems, docsNavItem } from '@/lib/navigation'
-import { usePlugins } from '@/hooks/useSpaces'
+import { usePlugins, useSpaces } from '@/hooks/useSpaces'
 import { useTheme } from '@/hooks/useTheme'
 
 const STORAGE_KEY = 'superbot-sidebar-collapsed'
+const STARRED_KEY = 'superbot-starred-spaces'
 
 function getInitialCollapsed(): boolean {
   try {
@@ -15,11 +16,23 @@ function getInitialCollapsed(): boolean {
   }
 }
 
+function getStarredSpaces(): Set<string> {
+  try {
+    const stored = localStorage.getItem(STARRED_KEY)
+    return stored ? new Set(JSON.parse(stored)) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [spacesOpen, setSpacesOpen] = useState(true)
+  const [starred, setStarred] = useState(getStarredSpaces)
   const location = useLocation()
   const { data: plugins } = usePlugins()
+  const { data: spaces } = useSpaces()
   const { theme, toggleTheme } = useTheme()
 
   const hasPluginWarnings = plugins?.some(p => p.installed && (p.hasUnconfiguredCredentials || p.hasMissingBins)) ?? false
@@ -28,6 +41,11 @@ export function Sidebar() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, String(collapsed))
   }, [collapsed])
+
+  // Persist starred spaces
+  useEffect(() => {
+    localStorage.setItem(STARRED_KEY, JSON.stringify([...starred]))
+  }, [starred])
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -39,12 +57,37 @@ export function Sidebar() {
     return location.pathname.startsWith(to)
   }
 
-  const allNavItems = [...topNavItems, docsNavItem]
+  const toggleStar = (slug: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setStarred(prev => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  }
+
+  // Sort spaces: starred first, then alphabetical
+  const sortedSpaces = useMemo(() => {
+    if (!spaces) return []
+    return [...spaces].sort((a, b) => {
+      const aStarred = starred.has(a.slug)
+      const bStarred = starred.has(b.slug)
+      if (aStarred && !bStarred) return -1
+      if (!aStarred && bStarred) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [spaces, starred])
+
+  // Nav items excluding Spaces (we render spaces separately)
+  const navItems = topNavItems.filter(item => item.to !== '/spaces')
+  const allNavItems = [...navItems, docsNavItem]
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo / Icon */}
-      <div className="flex items-center justify-center px-3 pt-5 pb-6 shrink-0">
+      <div className="flex items-center justify-center px-3 pt-5 pb-4 shrink-0">
         {collapsed ? (
           <NavLink to="/" className="block hover:opacity-80 transition-opacity">
             <img src="/logo.png" alt="SB" className="h-8 w-8" />
@@ -57,7 +100,7 @@ export function Sidebar() {
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+      <nav className="px-2 space-y-1 shrink-0">
         {allNavItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
@@ -79,7 +122,6 @@ export function Sidebar() {
             {to === '/skills' && hasPluginWarnings && (
               <span className={`h-2 w-2 rounded-full bg-amber-400 ${collapsed ? 'absolute top-1 right-1' : ''}`} />
             )}
-            {/* Tooltip for collapsed state */}
             {collapsed && (
               <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
                 {label}
@@ -88,6 +130,76 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Spaces section — only when expanded */}
+      {!collapsed && (
+        <div className="mt-4 flex-1 min-h-0 flex flex-col">
+          <button
+            onClick={() => setSpacesOpen(o => !o)}
+            className="flex items-center gap-2 px-4 py-1.5 text-xs text-stone/70 uppercase tracking-wider hover:text-stone transition-colors w-full"
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${spacesOpen ? '' : '-rotate-90'}`} />
+            Spaces
+          </button>
+          {spacesOpen && (
+            <div className="flex-1 overflow-y-auto px-2 space-y-0.5 pb-2">
+              {sortedSpaces.map(space => (
+                <NavLink
+                  key={space.slug}
+                  to={`/spaces/${space.slug}`}
+                  className={() =>
+                    `flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors group/space ${
+                      isActive(`/spaces/${space.slug}`)
+                        ? 'bg-sand/15 text-sand font-medium'
+                        : 'text-stone hover:text-parchment hover:bg-surface'
+                    }`
+                  }
+                >
+                  <span className="truncate flex-1">{space.name}</span>
+                  <button
+                    onClick={(e) => toggleStar(space.slug, e)}
+                    className={`shrink-0 transition-colors ${
+                      starred.has(space.slug)
+                        ? 'text-sand'
+                        : 'text-transparent group-hover/space:text-stone/30 hover:!text-sand'
+                    }`}
+                    title={starred.has(space.slug) ? 'Unstar' : 'Star'}
+                  >
+                    <Star className={`h-3 w-3 ${starred.has(space.slug) ? 'fill-sand' : ''}`} />
+                  </button>
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Collapsed: just show spaces icon */}
+      {collapsed && (
+        <div className="px-2 mt-4">
+          <NavLink
+            to="/spaces"
+            title="Spaces"
+            className={() =>
+              `flex items-center justify-center px-2 py-2.5 rounded-md text-sm transition-colors relative group/item ${
+                isActive('/spaces')
+                  ? 'bg-sand/15 text-sand font-medium'
+                  : 'text-stone hover:text-parchment hover:bg-surface'
+              }`
+            }
+          >
+            {topNavItems.find(i => i.to === '/spaces')?.icon &&
+              (() => {
+                const SpacesIcon = topNavItems.find(i => i.to === '/spaces')!.icon
+                return <SpacesIcon className="h-4 w-4 shrink-0" />
+              })()
+            }
+            <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
+              Spaces
+            </div>
+          </NavLink>
+        </div>
+      )}
 
       {/* Bottom section: theme toggle + collapse */}
       <div className="px-2 pb-3 pt-2 space-y-1 border-t border-border-custom mt-auto shrink-0">
