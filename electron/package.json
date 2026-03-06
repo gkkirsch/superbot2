@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "package": "electron-builder --mac --arm64",
+    "publish": "GH_TOKEN=$(gh auth token) electron-builder --publish always",
     "start": "electron ."
   },
   "dependencies": {
@@ -20,9 +21,17 @@
   "build": {
     "appId": "com.superbot2.electron",
     "productName": "Superbot2",
+    "publish": {
+      "provider": "github",
+      "owner": "gkkirsch",
+      "repo": "superbot2"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
-      "target": "dmg"
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ]
     },
     "files": [
       "dist/**/*.js",

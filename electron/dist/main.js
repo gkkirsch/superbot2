@@ -398,6 +398,7 @@ electron_1.app.on('ready', () => {
     // Initialize auto-updater (only in packaged builds)
     if (electron_1.app.isPackaged) {
         (0, updater_js_1.initAutoUpdater)();
+        (0, updater_js_1.schedulePeriodicUpdates)();
     }
 });
 electron_1.app.on('second-instance', (_event, _commandLine, _workingDirectory) => {
