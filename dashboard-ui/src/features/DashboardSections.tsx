@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, BookOpen, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -13,7 +13,6 @@ import { ScheduleSection } from '@/features/ScheduleSection'
 import type { ScheduleViewMode } from '@/features/ScheduleSection'
 import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
-import { SpacesSection } from '@/features/SpacesSection'
 import { KnowledgeSection } from '@/features/KnowledgeSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSection } from '@/features/CardSection'
@@ -23,10 +22,42 @@ import { Send } from 'lucide-react'
 import { Target } from 'lucide-react'
 import type { DashboardConfig } from '@/lib/types'
 
+// --- Collapse state hook + animated wrapper ---
+
+function useCollapsedState(sectionId: string, defaultExpanded = false): [boolean, () => void] {
+  const key = `dashboard-collapsed:${sectionId}`
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key)
+      if (stored !== null) return stored === 'true'
+    } catch { /* SSR or private browsing */ }
+    return !defaultExpanded
+  })
+  const toggle = useCallback(() => {
+    setCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(key, String(next)) } catch {}
+      return next
+    })
+  }, [key])
+  return [collapsed, toggle]
+}
+
+function CollapsibleContent({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${collapsed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
+      <div className="overflow-hidden">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // --- Section wrapper components ---
 // Each wraps a section with its SectionHeader to be self-contained
 
 function EscalationsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('escalations')
   const [filter, setFilter] = useState<'all' | 'needs_review' | 'orchestrator'>('all')
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [showFilterMenu, setShowFilterMenu] = useState(false)
@@ -57,6 +88,8 @@ function EscalationsDashboardSection() {
       <SectionHeader
         title="Escalations"
         icon={MessageCircleQuestion}
+        collapsed={collapsed}
+        onToggle={toggle}
         action={
           <div className="flex items-center gap-1">
             <button
@@ -92,7 +125,9 @@ function EscalationsDashboardSection() {
           </div>
         }
       />
-      <CombinedEscalationsSection filters={filters} />
+      <CollapsibleContent collapsed={collapsed}>
+        <CombinedEscalationsSection filters={filters} />
+      </CollapsibleContent>
       {showRulesModal && <AutoTriageRulesModal onClose={() => setShowRulesModal(false)} />}
     </section>
   )
@@ -106,6 +141,7 @@ const HEARTBEAT_INTERVALS = [
 ]
 
 function PulseDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('pulse', true)
   const { data: hbConfig } = useHeartbeatConfig()
   const { data: status } = useSystemStatus()
   const queryClient = useQueryClient()
@@ -123,6 +159,8 @@ function PulseDashboardSection() {
       <SectionHeader
         title="Pulse"
         icon={Activity}
+        collapsed={collapsed}
+        onToggle={toggle}
         action={
           <div className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full shrink-0 ${heartbeatRunning ? 'bg-ember' : 'bg-stone/30'}`} />
@@ -140,7 +178,9 @@ function PulseDashboardSection() {
           </div>
         }
       />
-      <ActivitySection />
+      <CollapsibleContent collapsed={collapsed}>
+        <ActivitySection />
+      </CollapsibleContent>
     </section>
   )
 }
@@ -151,6 +191,7 @@ const SCHEDULE_VIEWS: { value: ScheduleViewMode; label: string }[] = [
 ]
 
 function ScheduleDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('schedule')
   const [addingJob, setAddingJob] = useState(false)
   const [viewMode, setViewMode] = useState<ScheduleViewMode>('timeline')
   const [showViewMenu, setShowViewMenu] = useState(false)
@@ -171,6 +212,8 @@ function ScheduleDashboardSection() {
       <SectionHeader
         title="Schedule"
         icon={Clock}
+        collapsed={collapsed}
+        onToggle={toggle}
         action={
           <div className="flex items-center gap-1">
             <button
@@ -206,18 +249,23 @@ function ScheduleDashboardSection() {
           </div>
         }
       />
-      <ScheduleSection adding={addingJob} setAdding={setAddingJob} viewMode={viewMode} />
+      <CollapsibleContent collapsed={collapsed}>
+        <ScheduleSection adding={addingJob} setAdding={setAddingJob} viewMode={viewMode} />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function TodoDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('todos')
   const [showCompleted, setShowCompleted] = useState(false)
   return (
     <section className="group" data-section="todos">
       <SectionHeader
         title="Todos"
         icon={ListChecks}
+        collapsed={collapsed}
+        onToggle={toggle}
         action={
           <button
             onClick={() => setShowCompleted(v => !v)}
@@ -227,65 +275,73 @@ function TodoDashboardSection() {
           </button>
         }
       />
-      <TodoSection showCompleted={showCompleted} />
+      <CollapsibleContent collapsed={collapsed}>
+        <TodoSection showCompleted={showCompleted} />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function KnowledgeDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('knowledge')
   return (
     <section className="group" data-section="knowledge">
-      <SectionHeader title="Knowledge" icon={BookOpen} linkTo="/knowledge" />
-      <KnowledgeSection />
-    </section>
-  )
-}
-
-function SpacesDashboardSection() {
-  return (
-    <section className="group" data-section="spaces">
-      <SectionHeader title="Spaces" icon={FolderKanban} linkTo="/spaces" />
-      <SpacesSection />
+      <SectionHeader title="Knowledge" icon={BookOpen} linkTo="/knowledge" collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <KnowledgeSection />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function ExtensionsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('extensions')
   return (
     <section className="group" data-section="extensions">
-      <SectionHeader title="Plugins" icon={({ className }) => (
+      <SectionHeader title="Plugins" collapsed={collapsed} onToggle={toggle} icon={({ className }) => (
         <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
         </svg>
       )} />
-      <DashboardExtensionsSection />
+      <CollapsibleContent collapsed={collapsed}>
+        <DashboardExtensionsSection />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function CardsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('cards')
   return (
     <section className="group" data-section="cards">
-      <SectionHeader title="Approvals" icon={Send} />
-      <CardSection />
+      <SectionHeader title="Approvals" icon={Send} collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <CardSection />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function GoalsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('goals')
   return (
     <section className="group" data-section="goals">
-      <SectionHeader title="Goals" icon={Target} />
-      <GoalSection />
+      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <GoalSection />
+      </CollapsibleContent>
     </section>
   )
 }
 
 function TipsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('tips')
   return (
     <section className="group" data-section="tips">
-      <SectionHeader title="Tips" icon={Lightbulb} />
-      <TipsRotator />
+      <SectionHeader title="Tips" icon={Lightbulb} collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <TipsRotator />
+      </CollapsibleContent>
     </section>
   )
 }
@@ -326,11 +382,7 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'extensions',
     Component: ExtensionsDashboardSection,
   },
-  'spaces': {
-    id: 'spaces',
-    Component: SpacesDashboardSection,
-  },
-  'cards': {
+'cards': {
     id: 'cards',
     Component: CardsDashboardSection,
   },
@@ -353,6 +405,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
+  rightColumn: ['pulse', 'tips', 'goals', 'cards', 'escalations', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['recent-activity'],
 }
