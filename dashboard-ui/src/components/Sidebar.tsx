@@ -1,0 +1,169 @@
+import { useState, useEffect } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Sun, Moon, Menu, X } from 'lucide-react'
+import { topNavItems, docsNavItem } from '@/lib/navigation'
+import { usePlugins } from '@/hooks/useSpaces'
+import { useTheme } from '@/hooks/useTheme'
+
+const STORAGE_KEY = 'superbot-sidebar-collapsed'
+
+function getInitialCollapsed(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export function Sidebar() {
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+  const { data: plugins } = usePlugins()
+  const { theme, toggleTheme } = useTheme()
+
+  const hasPluginWarnings = plugins?.some(p => p.installed && (p.hasUnconfiguredCredentials || p.hasMissingBins)) ?? false
+
+  // Persist collapse state
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(collapsed))
+  }, [collapsed])
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [location.pathname])
+
+  const isActive = (to: string, end?: boolean) => {
+    if (end) return location.pathname === to
+    return location.pathname.startsWith(to)
+  }
+
+  const allNavItems = [...topNavItems, docsNavItem]
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
+      {/* Logo / Icon */}
+      <div className="flex items-center justify-center px-3 pt-5 pb-6 shrink-0">
+        {collapsed ? (
+          <NavLink to="/" className="block hover:opacity-80 transition-opacity">
+            <img src="/logo.png" alt="SB" className="h-8 w-8" />
+          </NavLink>
+        ) : (
+          <NavLink to="/" className="block hover:opacity-80 transition-opacity">
+            <img src="/superbot-logo.png" alt="Superbot" className="h-6" />
+          </NavLink>
+        )}
+      </div>
+
+      {/* Nav items */}
+      <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+        {allNavItems.map(({ to, label, icon: Icon, end }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            title={collapsed ? label : undefined}
+            className={() =>
+              `flex items-center gap-3 rounded-md text-sm transition-colors relative group/item ${
+                collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'
+              } ${
+                isActive(to, end)
+                  ? 'bg-sand/15 text-sand font-medium'
+                  : 'text-stone hover:text-parchment hover:bg-surface'
+              }`
+            }
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            {!collapsed && <span>{label}</span>}
+            {to === '/skills' && hasPluginWarnings && (
+              <span className={`h-2 w-2 rounded-full bg-amber-400 ${collapsed ? 'absolute top-1 right-1' : ''}`} />
+            )}
+            {/* Tooltip for collapsed state */}
+            {collapsed && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
+                {label}
+              </div>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Bottom section: theme toggle + collapse */}
+      <div className="px-2 pb-3 pt-2 space-y-1 border-t border-border-custom mt-auto shrink-0">
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={collapsed ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
+          className={`flex items-center gap-3 w-full rounded-md text-sm text-stone hover:text-parchment hover:bg-surface transition-colors relative group/item ${
+            collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'
+          }`}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+          {!collapsed && <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
+          {collapsed && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </div>
+          )}
+        </button>
+
+        {/* Collapse/Expand button — hidden on mobile */}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="hidden md:flex items-center gap-3 w-full rounded-md text-sm text-stone hover:text-parchment hover:bg-surface transition-colors justify-center px-2 py-2.5"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {!collapsed && <span className="flex-1 text-left">Collapse</span>}
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden md:flex flex-col bg-ink border-r border-border-custom h-screen sticky top-0 z-40 transition-all duration-300 shrink-0 ${
+          collapsed ? 'w-14' : 'w-60'
+        }`}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-md bg-surface border border-border-custom text-stone hover:text-parchment transition-colors shadow-lg"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        >
+          <aside
+            className="w-60 h-full bg-ink border-r border-border-custom shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <div className="flex justify-end p-2">
+              <button
+                onClick={() => setMobileOpen(false)}
+                className="p-2 rounded-md text-stone hover:text-parchment hover:bg-surface transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
+  )
+}
