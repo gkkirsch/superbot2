@@ -20,7 +20,7 @@ export function Nav() {
 
   return (
     <nav className="border-b border-border-custom bg-ink sticky top-0 z-50">
-      <div className="mx-auto max-w-7xl px-6 flex items-center h-14 gap-8">
+      <div className="mx-auto max-w-7xl px-6 pl-20 flex items-center h-14 gap-8">
         <NavLink to="/" className="flex items-center shrink-0 hover:opacity-80 transition-opacity">
           <img src="/superbot-logo.png" alt="Superbot" className="h-6" />
         </NavLink>
