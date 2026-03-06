@@ -1,0 +1,63 @@
+{
+  "name": "superbot2-electron",
+  "version": "0.1.0",
+  "description": "macOS tray app for superbot2 — manages orchestrator, dashboard, heartbeat, and scheduler processes",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "package": "electron-builder --mac --arm64",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "com.superbot2.electron",
+    "productName": "Superbot2",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "files": [
+      "dist/**/*.js",
+      "assets/**/*",
+      "!assets/icon.icns",
+      "!assets/icon.iconset",
+      "!assets/.gitkeep",
+      "package.json",
+      "!src",
+      "!tsconfig.json",
+      "!release",
+      "!build"
+    ],
+    "extraResources": [
+      {
+        "from": "../dashboard",
+        "to": "dashboard",
+        "filter": [
+          "**/*",
+          "!node_modules/.cache/**"
+        ]
+      },
+      {
+        "from": "../scripts",
+        "to": "scripts",
+        "filter": [
+          "heartbeat-cron.sh",
+          "scheduler.sh"
+        ]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    }
+  },
+  "author": "",
+  "license": "UNLICENSED"
+}
