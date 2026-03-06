@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, FolderKanban, BookOpen, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -18,6 +18,7 @@ import { KnowledgeSection } from '@/features/KnowledgeSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSection } from '@/features/CardSection'
 import { GoalSection } from '@/features/GoalSection'
+import { TipsRotator } from '@/features/TipsRotator'
 import { Send } from 'lucide-react'
 import { Target } from 'lucide-react'
 import type { DashboardConfig } from '@/lib/types'
@@ -280,6 +281,15 @@ function GoalsDashboardSection() {
   )
 }
 
+function TipsDashboardSection() {
+  return (
+    <section className="group" data-section="tips">
+      <SectionHeader title="Tips" icon={Lightbulb} />
+      <TipsRotator />
+    </section>
+  )
+}
+
 // --- Section registry ---
 
 export interface SectionDef {
@@ -332,13 +342,17 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'chat',
     Component: ChatSection,
   },
+  'tips': {
+    id: 'tips',
+    Component: TipsDashboardSection,
+  },
 }
 
 // --- Default layout ---
 
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  leftColumn: ['goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
+  leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['chat'],
+  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['recent-activity'],
 }
