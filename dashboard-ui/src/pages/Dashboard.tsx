@@ -37,10 +37,7 @@ const SECTION_LABELS: Record<string, string> = {
   'recent-activity': 'Recent Activity',
   'pulse': 'Pulse',
   'schedule': 'Schedule',
-  'knowledge': 'Knowledge',
-  'extensions': 'Plugins',
-  'spaces': 'Spaces & Projects',
-  'cards': 'Approvals',
+  'cards': 'Social Drafts',
   'goals': 'Goals',
   'chat': 'Chat',
   'tips': 'Tips',
@@ -367,49 +364,49 @@ export function Dashboard() {
             </div>
 
             {/* Right column — sections (narrower, scrollable, draggable) */}
-            <div className="min-w-0">
-              {/* Section controls — top of right column */}
-              <div className="flex items-center gap-2 flex-wrap mb-6 pt-2">
-                {isEditing && layout.hidden.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap flex-1">
-                    <span className="text-xs text-stone/70 uppercase tracking-wider">Hidden:</span>
-                    {layout.hidden.map((id) => (
-                      <button
-                        key={id}
-                        onClick={() => handleRestoreSection(id)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/40 bg-surface/60 text-xs text-parchment/70 hover:text-sand hover:border-sand/50 hover:bg-surface transition-colors"
-                      >
-                        <Plus className="h-3 w-3" />
-                        {SECTION_LABELS[id] || id}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center gap-2 shrink-0 ml-auto">
-                  {isEditing && (
+            <div className="min-w-0 pt-8">
+              {/* Hidden sections toolbar — shown only when editing */}
+              {isEditing && layout.hidden.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-6">
+                  <span className="text-xs text-stone/70 uppercase tracking-wider">Hidden:</span>
+                  {layout.hidden.map((id) => (
                     <button
-                      onClick={handleResetDefaults}
-                      className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-stone hover:text-parchment border border-stone/20 hover:border-stone/30 transition-colors"
+                      key={id}
+                      onClick={() => handleRestoreSection(id)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-stone/40 bg-surface/60 text-xs text-parchment/70 hover:text-sand hover:border-sand/50 hover:bg-surface transition-colors"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Reset
+                      <Plus className="h-3 w-3" />
+                      {SECTION_LABELS[id] || id}
                     </button>
-                  )}
-                  <button
-                    onClick={toggleEditing}
-                    className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all ${
-                      isEditing
-                        ? 'bg-sand text-ink'
-                        : 'text-stone hover:text-sand border border-stone/20 hover:border-sand/30'
-                    }`}
-                    title={isEditing ? 'Done' : 'Customize layout'}
-                  >
-                    {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-                  </button>
+                  ))}
                 </div>
-              </div>
+              )}
 
               <DroppableColumn id="rightColumn" sectionIds={layout.rightColumn} isEditing={isEditing} onHide={handleHideSection} />
+
+              {/* Section controls — bottom of right column */}
+              <div className="flex items-center gap-2 mt-8 pb-6 justify-end">
+                {isEditing && (
+                  <button
+                    onClick={handleResetDefaults}
+                    className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-stone hover:text-parchment border border-stone/20 hover:border-stone/30 transition-colors"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset
+                  </button>
+                )}
+                <button
+                  onClick={toggleEditing}
+                  className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all ${
+                    isEditing
+                      ? 'bg-sand text-ink'
+                      : 'text-stone hover:text-sand border border-stone/20 hover:border-sand/30'
+                  }`}
+                  title={isEditing ? 'Done' : 'Customize layout'}
+                >
+                  {isEditing ? <Check className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             </div>
           </div>
 

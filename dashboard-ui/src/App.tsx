@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
-import { UpdateCheckButton } from './components/UpdateCheckButton'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -27,7 +26,6 @@ function AppContent() {
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/learn" element={<Learn />} />
         </Routes>
-        <UpdateCheckButton />
       </main>
     </div>
   )

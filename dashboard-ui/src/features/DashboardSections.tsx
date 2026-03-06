@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, BookOpen, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
@@ -11,9 +11,7 @@ import { RecentActivitySection } from '@/features/RecentActivitySection'
 import { ActivitySection } from '@/features/ActivitySection'
 import { ScheduleSection } from '@/features/ScheduleSection'
 import type { ScheduleViewMode } from '@/features/ScheduleSection'
-import { DashboardExtensionsSection } from '@/features/SuperbotSkillsSection'
 import { TodoSection } from '@/features/TodoSection'
-import { KnowledgeSection } from '@/features/KnowledgeSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSection } from '@/features/CardSection'
 import { GoalSection } from '@/features/GoalSection'
@@ -282,39 +280,11 @@ function TodoDashboardSection() {
   )
 }
 
-function KnowledgeDashboardSection() {
-  const [collapsed, toggle] = useCollapsedState('knowledge')
-  return (
-    <section className="group" data-section="knowledge">
-      <SectionHeader title="Knowledge" icon={BookOpen} linkTo="/knowledge" collapsed={collapsed} onToggle={toggle} />
-      <CollapsibleContent collapsed={collapsed}>
-        <KnowledgeSection />
-      </CollapsibleContent>
-    </section>
-  )
-}
-
-function ExtensionsDashboardSection() {
-  const [collapsed, toggle] = useCollapsedState('extensions')
-  return (
-    <section className="group" data-section="extensions">
-      <SectionHeader title="Plugins" collapsed={collapsed} onToggle={toggle} icon={({ className }) => (
-        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-        </svg>
-      )} />
-      <CollapsibleContent collapsed={collapsed}>
-        <DashboardExtensionsSection />
-      </CollapsibleContent>
-    </section>
-  )
-}
-
 function CardsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('cards')
   return (
     <section className="group" data-section="cards">
-      <SectionHeader title="Approvals" icon={Send} collapsed={collapsed} onToggle={toggle} />
+      <SectionHeader title="Social Drafts" icon={Send} collapsed={collapsed} onToggle={toggle} />
       <CollapsibleContent collapsed={collapsed}>
         <CardSection />
       </CollapsibleContent>
@@ -374,14 +344,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'todos',
     Component: TodoDashboardSection,
   },
-  'knowledge': {
-    id: 'knowledge',
-    Component: KnowledgeDashboardSection,
-  },
-  'extensions': {
-    id: 'extensions',
-    Component: ExtensionsDashboardSection,
-  },
 'cards': {
     id: 'cards',
     Component: CardsDashboardSection,
@@ -405,6 +367,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['pulse', 'tips', 'goals', 'cards', 'escalations', 'schedule', 'todos', 'knowledge', 'extensions'],
-  hidden: ['recent-activity'],
+  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'schedule', 'todos'],
+  hidden: ['recent-activity', 'tips'],
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ChevronDown, Sun, Moon, Menu, X, Star } from 'lucide-react'
 import { topNavItems, docsNavItem } from '@/lib/navigation'
-import { usePlugins, useSpaces } from '@/hooks/useSpaces'
+import { usePlugins, useSpaces, useEscalations } from '@/hooks/useSpaces'
 import { useTheme } from '@/hooks/useTheme'
 
 const STORAGE_KEY = 'superbot-sidebar-collapsed'
@@ -33,9 +33,20 @@ export function Sidebar() {
   const location = useLocation()
   const { data: plugins } = usePlugins()
   const { data: spaces } = useSpaces()
+  const { data: needsHumanEscalations } = useEscalations('needs_human')
   const { theme, toggleTheme } = useTheme()
 
   const hasPluginWarnings = plugins?.some(p => p.installed && (p.hasUnconfiguredCredentials || p.hasMissingBins)) ?? false
+
+  // Count needs_human escalations per space for blocked indicators
+  const blockedBySpace = useMemo(() => {
+    const counts = new Map<string, number>()
+    if (!needsHumanEscalations) return counts
+    for (const esc of needsHumanEscalations) {
+      counts.set(esc.space, (counts.get(esc.space) || 0) + 1)
+    }
+    return counts
+  }, [needsHumanEscalations])
 
   // Persist collapse state
   useEffect(() => {
@@ -155,6 +166,12 @@ export function Sidebar() {
                   }
                 >
                   <span className="truncate flex-1">{space.name}</span>
+                  {blockedBySpace.has(space.slug) && (
+                    <span
+                      className="shrink-0 h-2 w-2 rounded-full bg-ember"
+                      title={`${blockedBySpace.get(space.slug)} blocked`}
+                    />
+                  )}
                   <button
                     onClick={(e) => toggleStar(space.slug, e)}
                     className={`shrink-0 transition-colors ${
@@ -193,6 +210,9 @@ export function Sidebar() {
                 return <SpacesIcon className="h-4 w-4 shrink-0" />
               })()
             }
+            {blockedBySpace.size > 0 && (
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-ember" />
+            )}
             <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
               Spaces
             </div>
