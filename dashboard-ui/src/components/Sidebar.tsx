@@ -97,7 +97,7 @@ export function Sidebar() {
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Collapse toggle — above the logo, top-right */}
-      <div className="hidden md:flex items-center justify-end px-2 pt-2 pb-0 shrink-0">
+      <div className={`hidden md:flex items-center px-2 pt-2 pb-0 shrink-0 ${collapsed ? 'justify-center' : 'justify-end'}`}>
         <button
           onClick={() => setCollapsed(c => !c)}
           className="p-1.5 rounded-md text-stone/40 hover:text-parchment hover:bg-surface transition-colors"

@@ -740,25 +740,28 @@ export function ChatSection() {
                     <Sparkles className="h-4 w-4" />
                   </button>
                   {showSkills && (
-                    <div className="absolute bottom-full left-0 mb-2 p-2 rounded-xl bg-ink/95 border border-border-custom backdrop-blur-sm shadow-lg max-w-sm flex flex-wrap gap-1.5 z-10">
-                      {skills.map(skill => (
-                        <button
-                          key={skill.id}
-                          type="button"
-                          onClick={() => {
-                            if (inputRef.current) {
-                              inputRef.current.value = `/${skill.name} `
-                              inputRef.current.focus()
-                            }
-                            setShowSkills(false)
-                          }}
-                          className="px-2 py-0.5 rounded-full text-[11px] text-stone/60 bg-surface/20 border border-border-custom hover:text-parchment/80 hover:border-stone/30 transition-colors"
-                          title={skill.description}
-                        >
-                          /{skill.name}
-                        </button>
-                      ))}
-                    </div>
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowSkills(false)} />
+                      <div className="absolute bottom-full left-0 mb-2 p-3 rounded-xl bg-ink/95 border border-border-custom backdrop-blur-sm shadow-lg w-[28rem] flex flex-wrap gap-1.5 z-20">
+                        {skills.map(skill => (
+                          <button
+                            key={skill.id}
+                            type="button"
+                            onClick={() => {
+                              if (inputRef.current) {
+                                inputRef.current.value = `/${skill.name} `
+                                inputRef.current.focus()
+                              }
+                              setShowSkills(false)
+                            }}
+                            className="px-2.5 py-1 rounded-full text-[11px] text-stone/60 bg-surface/20 border border-border-custom hover:text-parchment/80 hover:border-stone/30 transition-colors"
+                            title={skill.description}
+                          >
+                            /{skill.name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
