@@ -3297,9 +3297,15 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
 // Card data lives within the skill directory (self-contained).
 // dataSource in CARD.json is relative to the skill dir.
 
+// Map from skillId → base directory for cards not in SUPERBOT_SKILLS_DIR
+const _cardBaseDirs = new Map()
+
 async function getCardDefinitions() {
-  const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
   const cards = []
+  _cardBaseDirs.clear()
+
+  // 1. Scan repo skills (skills/ directory)
+  const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
   for (const entry of entries) {
     const cardPath = join(SUPERBOT_SKILLS_DIR, entry, 'CARD.json')
     try {
@@ -3312,6 +3318,63 @@ async function getCardDefinitions() {
       }
     } catch { /* no CARD.json or parse error — skip */ }
   }
+
+  // 2. Scan installed Claude Code plugins for CARD.json
+  // Structure: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+  // Check both superbot2's Claude config and user's personal Claude config
+  const pluginCacheDirs = [
+    PLUGINS_CACHE_DIR,                                    // ~/.superbot2/.claude/plugins/cache/
+    join(homedir(), '.claude', 'plugins', 'cache'),       // ~/.claude/plugins/cache/
+  ]
+  for (const cacheDir of pluginCacheDirs) {
+    try {
+      const marketplaces = await safeReaddir(cacheDir)
+      for (const marketplace of marketplaces) {
+        const marketplaceDir = join(cacheDir, marketplace)
+        try { if (!(await stat(marketplaceDir)).isDirectory()) continue } catch { continue }
+        const plugins = await safeReaddir(marketplaceDir)
+        for (const plugin of plugins) {
+          const pluginDir = join(marketplaceDir, plugin)
+          try { if (!(await stat(pluginDir)).isDirectory()) continue } catch { continue }
+          const versions = (await safeReaddir(pluginDir)).filter(v => !v.startsWith('.')).sort()
+          if (versions.length === 0) continue
+          const versionDir = join(pluginDir, versions[versions.length - 1])
+
+          // Check root-level CARD.json
+          try {
+            const content = await readFile(join(versionDir, 'CARD.json'), 'utf-8')
+            const card = JSON.parse(content)
+            const skillId = `plugin__${plugin}`
+            if (!cards.some(c => c.skillId === skillId)) {
+              _cardBaseDirs.set(skillId, versionDir)
+              cards.push({ ...card, skillId })
+            }
+          } catch { /* no root CARD.json */ }
+
+          // Check skills/<skill>/CARD.json
+          const skillsDir = join(versionDir, 'skills')
+          try {
+            const skills = await safeReaddir(skillsDir)
+            for (const skill of skills) {
+              if (skill.startsWith('.')) continue
+              const skillDir = join(skillsDir, skill)
+              try { if (!(await stat(skillDir)).isDirectory()) continue } catch { continue }
+              try {
+                const content = await readFile(join(skillDir, 'CARD.json'), 'utf-8')
+                const card = JSON.parse(content)
+                const skillId = plugin === skill ? `plugin__${plugin}` : `plugin__${plugin}__${skill}`
+                if (!cards.some(c => c.skillId === skillId)) {
+                  _cardBaseDirs.set(skillId, skillDir)
+                  cards.push({ ...card, skillId })
+                }
+              } catch { /* no CARD.json in this skill dir */ }
+            }
+          } catch { /* no skills dir */ }
+        }
+      }
+    } catch { /* no plugin cache dir */ }
+  }
+
   return cards
 }
 
@@ -3332,7 +3395,7 @@ function acquireFileLock(filePath) {
 }
 
 function resolveCardDataPath(skillId, dataSource) {
-  const base = resolve(SUPERBOT_SKILLS_DIR, skillId)
+  const base = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
   const resolved = resolve(base, dataSource)
   if (!resolved.startsWith(base + '/')) {
     throw new Error('Invalid dataSource path')
