@@ -176,6 +176,13 @@ function createMainWindow() {
         const req = http.get(dashboardUrl, (res) => {
             res.resume(); // drain
             win.loadURL(dashboardUrl);
+            // Show the window once the page finishes loading
+            win.webContents.once('did-finish-load', () => {
+                win.show();
+                if (electron_1.app.dock) {
+                    electron_1.app.dock.show();
+                }
+            });
         });
         req.on('error', () => {
             if (attempt < 30) {
