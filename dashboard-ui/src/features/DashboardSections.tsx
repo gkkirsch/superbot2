@@ -288,9 +288,14 @@ function TodoDashboardSection() {
 
 function CardsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('cards')
+  const { data: cards, isLoading } = useCards()
+  const pluginCards = cards?.filter(c => c.skillId !== 'goals') || []
+
+  if (!isLoading && pluginCards.length === 0) return null
+
   return (
     <section className="group" data-section="cards">
-      <SectionHeader title="Social Drafts" icon={Send} collapsed={collapsed} onToggle={toggle} />
+      <SectionHeader title="Plugin Cards" icon={Send} collapsed={collapsed} onToggle={toggle} />
       <CollapsibleContent collapsed={collapsed}>
         <CardSection />
       </CollapsibleContent>

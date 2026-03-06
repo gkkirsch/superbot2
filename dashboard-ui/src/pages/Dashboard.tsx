@@ -37,7 +37,7 @@ const SECTION_LABELS: Record<string, string> = {
   'recent-activity': 'Recent Activity',
   'pulse': 'Pulse',
   'schedule': 'Schedule',
-  'cards': 'Social Drafts',
+  'cards': 'Plugin Cards',
   'goals': 'Goals',
   'chat': 'Chat',
   'tips': 'Tips',
