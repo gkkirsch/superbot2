@@ -3419,6 +3419,60 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
   }
 })
 
+app.delete('/api/cards/:skillId/items/:itemId', async (req, res) => {
+  try {
+    const { skillId, itemId } = req.params
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    const release = await acquireFileLock(filePath)
+    try {
+      const items = await readCardItems(card.skillId, card.dataSource)
+      const idx = items.findIndex(item => item.id === itemId)
+      if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
+
+      items.splice(idx, 1)
+      await writeCardItems(card.skillId, card.dataSource, items)
+      res.json({ success: true })
+    } finally {
+      release()
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/cards/:skillId/items', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    const newItem = req.body
+
+    if (!newItem.id || !newItem.title) {
+      return res.status(400).json({ error: 'id and title are required' })
+    }
+
+    const cards = await getCardDefinitions()
+    const card = cards.find(c => c.skillId === skillId)
+    if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    const release = await acquireFileLock(filePath)
+    try {
+      const items = await readCardItems(card.skillId, card.dataSource)
+      newItem.createdAt = new Date().toISOString()
+      items.push(newItem)
+      await writeCardItems(card.skillId, card.dataSource, items)
+      res.json({ item: newItem })
+    } finally {
+      release()
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Active workers ---
 
 const TEAM_CONFIG_PATH = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'config.json')
@@ -5065,53 +5119,50 @@ app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   res.json({ ok: true })
 })
 
-// --- Static files (production only — skipped when vite dev server handles frontend) ---
+// --- Static files ---
+// Always serve the built dashboard UI if it exists.
+// In dev mode the Vite HMR server on a separate port is the primary frontend,
+// but serving static here too means the API port works standalone (e.g. Electron).
 
-const DEV_MODE = process.argv.includes('--no-static')
+const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+const INDEX_HTML = resolve(DIST_DIR, 'index.html')
 
-if (!DEV_MODE) {
-  const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
-  const INDEX_HTML = resolve(DIST_DIR, 'index.html')
-
-  if (existsSync(DIST_DIR)) {
-    app.use(express.static(DIST_DIR))
-  }
-
-  // SPA fallback — only in production mode
-  app.get('/{*path}', (_req, res) => {
-    if (existsSync(INDEX_HTML)) {
-      res.sendFile(INDEX_HTML, (err) => {
-        if (err) {
-          console.error('Failed to serve index.html:', err.message)
-          res.status(503).send(`
-            <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
-              <h1>Dashboard Error</h1>
-              <p>Failed to serve the dashboard UI: ${err.message}</p>
-              <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
-            </body></html>
-          `)
-        }
-      })
-    } else {
-      res.status(503).send(`
-        <html>
-          <head><title>Dashboard Not Built</title></head>
-          <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
-            <h1>Dashboard UI Not Built</h1>
-            <p>The dashboard server is running, but the UI hasn't been built yet.</p>
-            <p>Run this command to build it:</p>
-            <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
-            <p>Then refresh this page.</p>
-            <hr>
-            <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
-          </body>
-        </html>
-      `)
-    }
-  })
-} else {
-  console.log('Dev mode: static file serving disabled (vite dev server handles frontend)')
+if (existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR))
 }
+
+// SPA fallback — serve index.html for any non-API route
+app.get('/{*path}', (_req, res) => {
+  if (existsSync(INDEX_HTML)) {
+    res.sendFile(INDEX_HTML, (err) => {
+      if (err) {
+        console.error('Failed to serve index.html:', err.message)
+        res.status(503).send(`
+          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard Error</h1>
+            <p>Failed to serve the dashboard UI: ${err.message}</p>
+            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+          </body></html>
+        `)
+      }
+    })
+  } else {
+    res.status(503).send(`
+      <html>
+        <head><title>Dashboard Not Built</title></head>
+        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+          <h1>Dashboard UI Not Built</h1>
+          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+          <p>Run this command to build it:</p>
+          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+          <p>Then refresh this page.</p>
+          <hr>
+          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+        </body>
+      </html>
+    `)
+  }
+})
 
 // --- iMessage reply mirroring ---
 

@@ -46,6 +46,13 @@
         ]
       },
       {
+        "from": "../dashboard-ui/dist",
+        "to": "dashboard-ui/dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "../scripts",
         "to": "scripts",
         "filter": [
