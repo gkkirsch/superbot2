@@ -628,7 +628,7 @@ export function ChatSection() {
             <p className="text-sm text-stone/50">No messages yet</p>
           </div>
         ) : (
-          <>
+          <div className="max-w-4xl mx-auto">
             {hasEarlierMessages && (
               <button
                 onClick={loadEarlier}
@@ -651,7 +651,7 @@ export function ChatSection() {
               return <ActivityIndicator key={`a-${i}`} msgs={item.msgs} />
             })}
             {waitingForReply && <TypingIndicator />}
-          </>
+          </div>
         )}
       </div>
       </div>
@@ -685,7 +685,7 @@ export function ChatSection() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2">
+      <form onSubmit={handleSubmit} className="mt-2 flex items-end gap-2 max-w-4xl mx-auto w-full">
         <input
           ref={fileInputRef}
           type="file"
@@ -846,7 +846,7 @@ function OrchestratorBubble({ msg }: { msg: InboxMessage }) {
             <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] bg-sand/15 text-sand/70">Welcome</span>
           )}
         </span>
-        <div className={`rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
+        <div className={`px-1 py-1 overflow-hidden min-w-0 w-full ${isOnboarding ? 'opacity-85' : ''}`}>
           <MarkdownContent content={processedText} className="text-parchment/80" />
         </div>
         {imagePaths.length > 0 && <ThumbnailGallery paths={imagePaths} />}

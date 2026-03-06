@@ -353,7 +353,7 @@ export function Dashboard() {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-[4fr_1fr] gap-8">
             {/* Left column — chat (wider, sticky full-height) */}
             <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-hidden min-w-0">
               {layout.leftColumn.map((sectionId) => {
@@ -364,7 +364,7 @@ export function Dashboard() {
             </div>
 
             {/* Right column — sections (narrower, scrollable, draggable) */}
-            <div className="min-w-0 pt-8">
+            <div className="min-w-[280px] pt-8">
               {/* Hidden sections toolbar — shown only when editing */}
               {isEditing && layout.hidden.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap mb-6">
