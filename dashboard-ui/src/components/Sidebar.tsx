@@ -80,9 +80,8 @@ export function Sidebar() {
     })
   }, [spaces, starred])
 
-  // Nav items excluding Spaces (we render spaces separately)
-  const navItems = topNavItems.filter(item => item.to !== '/spaces')
-  const allNavItems = [...navItems, docsNavItem]
+  // Nav items excluding Spaces (rendered separately) and Docs (bottom section)
+  const mainNavItems = topNavItems.filter(item => item.to !== '/spaces')
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -101,7 +100,7 @@ export function Sidebar() {
 
       {/* Nav items */}
       <nav className="px-2 space-y-1 shrink-0">
-        {allNavItems.map(({ to, label, icon: Icon, end }) => (
+        {mainNavItems.map(({ to, label, icon: Icon, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -201,8 +200,31 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Bottom section: theme toggle + collapse */}
+      {/* Bottom section: docs + theme toggle + collapse */}
       <div className="px-2 pb-3 pt-2 space-y-1 border-t border-border-custom mt-auto shrink-0">
+        {/* Docs link */}
+        <NavLink
+          to={docsNavItem.to}
+          title={collapsed ? docsNavItem.label : undefined}
+          className={() =>
+            `flex items-center gap-3 rounded-md text-sm transition-colors relative group/item ${
+              collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2'
+            } ${
+              isActive(docsNavItem.to)
+                ? 'bg-sand/15 text-sand font-medium'
+                : 'text-stone hover:text-parchment hover:bg-surface'
+            }`
+          }
+        >
+          <docsNavItem.icon className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>{docsNavItem.label}</span>}
+          {collapsed && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-surface border border-border-custom rounded text-xs text-parchment whitespace-nowrap opacity-0 pointer-events-none group-hover/item:opacity-100 transition-opacity z-50 shadow-lg">
+              {docsNavItem.label}
+            </div>
+          )}
+        </NavLink>
+
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
@@ -237,7 +259,7 @@ export function Sidebar() {
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`hidden md:flex flex-col bg-ink border-r border-border-custom h-screen sticky top-0 z-40 transition-all duration-300 shrink-0 ${
+        className={`hidden md:flex flex-col bg-ink border-r border-border-custom h-screen sticky top-0 z-40 transition-all duration-300 shrink-0 overflow-hidden ${
           collapsed ? 'w-14' : 'w-60'
         }`}
       >
