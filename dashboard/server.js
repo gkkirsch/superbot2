@@ -3372,7 +3372,8 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
     const cards = await getCardDefinitions()
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
-    const items = await readCardItems(card.skillId, card.dataSource)
+    const allItems = await readCardItems(card.skillId, card.dataSource)
+    const items = allItems.filter(i => !i.status || i.status === 'pending')
     res.json({ items, card })
   } catch (err) {
     res.status(500).json({ error: err.message })
