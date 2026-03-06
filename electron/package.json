@@ -27,6 +27,7 @@
       "repo": "superbot2"
     },
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": [
         { "target": "dmg", "arch": ["arm64"] },
