@@ -742,24 +742,27 @@ export function ChatSection() {
                   {showSkills && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setShowSkills(false)} />
-                      <div className="absolute bottom-full left-0 mb-2 p-3 rounded-xl bg-ink/95 border border-border-custom backdrop-blur-sm shadow-lg w-[28rem] flex flex-wrap gap-1.5 z-20">
-                        {skills.map(skill => (
-                          <button
-                            key={skill.id}
-                            type="button"
-                            onClick={() => {
-                              if (inputRef.current) {
-                                inputRef.current.value = `/${skill.name} `
-                                inputRef.current.focus()
-                              }
-                              setShowSkills(false)
-                            }}
-                            className="px-2.5 py-1 rounded-full text-[11px] text-stone/60 bg-surface/20 border border-border-custom hover:text-parchment/80 hover:border-stone/30 transition-colors"
-                            title={skill.description}
-                          >
-                            /{skill.name}
-                          </button>
-                        ))}
+                      <div className="absolute bottom-full left-0 mb-2 rounded-xl bg-ink/95 border border-border-custom backdrop-blur-sm shadow-lg w-[28rem] z-20">
+                        <div className="px-3 pt-2.5 pb-1.5 text-[11px] font-medium text-stone/50 uppercase tracking-wider">Skills</div>
+                        <div className="px-3 pb-3 flex flex-wrap gap-1.5">
+                          {skills.map(skill => (
+                            <button
+                              key={skill.id}
+                              type="button"
+                              onClick={() => {
+                                if (inputRef.current) {
+                                  inputRef.current.value = `/${skill.name} `
+                                  inputRef.current.focus()
+                                }
+                                setShowSkills(false)
+                              }}
+                              className="px-2.5 py-1 rounded-full text-[11px] text-stone/60 bg-surface/20 border border-border-custom hover:text-parchment/80 hover:border-stone/30 transition-colors"
+                              title={skill.description}
+                            >
+                              /{skill.name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </>
                   )}

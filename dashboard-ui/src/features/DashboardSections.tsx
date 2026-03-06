@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
-import { useHeartbeatConfig, useSystemStatus } from '@/hooks/useSpaces'
+import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useCards, useCardItems } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import type { Filter } from '@/features/CombinedEscalationsSection'
@@ -56,6 +56,8 @@ function CollapsibleContent({ collapsed, children }: { collapsed: boolean; child
 
 function EscalationsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('escalations')
+  const { data: escalations } = useEscalations()
+  const needsReviewCount = escalations?.filter(e => !e.resolvedAt).length ?? 0
   const [filter, setFilter] = useState<'all' | 'needs_review' | 'orchestrator'>('all')
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [showFilterMenu, setShowFilterMenu] = useState(false)
@@ -88,6 +90,7 @@ function EscalationsDashboardSection() {
         icon={MessageCircleQuestion}
         collapsed={collapsed}
         onToggle={toggle}
+        badge={needsReviewCount}
         action={
           <div className="flex items-center gap-1">
             <button
@@ -257,6 +260,8 @@ function ScheduleDashboardSection() {
 function TodoDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('todos')
   const [showCompleted, setShowCompleted] = useState(false)
+  const { todos } = useTodos()
+  const incompleteTodoCount = todos?.filter(t => !t.completed).length ?? 0
   return (
     <section className="group" data-section="todos">
       <SectionHeader
@@ -264,6 +269,7 @@ function TodoDashboardSection() {
         icon={ListChecks}
         collapsed={collapsed}
         onToggle={toggle}
+        badge={incompleteTodoCount}
         action={
           <button
             onClick={() => setShowCompleted(v => !v)}
@@ -294,9 +300,13 @@ function CardsDashboardSection() {
 
 function GoalsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('goals')
+  const { data: goalCards } = useCards()
+  const goalCard = goalCards?.find(c => c.skillId === 'goals')
+  const { data: goalData } = useCardItems(goalCard?.skillId || '')
+  const activeGoalCount = goalData?.items?.filter(i => i.status !== 'completed').length ?? 0
   return (
     <section className="group" data-section="goals">
-      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} />
+      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} badge={activeGoalCount} />
       <CollapsibleContent collapsed={collapsed}>
         <GoalSection />
       </CollapsibleContent>

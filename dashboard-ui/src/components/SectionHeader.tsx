@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 
-export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, collapsed, onToggle }: {
+export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, collapsed, onToggle, badge }: {
   title: string
   icon: React.ComponentType<{ className?: string }>
   linkTo?: string
@@ -9,6 +9,7 @@ export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, co
   action?: React.ReactNode
   collapsed?: boolean
   onToggle?: () => void
+  badge?: number
 }) {
   const isCollapsible = onToggle !== undefined
 
@@ -20,6 +21,9 @@ export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, co
       <div className="flex items-center gap-2">
         <Icon className="h-5 w-5 text-sand" />
         <h2 className="font-heading text-xl text-parchment">{title}</h2>
+        {collapsed && badge !== undefined && badge > 0 && (
+          <span className="ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sand/15 text-sand/80 leading-none">{badge}</span>
+        )}
         {isCollapsible && (
           <ChevronDown className={`h-4 w-4 text-stone/50 transition-transform duration-300 ${!collapsed ? 'rotate-180' : ''}`} />
         )}
