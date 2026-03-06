@@ -635,7 +635,7 @@ export function ChatSection() {
             <p className="text-sm text-stone/50">No messages yet</p>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto space-y-3">
             {hasEarlierMessages && (
               <button
                 onClick={loadEarlier}
