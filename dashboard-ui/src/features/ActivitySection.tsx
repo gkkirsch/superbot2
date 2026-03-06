@@ -123,19 +123,9 @@ export function ActivitySection() {
             <Link
               key={w.agentId || w.name}
               to={`/spaces/${w.space}${w.project ? '/' + w.project : ''}`}
-              className="inline-flex items-center gap-1.5 rounded-full bg-stone/10 px-2.5 py-0.5 text-[10px] hover:bg-stone/20 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-full bg-stone/10 px-2.5 py-0.5 text-[10px] text-stone/70 hover:bg-stone/20 transition-colors"
             >
-              <span
-                className="max-w-[120px] truncate"
-                style={{
-                  background: 'linear-gradient(90deg, var(--color-stone) 25%, var(--color-sand) 50%, var(--color-stone) 75%)',
-                  backgroundSize: '200% 100%',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  animation: 'shimmer 3s infinite linear',
-                }}
-              >{w.name}</span>
+              <span className="max-w-[120px] truncate shimmer-text">{w.name}</span>
             </Link>
           ))}
         </div>
