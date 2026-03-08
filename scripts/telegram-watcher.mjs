@@ -23,6 +23,7 @@ const PID_FILE = join(SUPERBOT_DIR, 'telegram.pid')
 const LAST_SENT_FILE = join(SUPERBOT_DIR, 'telegram-last-sent-idx.txt')
 const LAST_UPDATE_ID_FILE = join(SUPERBOT_DIR, 'telegram-last-update-id.txt')
 const SENT_ESCALATIONS_FILE = join(SUPERBOT_DIR, 'telegram-sent-escalations.json')
+const MESSAGE_MAP_FILE = join(SUPERBOT_DIR, 'telegram-message-map.json')
 const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations', 'needs_human')
 const SUPERBOT2_NAME = process.env.SUPERBOT2_NAME || 'superbot2'
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
@@ -48,6 +49,15 @@ let shuttingDown = false
 // Populated when escalation cards are sent, used when callback buttons are clicked
 let callbackMap = new Map() // e.g. "e1" -> "esc-personal-assistant-email-triage-..."
 let callbackCounter = 0
+
+// Message ID tracking for reply threading
+// lastUserMessageId: the Telegram message_id of the user's most recent non-command message
+// messageMap: maps inbox index -> Telegram message_id of the bot's sent reply
+// This lets us thread orchestrator replies back to the user's message,
+// and preserve reply context when the user replies to a specific bot message.
+let lastUserMessageId = null
+let messageMap = {} // { inboxIdx: telegramMessageId, ... } + { lastUserMessageId }
+const MAX_MESSAGE_MAP_SIZE = 200 // Keep map bounded
 
 // --- Helpers ---
 
@@ -187,16 +197,17 @@ async function tgMultipart(method, fields, files) {
   return json.result
 }
 
-async function sendPhoto(filePath, caption) {
+async function sendPhoto(filePath, caption, replyToMessageId) {
   if (!chatId) return null
   const fields = {
     chat_id: chatId,
     ...(caption ? { caption, parse_mode: 'HTML' } : {}),
+    ...(replyToMessageId ? { reply_to_message_id: String(replyToMessageId) } : {}),
   }
   return tgMultipart('sendPhoto', fields, [{ field: 'photo', filePath }])
 }
 
-async function sendMediaGroup(filePaths, caption) {
+async function sendMediaGroup(filePaths, caption, replyToMessageId) {
   if (!chatId) return null
   // sendMediaGroup requires media as JSON array with attach:// references
   // and the actual files as multipart fields
@@ -208,6 +219,7 @@ async function sendMediaGroup(filePaths, caption) {
   const fields = {
     chat_id: chatId,
     media: JSON.stringify(media),
+    ...(replyToMessageId ? { reply_to_message_id: String(replyToMessageId) } : {}),
   }
   const files = filePaths.map((filePath, i) => ({
     field: `photo${i}`,
@@ -223,6 +235,7 @@ async function sendMessage(text, opts = {}) {
     text,
     parse_mode: opts.parseMode || 'HTML',
     ...opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {},
+    ...opts.replyToMessageId ? { reply_to_message_id: opts.replyToMessageId } : {},
   }
   return tg('sendMessage', body)
 }
@@ -352,9 +365,46 @@ async function saveSentEscalations() {
   await writeJsonFile(SENT_ESCALATIONS_FILE, [...sentEscalationIds])
 }
 
+async function loadMessageMap() {
+  const data = await readJsonFile(MESSAGE_MAP_FILE)
+  if (data && typeof data === 'object') {
+    if (data.lastUserMessageId) lastUserMessageId = data.lastUserMessageId
+    return data
+  }
+  return {}
+}
+
+async function saveMessageMap() {
+  // Prune old entries to keep the map bounded
+  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId')
+  if (keys.length > MAX_MESSAGE_MAP_SIZE) {
+    // Keep only the most recent entries (highest numeric keys)
+    const numericKeys = keys.filter(k => !isNaN(parseInt(k, 10))).map(Number).sort((a, b) => a - b)
+    const toRemove = numericKeys.slice(0, numericKeys.length - MAX_MESSAGE_MAP_SIZE)
+    for (const k of toRemove) {
+      delete messageMap[String(k)]
+    }
+  }
+  messageMap.lastUserMessageId = lastUserMessageId
+  await writeJsonFile(MESSAGE_MAP_FILE, messageMap)
+}
+
 // --- Message processing ---
 
-async function handleTextMessage(text) {
+// Build reply context string when user replies to a bot message
+function buildReplyContext(replyToMessage) {
+  if (!replyToMessage) return ''
+  const replyText = replyToMessage.text || replyToMessage.caption || ''
+  if (!replyText.trim()) return ''
+  // Truncate long quoted text
+  const maxQuoteLen = 200
+  const quoted = replyText.length > maxQuoteLen
+    ? replyText.slice(0, maxQuoteLen - 3) + '...'
+    : replyText
+  return `[Replying to: "${quoted}"]\n\n`
+}
+
+async function handleTextMessage(text, msg) {
   // Check for bot commands
   const cmd = text.trim().toLowerCase()
 
@@ -421,19 +471,29 @@ async function handleTextMessage(text) {
   }
 
   // Regular message — relay to orchestrator
+  // Track the user's message ID for reply threading
+  if (msg && msg.message_id) {
+    lastUserMessageId = msg.message_id
+    await saveMessageMap()
+  }
+
+  // Build the relayed text, prepending reply context if the user replied to a specific message
+  const replyContext = msg?.reply_to_message ? buildReplyContext(msg.reply_to_message) : ''
+  const relayText = replyContext + text
+
   startTyping()
   try {
     const res = await fetch(`${DASHBOARD_API}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: relayText }),
     })
     if (!res.ok) {
       logError(`Failed to relay message to dashboard: HTTP ${res.status}`)
       stopTyping()
       await sendMessage('Failed to relay message to orchestrator.')
     } else {
-      log(`Relayed message to orchestrator: ${text.slice(0, 60)}...`)
+      log(`Relayed message to orchestrator: ${relayText.slice(0, 80)}...`)
     }
   } catch (err) {
     logError(`Error relaying message: ${err.message}`)
@@ -909,13 +969,22 @@ async function checkForReplies() {
 
     const newReplies = orchestratorReplies.slice(lastSentReplyCount)
 
+    // Use lastUserMessageId for reply threading — the orchestrator reply
+    // should thread back to the user's most recent message
+    const replyToId = lastUserMessageId || null
+
     for (const reply of newReplies) {
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
+      // Track the inbox index for this reply (for future reverse-mapping)
+      const replyIdx = lastSentReplyCount + newReplies.indexOf(reply)
+
       // Check for image paths in the message
       const imagePaths = extractImagePaths(text)
       const existingImages = imagePaths.length > 0 ? await filterExistingImages(imagePaths) : []
+
+      let sentResult = null
 
       if (existingImages.length > 0) {
         // Send images with text as caption
@@ -927,12 +996,12 @@ async function checkForReplies() {
 
         try {
           if (existingImages.length === 1) {
-            await sendPhoto(existingImages[0], captionHtml)
+            sentResult = await sendPhoto(existingImages[0], captionHtml, replyToId)
             log(`Sent photo to Telegram: ${basename(existingImages[0])}`)
           } else {
             // sendMediaGroup for 2-10 images (Telegram limit)
             const batch = existingImages.slice(0, 10)
-            await sendMediaGroup(batch, captionHtml)
+            sentResult = await sendMediaGroup(batch, captionHtml, replyToId)
             log(`Sent ${batch.length} photos as album to Telegram`)
           }
 
@@ -952,42 +1021,59 @@ async function checkForReplies() {
           // Fallback: send as text with paths
           const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
           try {
-            await tg('sendMessage', { chat_id: chatId, text: markdownToTelegramHtml(truncated), parse_mode: 'HTML' })
+            sentResult = await tg('sendMessage', {
+              chat_id: chatId,
+              text: markdownToTelegramHtml(truncated),
+              parse_mode: 'HTML',
+              ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+            })
           } catch {
             await tg('sendMessage', { chat_id: chatId, text: truncated }).catch(() => {})
           }
         }
       } else {
-        // No images — send as text (original behavior)
+        // No images — send as text with reply threading
         const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
         const html = markdownToTelegramHtml(truncated)
 
         try {
-          await tg('sendMessage', {
+          sentResult = await tg('sendMessage', {
             chat_id: chatId,
             text: html,
             parse_mode: 'HTML',
+            ...(replyToId ? { reply_to_message_id: replyToId } : {}),
           })
-          log(`Sent reply to Telegram: ${truncated.slice(0, 60)}...`)
+          log(`Sent reply to Telegram (reply_to=${replyToId || 'none'}): ${truncated.slice(0, 60)}...`)
         } catch (err) {
           logError(`Failed to send reply to Telegram: ${err.message}`)
           // Fallback: send as plain text if HTML parsing fails
           try {
-            await tg('sendMessage', {
+            sentResult = await tg('sendMessage', {
               chat_id: chatId,
               text: truncated,
+              ...(replyToId ? { reply_to_message_id: replyToId } : {}),
             })
             log(`Sent reply as plain text fallback`)
           } catch (fallbackErr) {
             logError(`Fallback send also failed: ${fallbackErr.message}`)
+            // Last resort: send without reply threading
+            try {
+              await tg('sendMessage', { chat_id: chatId, text: truncated })
+            } catch { /* give up */ }
           }
         }
+      }
+
+      // Track the sent message ID so we can map it when user replies to it
+      if (sentResult?.message_id) {
+        messageMap[String(replyIdx)] = sentResult.message_id
       }
     }
 
     stopTyping()
     lastSentReplyCount = orchestratorReplies.length
     await saveLastSentCount(lastSentReplyCount)
+    await saveMessageMap()
   } catch (err) {
     logError(`Error checking for replies: ${err.message}`)
   }
@@ -1112,8 +1198,9 @@ async function pollUpdates() {
           }
 
           if (msg.text) {
-            log(`Inbound message [update_id=${update.update_id}]: ${msg.text.slice(0, 100)}`)
-            await handleTextMessage(msg.text)
+            const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
+            log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
+            await handleTextMessage(msg.text, msg)
           }
         }
       }
@@ -1178,6 +1265,7 @@ async function main() {
   lastUpdateId = await loadLastUpdateId()
   lastSentReplyCount = await loadLastSentCount()
   sentEscalationIds = await loadSentEscalations()
+  messageMap = await loadMessageMap()
 
   // Check for already-running instance, then write PID file
   await checkPidFile()
