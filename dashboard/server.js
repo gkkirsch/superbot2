@@ -3295,31 +3295,74 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
 
 // --- Dashboard cards ---
 // Card data lives within the skill directory (self-contained).
-// dataSource in CARD.json is relative to the skill dir.
+// dataSource in CARD.json / superbot.json is relative to the skill dir.
 
 // Map from skillId → base directory for cards not in SUPERBOT_SKILLS_DIR
 const _cardBaseDirs = new Map()
+// Map from skillId → full superbot.json manifest (includes settings, schedule, agent)
+const _manifests = new Map()
+
+// Read superbot.json or fall back to CARD.json from a directory.
+// Returns { card, manifest } where card is the CardDefinition shape and manifest is the full superbot.json.
+async function readSkillManifest(dir) {
+  // Try superbot.json first
+  try {
+    const content = await readFile(join(dir, 'superbot.json'), 'utf-8')
+    const manifest = JSON.parse(content)
+    if (!manifest.card) return null
+    // Build card definition from manifest
+    const card = {
+      name: manifest.name,
+      description: manifest.description,
+      ...manifest.card,
+      renderer: manifest.card.renderer || 'default',
+    }
+    return { card, manifest }
+  } catch { /* no superbot.json */ }
+
+  // Fall back to CARD.json (legacy)
+  try {
+    const content = await readFile(join(dir, 'CARD.json'), 'utf-8')
+    const legacy = JSON.parse(content)
+    // Auto-wrap legacy CARD.json into superbot.json shape
+    const card = { ...legacy, renderer: legacy.renderer || 'default' }
+    const manifest = {
+      name: legacy.name,
+      description: legacy.description,
+      card: {
+        dataSource: legacy.dataSource,
+        renderer: 'default',
+        itemSchema: legacy.itemSchema,
+        display: legacy.display,
+        actions: legacy.actions,
+      },
+    }
+    return { card, manifest }
+  } catch { /* no CARD.json either */ }
+
+  return null
+}
 
 async function getCardDefinitions() {
   const cards = []
   _cardBaseDirs.clear()
+  _manifests.clear()
 
   // 1. Scan repo skills (skills/ directory)
   const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
   for (const entry of entries) {
-    const cardPath = join(SUPERBOT_SKILLS_DIR, entry, 'CARD.json')
-    try {
-      const content = await readFile(cardPath, 'utf-8')
-      const card = JSON.parse(content)
-      // Only include if the skill is enabled (SKILL.md exists, not .disabled)
-      const skillEnabled = existsSync(join(SUPERBOT_SKILLS_DIR, entry, 'SKILL.md'))
-      if (skillEnabled) {
-        cards.push({ ...card, skillId: entry })
-      }
-    } catch { /* no CARD.json or parse error — skip */ }
+    const skillDir = join(SUPERBOT_SKILLS_DIR, entry)
+    const result = await readSkillManifest(skillDir)
+    if (!result) continue
+    // Only include if the skill is enabled (SKILL.md exists, not .disabled)
+    const skillEnabled = existsSync(join(skillDir, 'SKILL.md'))
+    if (skillEnabled) {
+      cards.push({ ...result.card, skillId: entry })
+      _manifests.set(entry, result.manifest)
+    }
   }
 
-  // 2. Scan installed Claude Code plugins for CARD.json
+  // 2. Scan installed Claude Code plugins for superbot.json / CARD.json
   // Structure: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
   // Check both superbot2's Claude config and user's personal Claude config
   const pluginCacheDirs = [
@@ -3340,18 +3383,18 @@ async function getCardDefinitions() {
           if (versions.length === 0) continue
           const versionDir = join(pluginDir, versions[versions.length - 1])
 
-          // Check root-level CARD.json
-          try {
-            const content = await readFile(join(versionDir, 'CARD.json'), 'utf-8')
-            const card = JSON.parse(content)
+          // Check root-level superbot.json / CARD.json
+          const rootResult = await readSkillManifest(versionDir)
+          if (rootResult) {
             const skillId = `plugin__${plugin}`
             if (!cards.some(c => c.skillId === skillId)) {
               _cardBaseDirs.set(skillId, versionDir)
-              cards.push({ ...card, skillId })
+              _manifests.set(skillId, rootResult.manifest)
+              cards.push({ ...rootResult.card, skillId })
             }
-          } catch { /* no root CARD.json */ }
+          }
 
-          // Check skills/<skill>/CARD.json
+          // Check skills/<skill>/superbot.json or CARD.json
           const skillsDir = join(versionDir, 'skills')
           try {
             const skills = await safeReaddir(skillsDir)
@@ -3359,15 +3402,15 @@ async function getCardDefinitions() {
               if (skill.startsWith('.')) continue
               const skillDir = join(skillsDir, skill)
               try { if (!(await stat(skillDir)).isDirectory()) continue } catch { continue }
-              try {
-                const content = await readFile(join(skillDir, 'CARD.json'), 'utf-8')
-                const card = JSON.parse(content)
+              const skillResult = await readSkillManifest(skillDir)
+              if (skillResult) {
                 const skillId = plugin === skill ? `plugin__${plugin}` : `plugin__${plugin}__${skill}`
                 if (!cards.some(c => c.skillId === skillId)) {
                   _cardBaseDirs.set(skillId, skillDir)
-                  cards.push({ ...card, skillId })
+                  _manifests.set(skillId, skillResult.manifest)
+                  cards.push({ ...skillResult.card, skillId })
                 }
-              } catch { /* no CARD.json in this skill dir */ }
+              }
             }
           } catch { /* no skills dir */ }
         }
@@ -3532,6 +3575,110 @@ app.post('/api/cards/:skillId/items', async (req, res) => {
     } finally {
       release()
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Skill manifest & settings ---
+
+const SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
+
+app.get('/api/skills/:skillId/manifest', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    // Ensure card definitions (and manifests) are loaded
+    await getCardDefinitions()
+    const manifest = _manifests.get(skillId)
+    if (!manifest) return res.status(404).json({ error: 'Skill not found' })
+    res.json({ manifest: { ...manifest, skillId } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/skills/:skillId/settings', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    await getCardDefinitions()
+    const manifest = _manifests.get(skillId)
+    if (!manifest) return res.status(404).json({ error: 'Skill not found' })
+    if (!manifest.settings || !manifest.settings.schema) {
+      return res.status(404).json({ error: 'Skill has no settings' })
+    }
+    const schema = manifest.settings.schema
+    // Read saved values
+    const settingsPath = join(SKILL_SETTINGS_DIR, skillId, 'settings.json')
+    let savedValues = {}
+    try {
+      savedValues = JSON.parse(await readFile(settingsPath, 'utf-8'))
+    } catch { /* no saved settings yet */ }
+    // Merge defaults
+    const values = {}
+    for (const [key, field] of Object.entries(schema)) {
+      values[key] = savedValues[key] !== undefined ? savedValues[key] : (field.default !== undefined ? field.default : null)
+    }
+    res.json({ schema, values })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/skills/:skillId/settings', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    const newValues = req.body
+    await getCardDefinitions()
+    const manifest = _manifests.get(skillId)
+    if (!manifest) return res.status(404).json({ error: 'Skill not found' })
+    if (!manifest.settings || !manifest.settings.schema) {
+      return res.status(404).json({ error: 'Skill has no settings' })
+    }
+    const schema = manifest.settings.schema
+    // Basic validation
+    for (const [key, value] of Object.entries(newValues)) {
+      const field = schema[key]
+      if (!field) continue // ignore unknown fields
+      if (field.enum && !field.enum.includes(value)) {
+        return res.status(400).json({ error: `Invalid value for ${key}. Must be one of: ${field.enum.join(', ')}` })
+      }
+    }
+    // Ensure directory exists
+    const settingsDir = join(SKILL_SETTINGS_DIR, skillId)
+    await mkdir(settingsDir, { recursive: true })
+    const settingsPath = join(settingsDir, 'settings.json')
+    // Merge with existing values
+    let existing = {}
+    try { existing = JSON.parse(await readFile(settingsPath, 'utf-8')) } catch {}
+    const merged = { ...existing, ...newValues }
+    await writeFile(settingsPath, JSON.stringify(merged, null, 2))
+    res.json({ values: merged })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/skill-schedules', async (req, res) => {
+  try {
+    await getCardDefinitions()
+    const configContent = await readFile(join(SUPERBOT_DIR, 'config.json'), 'utf-8')
+    const config = JSON.parse(configContent)
+    const configSchedule = config.schedule || []
+
+    const skillSchedules = []
+    for (const [skillId, manifest] of _manifests.entries()) {
+      if (!manifest.schedule) continue
+      const jobName = `skill:${skillId}`
+      const existingJob = configSchedule.find(j => j.name === jobName)
+      skillSchedules.push({
+        skillId,
+        name: manifest.name,
+        schedule: manifest.schedule,
+        enabled: !!existingJob,
+        overrides: existingJob ? { time: existingJob.time, times: existingJob.times, days: existingJob.days } : undefined,
+      })
+    }
+    res.json({ schedules: skillSchedules })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
