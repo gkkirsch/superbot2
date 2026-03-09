@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2, Clock, Plus, ChevronDown } from 'lucide-react'
+import { X, Trash2, Clock, Plus, ChevronDown, Puzzle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSchedule } from '@/hooks/useSpaces'
+import { useSchedule, useSkillSchedules } from '@/hooks/useSpaces'
 import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
-import type { ScheduledJob } from '@/lib/types'
+import type { ScheduledJob, SkillScheduleInfo } from '@/lib/types'
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
@@ -148,6 +148,33 @@ function formatDays(days?: string[]): string {
   // Sort in week order and use abbreviations
   const sorted = ALL_DAYS.filter(d => days.includes(d))
   return sorted.map(d => DAY_LABELS[d]).join(', ')
+}
+
+function SkillBadge() {
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-sand/10 text-sand/60 shrink-0">
+      <Puzzle className="h-2.5 w-2.5" />
+      Skill
+    </span>
+  )
+}
+
+function isSkillJob(name: string): boolean {
+  return name.startsWith('skill:')
+}
+
+/** Convert skill schedule info to a ScheduledJob for display in the timeline */
+function skillScheduleToJob(s: SkillScheduleInfo): ScheduledJob {
+  const time = s.overrides?.time ?? s.schedule.default.time
+  const times = s.overrides?.times ?? s.schedule.default.times
+  const days = s.overrides?.days ?? s.schedule.default.days
+  return {
+    name: `skill:${s.skillId}`,
+    task: `Run ${s.name} skill`,
+    ...(time ? { time } : {}),
+    ...(times ? { times } : {}),
+    ...(days ? { days } : {}),
+  }
 }
 
 export type ScheduleViewMode = 'timeline' | 'all-schedules'
@@ -535,6 +562,7 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
 
 export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { adding: boolean; setAdding: (v: boolean) => void; viewMode?: ScheduleViewMode }) {
   const { data, isLoading } = useSchedule()
+  const { data: skillSchedules } = useSkillSchedules()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [pastExpanded, setPastExpanded] = useState(false)
   const [tomorrowExpanded, setTomorrowExpanded] = useState(false)
@@ -551,18 +579,28 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
   }
 
   const schedule = data?.schedule || []
-  const timeline = buildTimeline(schedule)
+
+  // Merge enabled skill schedules that aren't already in the config schedule
+  const enabledSkillJobs = (skillSchedules || [])
+    .filter(s => s.enabled)
+    .map(skillScheduleToJob)
+    .filter(sj => !schedule.some(j => j.name === sj.name))
+  const mergedSchedule = [...schedule, ...enabledSkillJobs]
+
+  const timeline = buildTimeline(mergedSchedule)
   const hasUpcoming = timeline.some(i => !i.isPast)
-  const nextDay = !hasUpcoming ? buildNextDayTimeline(schedule) : null
+  const nextDay = !hasUpcoming ? buildNextDayTimeline(mergedSchedule) : null
 
   const pastItems = timeline.filter(i => i.isPast)
   const upcomingItems = timeline.filter(i => !i.isPast)
   const visiblePastItems = pastExpanded ? pastItems : pastItems.slice(-DEFAULT_VISIBLE)
   const hiddenPastCount = pastItems.length - DEFAULT_VISIBLE
 
-  const allSchedulesSorted = viewMode === 'all-schedules'
-    ? [...schedule].sort((a, b) => a.name.localeCompare(b.name))
+  // For all-schedules view: manual jobs + all skill schedules (enabled or not)
+  const manualJobs = viewMode === 'all-schedules'
+    ? schedule.filter(j => !isSkillJob(j.name)).sort((a, b) => a.name.localeCompare(b.name))
     : []
+  const allSkillSchedules = viewMode === 'all-schedules' ? (skillSchedules || []) : []
 
   return (
     <div className="space-y-2">
@@ -590,8 +628,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {visiblePastItems.map((item, idx) => (
                 <button
                   key={`past-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => setEditingJob(item.job)}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-surface/30"
+                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/30'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
@@ -600,8 +638,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/40">
-                    {toTitleCase(item.job.name)}
+                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
+                  {isSkillJob(item.job.name) && <SkillBadge />}
                 </button>
               ))}
             </div>
@@ -618,8 +657,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {upcomingItems.map((item, idx) => (
                 <button
                   key={`upcoming-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => setEditingJob(item.job)}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
+                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/50'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
@@ -628,8 +667,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/70">
-                    {toTitleCase(item.job.name)}
+                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
+                  {isSkillJob(item.job.name) && <SkillBadge />}
                 </button>
               ))}
             </div>
@@ -645,8 +685,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {(tomorrowExpanded ? nextDay.items : nextDay.items.slice(0, 1)).map((item, idx) => (
                 <button
                   key={`next-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => setEditingJob(item.job)}
-                  className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 hover:bg-surface/50 border border-transparent"
+                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/50'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
@@ -655,8 +695,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/70">
-                    {toTitleCase(item.job.name)}
+                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
+                  {isSkillJob(item.job.name) && <SkillBadge />}
                 </button>
               ))}
               {nextDay.items.length > 1 && (
@@ -675,13 +716,13 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
 
       {viewMode === 'all-schedules' && (
         <div className="space-y-1.5">
-          {allSchedulesSorted.length === 0 && !adding && (
+          {manualJobs.length === 0 && allSkillSchedules.length === 0 && !adding && (
             <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
               <Clock className="h-4 w-4 text-stone/30 shrink-0" />
               <p className="text-xs text-stone/50">No scheduled jobs</p>
             </div>
           )}
-          {allSchedulesSorted.map(job => {
+          {manualJobs.map(job => {
             const times = getJobTimes(job)
             const isMultiTime = times.length > 1
             return (
@@ -715,6 +756,59 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               </button>
             )
           })}
+
+          {/* Skill-declared schedules */}
+          {allSkillSchedules.length > 0 && (
+            <>
+              {manualJobs.length > 0 && (
+                <div className="flex items-center gap-2 py-1">
+                  <div className="flex-1 border-t border-stone/15" />
+                  <span className="text-[10px] text-stone/40 uppercase tracking-wider">Skill schedules</span>
+                  <div className="flex-1 border-t border-stone/15" />
+                </div>
+              )}
+              {allSkillSchedules.map(s => {
+                const time = s.overrides?.time ?? s.schedule.default.time
+                const times = s.overrides?.times ?? s.schedule.default.times
+                const days = s.overrides?.days ?? s.schedule.default.days
+                const displayTimes = times ?? (time ? [time] : [])
+                const isMultiTime = displayTimes.length > 1
+                return (
+                  <div
+                    key={s.skillId}
+                    className={`w-full text-left px-3 py-2 rounded-lg border border-transparent ${s.enabled ? 'bg-surface/30' : 'bg-surface/20 opacity-60'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
+                        {s.name}
+                      </span>
+                      <SkillBadge />
+                      {!s.enabled && (
+                        <span className="text-[9px] text-stone/40 uppercase tracking-wider">Not enabled</span>
+                      )}
+                      <span className="text-xs text-stone/40 shrink-0">
+                        {formatDays(days)}
+                      </span>
+                      {!isMultiTime && displayTimes.length === 1 && (
+                        <span className="text-xs font-mono tabular-nums text-stone/50 shrink-0">
+                          {to12Hour(displayTimes[0])}
+                        </span>
+                      )}
+                    </div>
+                    {isMultiTime && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {displayTimes.map(t => (
+                          <span key={t} className="text-[10px] font-mono tabular-nums text-stone/50 bg-stone/[0.08] px-1.5 py-0.5 rounded">
+                            {to12Hour(t)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       )}
 
