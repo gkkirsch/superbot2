@@ -1,0 +1,52 @@
+{
+  "name": "Goals",
+  "description": "Track and manage goals across all spaces",
+  "version": "0.1.0",
+
+  "card": {
+    "dataSource": "data.jsonl",
+    "renderer": "goal-tracker",
+    "itemSchema": {
+      "title": { "type": "string", "label": "Goal" },
+      "status": { "type": "string", "label": "Status" },
+      "progress": { "type": "string", "label": "Progress" },
+      "dueDate": { "type": "string", "label": "Due date" },
+      "notes": { "type": "string", "label": "Notes", "multiline": true },
+      "space": { "type": "string", "label": "Space" }
+    },
+    "display": {
+      "title": "title",
+      "body": "notes",
+      "subtitle": "space",
+      "meta": "progress"
+    },
+    "statusFlow": ["active", "paused", "completed", "abandoned"],
+    "defaultFilter": { "status": "active" },
+    "actions": [
+      {
+        "id": "complete",
+        "label": "Complete",
+        "icon": "check",
+        "style": "primary",
+        "handler": "set-status",
+        "params": { "status": "completed" }
+      },
+      {
+        "id": "pause",
+        "label": "Pause",
+        "icon": "pause",
+        "style": "secondary",
+        "handler": "set-status",
+        "params": { "status": "paused" }
+      },
+      {
+        "id": "update",
+        "label": "Update",
+        "icon": "pen-line",
+        "style": "secondary",
+        "handler": "edit-field",
+        "params": { "field": "notes" }
+      }
+    ]
+  }
+}

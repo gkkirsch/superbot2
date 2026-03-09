@@ -11,7 +11,7 @@ This skill provides a dashboard card for tracking goals. Everything is self-cont
 ## How It Works
 
 1. Goals are stored in `data.jsonl` (in this skill's directory)
-2. The dashboard reads `CARD.json` and renders goals with complete/pause/update actions
+2. The dashboard reads `superbot.json` and renders goals with complete/pause/update actions
 3. Workers or the user can add goals via the queue script
 
 ## Adding Goals
@@ -39,7 +39,7 @@ Options:
 ```
 goals/
 ├── SKILL.md          ← this file (skill instructions)
-├── CARD.json         ← card definition for dashboard
+├── superbot.json     ← skill manifest (card definition)
 ├── add-goal.sh       ← script to add goals
 ├── data.jsonl        ← runtime data (gitignored)
 └── .gitignore        ← excludes data.jsonl
