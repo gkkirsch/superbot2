@@ -40,6 +40,10 @@ import {
   updateCardItem,
   deleteCardItem,
   createCardItem,
+  fetchSkillManifest,
+  fetchSkillSettings,
+  saveSkillSettings,
+  fetchSkillSchedules,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -414,5 +418,44 @@ export function useCreateCardItem() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['card-items'] })
     },
+  })
+}
+
+// --- Skill manifest & settings ---
+
+export function useSkillManifest(skillId: string) {
+  return useQuery({
+    queryKey: ['skill-manifest', skillId],
+    queryFn: () => fetchSkillManifest(skillId),
+    enabled: !!skillId,
+    staleTime: 60_000,
+  })
+}
+
+export function useSkillSettings(skillId: string) {
+  return useQuery({
+    queryKey: ['skill-settings', skillId],
+    queryFn: () => fetchSkillSettings(skillId),
+    enabled: !!skillId,
+    staleTime: 30_000,
+  })
+}
+
+export function useSaveSkillSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ skillId, values }: { skillId: string; values: Record<string, unknown> }) =>
+      saveSkillSettings(skillId, values),
+    onSuccess: (_data, { skillId }) => {
+      qc.invalidateQueries({ queryKey: ['skill-settings', skillId] })
+    },
+  })
+}
+
+export function useSkillSchedules() {
+  return useQuery({
+    queryKey: ['skill-schedules'],
+    queryFn: fetchSkillSchedules,
+    staleTime: 30_000,
   })
 }

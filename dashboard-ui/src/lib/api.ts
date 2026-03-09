@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
 
 export type { PluginDetail }
 
@@ -861,4 +861,30 @@ export async function createCardItem(skillId: string, item: Record<string, unkno
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   const data = await response.json()
   return data.item
+}
+
+// --- Skill manifest & settings ---
+
+export async function fetchSkillManifest(skillId: string): Promise<SuperbotManifest & { skillId: string }> {
+  const data = await fetchJson<{ manifest: SuperbotManifest & { skillId: string } }>(`/skills/${encodeURIComponent(skillId)}/manifest`)
+  return data.manifest
+}
+
+export async function fetchSkillSettings(skillId: string): Promise<SkillSettingsResponse> {
+  return fetchJson<SkillSettingsResponse>(`/skills/${encodeURIComponent(skillId)}/settings`)
+}
+
+export async function saveSkillSettings(skillId: string, values: Record<string, unknown>): Promise<{ values: Record<string, unknown> }> {
+  const response = await fetch(`${API_BASE}/skills/${encodeURIComponent(skillId)}/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function fetchSkillSchedules(): Promise<SkillScheduleInfo[]> {
+  const data = await fetchJson<{ schedules: SkillScheduleInfo[] }>('/skill-schedules')
+  return data.schedules
 }
