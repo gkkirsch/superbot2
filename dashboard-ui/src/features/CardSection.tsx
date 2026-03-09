@@ -1,9 +1,10 @@
 import { useState, type ComponentType } from 'react'
 import {
-  Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus,
+  Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus, Settings,
   type LucideProps,
 } from 'lucide-react'
 import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
+import { SkillSettingsForm } from '@/features/SkillSettingsForm'
 import type { CardDefinition, CardItem, CardAction } from '@/lib/types'
 
 // --- Icon registry ---
@@ -262,6 +263,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
 export function CardSkillSection({ card }: { card: CardDefinition }) {
   const { data, isLoading } = useCardItems(card.skillId)
   const updateMutation = useUpdateCardItem()
+  const [showSettings, setShowSettings] = useState(false)
 
   const items = data?.items || []
   const defaultStatus = card.defaultFilter?.status || 'pending'
@@ -285,23 +287,40 @@ export function CardSkillSection({ card }: { card: CardDefinition }) {
     )
   }
 
-  if (filteredItems.length === 0) {
-    return (
-      <p className="text-xs text-stone/40 py-2 text-center">No items waiting for review</p>
-    )
-  }
-
   return (
     <div className="space-y-2">
-      {filteredItems.map(item => (
-        <CardItemRow
-          key={item.id}
-          item={item}
-          card={card}
-          onAction={handleAction}
-          isPending={updateMutation.isPending}
-        />
-      ))}
+      {/* Card header with name and optional settings gear */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-stone/60">{card.name}</span>
+        {card.hasSettings && (
+          <button
+            onClick={() => setShowSettings(v => !v)}
+            className={`p-1 rounded transition-colors ${showSettings ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone'}`}
+            title="Settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Settings form (collapsible) */}
+      {showSettings && (
+        <SkillSettingsForm skillId={card.skillId} onClose={() => setShowSettings(false)} />
+      )}
+
+      {filteredItems.length === 0 ? (
+        <p className="text-xs text-stone/40 py-2 text-center">No items waiting for review</p>
+      ) : (
+        filteredItems.map(item => (
+          <CardItemRow
+            key={item.id}
+            item={item}
+            card={card}
+            onAction={handleAction}
+            isPending={updateMutation.isPending}
+          />
+        ))
+      )}
     </div>
   )
 }

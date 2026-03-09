@@ -3316,6 +3316,7 @@ async function readSkillManifest(dir) {
       description: manifest.description,
       ...manifest.card,
       renderer: manifest.card.renderer || 'default',
+      hasSettings: !!(manifest.settings && manifest.settings.schema),
     }
     return { card, manifest }
   } catch { /* no superbot.json */ }
