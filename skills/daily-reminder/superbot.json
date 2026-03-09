@@ -1,0 +1,86 @@
+{
+  "name": "Daily Reminders",
+  "description": "Review and manage daily reminders",
+  "version": "0.1.0",
+
+  "card": {
+    "dataSource": "data.jsonl",
+    "renderer": "default",
+    "itemSchema": {
+      "title": { "type": "string", "label": "Reminder" },
+      "body": { "type": "string", "label": "Details", "multiline": true },
+      "category": { "type": "string", "label": "Category" }
+    },
+    "display": {
+      "title": "title",
+      "body": "body",
+      "subtitle": "category"
+    },
+    "statusFlow": ["pending", "done", "dismissed"],
+    "defaultFilter": { "status": "pending" },
+    "actions": [
+      {
+        "id": "done",
+        "label": "Done",
+        "icon": "check",
+        "style": "primary",
+        "handler": "set-status",
+        "params": { "status": "done" }
+      },
+      {
+        "id": "dismiss",
+        "label": "Dismiss",
+        "icon": "x",
+        "style": "danger",
+        "handler": "set-status",
+        "params": { "status": "dismissed" }
+      },
+      {
+        "id": "edit",
+        "label": "Edit",
+        "icon": "pen-line",
+        "style": "secondary",
+        "handler": "edit-field",
+        "params": { "field": "body" }
+      }
+    ]
+  },
+
+  "settings": {
+    "schema": {
+      "defaultCategory": {
+        "type": "string",
+        "enum": ["meeting", "task", "personal", "health"],
+        "label": "Default category",
+        "default": "task"
+      },
+      "maxReminders": {
+        "type": "number",
+        "label": "Max active reminders",
+        "description": "Maximum number of pending reminders at once",
+        "default": 20,
+        "min": 1,
+        "max": 100
+      },
+      "autoCleanup": {
+        "type": "boolean",
+        "label": "Auto-cleanup completed",
+        "description": "Automatically remove completed reminders after 7 days",
+        "default": true
+      }
+    }
+  },
+
+  "schedule": {
+    "default": {
+      "time": "08:00",
+      "days": ["mon", "tue", "wed", "thu", "fri"]
+    },
+    "configurable": true
+  },
+
+  "agent": {
+    "type": "space-worker",
+    "model": "haiku"
+  }
+}

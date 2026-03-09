@@ -3487,7 +3487,7 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
   }
 })
 
-const VALID_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending', 'active', 'completed', 'paused', 'abandoned'])
+const DEFAULT_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending', 'active', 'completed', 'paused', 'abandoned'])
 const IMMUTABLE_CARD_FIELDS = new Set(['id', 'createdAt', 'skillId'])
 
 app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
@@ -3495,13 +3495,15 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
     const { skillId, itemId } = req.params
     const updates = req.body
 
-    if (updates.status !== undefined && !VALID_CARD_STATUSES.has(updates.status)) {
-      return res.status(400).json({ error: `Invalid status. Must be one of: ${[...VALID_CARD_STATUSES].join(', ')}` })
-    }
-
     const cards = await getCardDefinitions()
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
+
+    // Use card's statusFlow if declared, otherwise fall back to defaults
+    const validStatuses = card.statusFlow ? new Set(card.statusFlow) : DEFAULT_CARD_STATUSES
+    if (updates.status !== undefined && !validStatuses.has(updates.status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${[...validStatuses].join(', ')}` })
+    }
 
     const filePath = resolveCardDataPath(card.skillId, card.dataSource)
     const release = await acquireFileLock(filePath)
