@@ -1,7 +1,40 @@
-import { useState } from 'react'
-import { Check, X, PenLine, Loader2, ExternalLink } from 'lucide-react'
+import { useState, type ComponentType } from 'react'
+import {
+  Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus,
+  type LucideProps,
+} from 'lucide-react'
 import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
-import type { CardDefinition, CardItem } from '@/lib/types'
+import type { CardDefinition, CardItem, CardAction } from '@/lib/types'
+
+// --- Icon registry ---
+
+const ICON_MAP: Record<string, ComponentType<LucideProps>> = {
+  check: Check,
+  x: X,
+  'pen-line': PenLine,
+  pause: Pause,
+  play: Play,
+  'trash-2': Trash2,
+  plus: Plus,
+  'external-link': ExternalLink,
+}
+
+function ActionIcon({ name, className }: { name?: string; className?: string }) {
+  if (!name) return null
+  const Icon = ICON_MAP[name]
+  if (!Icon) return null
+  return <Icon className={className} />
+}
+
+// --- Style mapping ---
+
+const ACTION_STYLES: Record<string, string> = {
+  primary: 'bg-moss/20 text-moss hover:bg-moss/30',
+  danger: 'bg-ember/20 text-ember hover:bg-ember/30',
+  secondary: 'bg-surface text-stone hover:bg-surface/80',
+}
+
+// --- Platform badge (kept for backward compat with social-media cards) ---
 
 const PLATFORM_COLORS: Record<string, string> = {
   facebook: 'bg-blue-500/20 text-blue-400',
@@ -31,39 +64,98 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`
 }
 
+// --- Generic action button ---
+
+interface ActionButtonProps {
+  action: CardAction
+  item: CardItem
+  onAction: (itemId: string, update: Record<string, unknown>) => void
+  onStartEdit: (field: string) => void
+  isPending: boolean
+}
+
+function ActionButton({ action, item, onAction, onStartEdit, isPending }: ActionButtonProps) {
+  // Check showWhen condition
+  if (action.showWhen?.status) {
+    const allowed = Array.isArray(action.showWhen.status)
+      ? action.showWhen.status
+      : [action.showWhen.status]
+    if (!allowed.includes(item.status)) return null
+  }
+
+  const styleClass = ACTION_STYLES[action.style] || ACTION_STYLES.secondary
+
+  const handleClick = () => {
+    if (action.handler === 'set-status' && action.params?.status) {
+      onAction(item.id, { status: action.params.status })
+    } else if (action.handler === 'edit-field' && action.params?.field) {
+      onStartEdit(action.params.field)
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={isPending}
+      className={`flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded transition-colors disabled:opacity-50 ${styleClass}`}
+    >
+      {isPending && action.handler === 'set-status'
+        ? <Loader2 className="h-3 w-3 animate-spin" />
+        : <ActionIcon name={action.icon} className="h-3 w-3" />
+      }
+      {action.label}
+    </button>
+  )
+}
+
+// --- Generic card item row ---
+
 interface CardItemRowProps {
   item: CardItem
   card: CardDefinition
-  onAction: (itemId: string, update: { status?: string; draft?: string }) => void
+  onAction: (itemId: string, update: Record<string, unknown>) => void
   isPending: boolean
 }
 
 function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(item.draft || '')
+  const [editingField, setEditingField] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
 
-  const handleApprove = () => onAction(item.id, { status: 'approved' })
-  const handleReject = () => onAction(item.id, { status: 'rejected' })
+  const handleStartEdit = (field: string) => {
+    setEditValue(String(item[field] || ''))
+    setEditingField(field)
+  }
+
   const handleSaveEdit = () => {
-    if (editValue.trim() && editValue !== item.draft) {
-      onAction(item.id, { draft: editValue.trim() })
+    if (editingField && editValue.trim() && editValue !== String(item[editingField] || '')) {
+      onAction(item.id, { [editingField]: editValue.trim() })
     }
-    setEditing(false)
+    setEditingField(null)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingField(null)
+    setEditValue('')
   }
 
   const statusColors: Record<string, string> = {
     pending: 'border-sand/20',
     approved: 'border-moss/30 bg-moss/[0.03]',
     rejected: 'border-ember/20 bg-ember/[0.03] opacity-50',
+    completed: 'border-moss/30 bg-moss/[0.03]',
   }
 
   const bodyField = card.display.body
   const subtitleField = card.display.subtitle
   const metaField = card.display.meta
 
+  // Determine which actions to show based on item status
+  const defaultFilter = card.defaultFilter?.status || 'pending'
+  const showActions = item.status === defaultFilter && !editingField
+
   return (
     <div className={`rounded-lg border p-3 transition-all ${statusColors[item.status] || 'border-border-custom'}`}>
-      {/* Header: platform + target + timestamp */}
+      {/* Header: platform/title + subtitle + timestamp */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2 min-w-0">
           {item.platform && <PlatformBadge platform={item.platform} />}
@@ -74,8 +166,8 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
         <span className="text-[10px] text-stone/40 shrink-0">{timeAgo(item.createdAt)}</span>
       </div>
 
-      {/* Body: draft text */}
-      {editing ? (
+      {/* Body: editable field or display */}
+      {editingField === bodyField ? (
         <div className="mb-2">
           <textarea
             value={editValue}
@@ -93,7 +185,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
               <Check className="h-3 w-3" /> Save
             </button>
             <button
-              onClick={() => { setEditValue(item.draft || ''); setEditing(false) }}
+              onClick={handleCancelEdit}
               className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
             >
               <X className="h-3 w-3" /> Cancel
@@ -106,7 +198,7 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
         </p>
       )}
 
-      {/* Meta: excerpt + post link */}
+      {/* Meta + post link */}
       {(metaField && item[metaField]) || item.postUrl ? (
         <div className="flex items-start justify-between gap-2 mb-2">
           {metaField && !!item[metaField] && (
@@ -134,49 +226,23 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
         </div>
       )}
 
-      {/* Actions */}
-      {item.status === 'pending' && !editing && (
+      {/* Generic actions */}
+      {showActions && (
         <div className="flex items-center gap-1.5 pt-1">
-          {card.actions.map(action => {
-            if (action.id === 'approve') return (
-              <button
-                key={action.id}
-                onClick={handleApprove}
-                disabled={isPending}
-                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-moss/20 text-moss hover:bg-moss/30 transition-colors disabled:opacity-50"
-              >
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                {action.label}
-              </button>
-            )
-            if (action.id === 'reject') return (
-              <button
-                key={action.id}
-                onClick={handleReject}
-                disabled={isPending}
-                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-ember/20 text-ember hover:bg-ember/30 transition-colors disabled:opacity-50"
-              >
-                {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-                {action.label}
-              </button>
-            )
-            if (action.id === 'rewrite') return (
-              <button
-                key={action.id}
-                onClick={() => { setEditValue(item.draft || ''); setEditing(true) }}
-                disabled={isPending}
-                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors disabled:opacity-50"
-              >
-                <PenLine className="h-3 w-3" />
-                {action.label}
-              </button>
-            )
-            return null
-          })}
+          {card.actions.map(action => (
+            <ActionButton
+              key={action.id}
+              action={action}
+              item={item}
+              onAction={onAction}
+              onStartEdit={handleStartEdit}
+              isPending={isPending}
+            />
+          ))}
         </div>
       )}
 
-      {/* Status badge for non-pending */}
+      {/* Status badge for non-default statuses */}
       {item.status === 'approved' && (
         <div className="flex items-center gap-1 text-[10px] text-moss">
           <Check className="h-3 w-3" /> Approved — queued for posting
@@ -191,14 +257,17 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
   )
 }
 
-function CardSkillSection({ card }: { card: CardDefinition }) {
+// --- Card skill section (default renderer) ---
+
+export function CardSkillSection({ card }: { card: CardDefinition }) {
   const { data, isLoading } = useCardItems(card.skillId)
   const updateMutation = useUpdateCardItem()
 
   const items = data?.items || []
-  const pendingItems = items.filter(i => !i.status || i.status === 'pending')
+  const defaultStatus = card.defaultFilter?.status || 'pending'
+  const filteredItems = items.filter(i => !i.status || i.status === defaultStatus)
 
-  const handleAction = (itemId: string, update: { status?: string; draft?: string }) => {
+  const handleAction = (itemId: string, update: Record<string, unknown>) => {
     updateMutation.mutate({ skillId: card.skillId, itemId, update })
   }
 
@@ -216,15 +285,15 @@ function CardSkillSection({ card }: { card: CardDefinition }) {
     )
   }
 
-  if (pendingItems.length === 0) {
+  if (filteredItems.length === 0) {
     return (
-      <p className="text-xs text-stone/40 py-2 text-center">No drafts waiting for review</p>
+      <p className="text-xs text-stone/40 py-2 text-center">No items waiting for review</p>
     )
   }
 
   return (
     <div className="space-y-2">
-      {pendingItems.map(item => (
+      {filteredItems.map(item => (
         <CardItemRow
           key={item.id}
           item={item}
@@ -236,6 +305,8 @@ function CardSkillSection({ card }: { card: CardDefinition }) {
     </div>
   )
 }
+
+// --- Main card section (renders all non-custom-renderer cards) ---
 
 export function CardSection() {
   const { data: cards, isLoading } = useCards()
@@ -251,8 +322,8 @@ export function CardSection() {
     )
   }
 
-  // Filter out goals — they have their own dedicated GoalSection
-  const filteredCards = cards?.filter(c => c.skillId !== 'goals') || []
+  // Filter out goals (uses goal-tracker renderer) and any cards with custom renderers
+  const filteredCards = cards?.filter(c => c.skillId !== 'goals' && (!c.renderer || c.renderer === 'default')) || []
 
   if (filteredCards.length === 0) {
     return null
