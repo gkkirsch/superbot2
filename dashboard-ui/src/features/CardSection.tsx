@@ -289,10 +289,9 @@ export function CardSkillSection({ card }: { card: CardDefinition }) {
 
   return (
     <div className="space-y-2">
-      {/* Card header with name and optional settings gear */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-stone/60">{card.name}</span>
-        {card.hasSettings && (
+      {/* Settings gear (inline, opens settings form) */}
+      {card.hasSettings && (
+        <div className="flex justify-end">
           <button
             onClick={() => setShowSettings(v => !v)}
             className={`p-1 rounded transition-colors ${showSettings ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone'}`}
@@ -300,8 +299,8 @@ export function CardSkillSection({ card }: { card: CardDefinition }) {
           >
             <Settings className="h-3.5 w-3.5" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Settings form (collapsible) */}
       {showSettings && (

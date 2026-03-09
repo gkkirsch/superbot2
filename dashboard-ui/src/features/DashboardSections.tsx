@@ -13,7 +13,7 @@ import { ScheduleSection } from '@/features/ScheduleSection'
 import type { ScheduleViewMode } from '@/features/ScheduleSection'
 import { TodoSection } from '@/features/TodoSection'
 import { ChatSection } from '@/features/ChatSection'
-import { CardSection } from '@/features/CardSection'
+import { CardSkillSection } from '@/features/CardSection'
 import { GoalSection } from '@/features/GoalSection'
 import { TipsRotator } from '@/features/TipsRotator'
 import { Send } from 'lucide-react'
@@ -288,20 +288,40 @@ function TodoDashboardSection() {
   )
 }
 
+function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinition }) {
+  const [collapsed, toggle] = useCollapsedState(`card:${card.skillId}`)
+  const { data } = useCardItems(card.skillId)
+  const defaultStatus = card.defaultFilter?.status || 'pending'
+  const itemCount = data?.items?.filter(i => !i.status || i.status === defaultStatus).length ?? 0
+
+  return (
+    <section className="group" data-section={`card:${card.skillId}`}>
+      <SectionHeader
+        title={card.name}
+        icon={Send}
+        collapsed={collapsed}
+        onToggle={toggle}
+        badge={itemCount}
+      />
+      <CollapsibleContent collapsed={collapsed}>
+        <CardSkillSection card={card} />
+      </CollapsibleContent>
+    </section>
+  )
+}
+
 function CardsDashboardSection() {
-  const [collapsed, toggle] = useCollapsedState('cards')
   const { data: cards, isLoading } = useCards()
-  const pluginCards = cards?.filter(c => c.skillId !== 'goals') || []
+  const pluginCards = cards?.filter(c => c.skillId !== 'goals' && (!c.renderer || c.renderer === 'default')) || []
 
   if (!isLoading && pluginCards.length === 0) return null
 
   return (
-    <section className="group" data-section="cards">
-      <SectionHeader title="Plugin Cards" icon={Send} collapsed={collapsed} onToggle={toggle} />
-      <CollapsibleContent collapsed={collapsed}>
-        <CardSection />
-      </CollapsibleContent>
-    </section>
+    <div className="space-y-10">
+      {pluginCards.map(card => (
+        <SingleCardSection key={card.skillId} card={card} />
+      ))}
+    </div>
   )
 }
 
