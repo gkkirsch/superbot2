@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Trash2, Clock, Plus, ChevronDown, Puzzle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSchedule, useSkillSchedules } from '@/hooks/useSpaces'
+import { useSchedule, useSkillSchedules, useToggleSkillSchedule } from '@/hooks/useSpaces'
 import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
 import type { ScheduledJob, SkillScheduleInfo } from '@/lib/types'
 
@@ -563,6 +563,7 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
 export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { adding: boolean; setAdding: (v: boolean) => void; viewMode?: ScheduleViewMode }) {
   const { data, isLoading } = useSchedule()
   const { data: skillSchedules } = useSkillSchedules()
+  const toggleSkillSchedule = useToggleSkillSchedule()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [pastExpanded, setPastExpanded] = useState(false)
   const [tomorrowExpanded, setTomorrowExpanded] = useState(false)
@@ -783,9 +784,6 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                         {s.name}
                       </span>
                       <SkillBadge />
-                      {!s.enabled && (
-                        <span className="text-[9px] text-stone/40 uppercase tracking-wider">Not enabled</span>
-                      )}
                       <span className="text-xs text-stone/40 shrink-0">
                         {formatDays(days)}
                       </span>
@@ -794,6 +792,17 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                           {to12Hour(displayTimes[0])}
                         </span>
                       )}
+                      <button
+                        onClick={() => toggleSkillSchedule.mutate(s.skillId)}
+                        disabled={toggleSkillSchedule.isPending}
+                        className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                          s.enabled
+                            ? 'bg-moss/20 text-moss hover:bg-moss/30'
+                            : 'bg-stone/10 text-stone/50 hover:bg-stone/20 hover:text-stone/70'
+                        }`}
+                      >
+                        {s.enabled ? 'Enabled' : 'Enable'}
+                      </button>
                     </div>
                     {isMultiTime && (
                       <div className="flex flex-wrap gap-1 mt-1.5">

@@ -888,3 +888,11 @@ export async function fetchSkillSchedules(): Promise<SkillScheduleInfo[]> {
   const data = await fetchJson<{ schedules: SkillScheduleInfo[] }>('/skill-schedules')
   return data.schedules
 }
+
+export async function toggleSkillSchedule(skillId: string): Promise<{ enabled: boolean }> {
+  const response = await fetch(`${API_BASE}/skill-schedules/${encodeURIComponent(skillId)}/toggle`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}

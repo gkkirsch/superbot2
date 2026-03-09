@@ -44,6 +44,7 @@ import {
   fetchSkillSettings,
   saveSkillSettings,
   fetchSkillSchedules,
+  toggleSkillSchedule,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -457,5 +458,16 @@ export function useSkillSchedules() {
     queryKey: ['skill-schedules'],
     queryFn: fetchSkillSchedules,
     staleTime: 30_000,
+  })
+}
+
+export function useToggleSkillSchedule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (skillId: string) => toggleSkillSchedule(skillId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skill-schedules'] })
+      qc.invalidateQueries({ queryKey: ['schedule'] })
+    },
   })
 }

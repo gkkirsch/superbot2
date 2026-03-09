@@ -3687,6 +3687,49 @@ app.get('/api/skill-schedules', async (req, res) => {
   }
 })
 
+app.post('/api/skill-schedules/:skillId/toggle', async (req, res) => {
+  try {
+    await getCardDefinitions()
+    const { skillId } = req.params
+    const manifest = _manifests.get(skillId)
+    if (!manifest || !manifest.schedule) {
+      return res.status(404).json({ error: 'Skill schedule not found' })
+    }
+
+    const configPath = join(SUPERBOT_DIR, 'config.json')
+    const config = await readJsonFile(configPath) || {}
+    if (!config.schedule) config.schedule = []
+
+    const jobName = `skill:${skillId}`
+    const existingIdx = config.schedule.findIndex(j => j.name === jobName)
+
+    if (existingIdx >= 0) {
+      // Disable: remove from config
+      config.schedule.splice(existingIdx, 1)
+      await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      res.json({ enabled: false })
+    } else {
+      // Enable: add to config using skill's schedule defaults
+      const sched = manifest.schedule.default
+      const job = {
+        name: jobName,
+        task: `Run ${manifest.name} skill`,
+      }
+      if (sched.time) job.time = sched.time
+      if (sched.times) job.times = sched.times
+      if (sched.days) job.days = sched.days
+      if (manifest.agent && manifest.agent.type) {
+        job.agentType = manifest.agent.type
+      }
+      config.schedule.push(job)
+      await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      res.json({ enabled: true })
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Active workers ---
 
 const TEAM_CONFIG_PATH = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'config.json')
