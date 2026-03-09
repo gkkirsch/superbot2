@@ -301,9 +301,17 @@ export interface KnowledgeGroup {
 export interface CardAction {
   id: string
   label: string
+  icon?: string
   style: 'primary' | 'danger' | 'secondary'
   handler: string
   params?: Record<string, string>
+  showWhen?: { status?: string | string[] }
+}
+
+export interface ItemSchemaField {
+  type: 'string' | 'number' | 'boolean'
+  label?: string
+  multiline?: boolean
 }
 
 export interface CardDefinition {
@@ -311,14 +319,73 @@ export interface CardDefinition {
   name: string
   description: string
   dataSource: string
-  itemSchema: Record<string, string>
+  renderer?: string
+  itemSchema: Record<string, string | ItemSchemaField>
   display: {
     title: string
     body: string
     subtitle?: string
     meta?: string
   }
+  statusFlow?: string[]
+  defaultFilter?: { status?: string }
   actions: CardAction[]
+}
+
+// --- superbot.json manifest ---
+
+export interface SettingsField {
+  type: 'string' | 'number' | 'boolean' | 'array'
+  label: string
+  description?: string
+  default?: unknown
+  required?: boolean
+  enum?: string[]
+  multiline?: boolean
+  items?: { type: string }
+  min?: number
+  max?: number
+}
+
+export interface SettingsSchema {
+  schema: Record<string, SettingsField>
+}
+
+export interface ScheduleConfig {
+  default: {
+    time?: string
+    times?: string[]
+    days: string[]
+  }
+  configurable?: boolean
+}
+
+export interface AgentConfig {
+  type: string
+  model?: string
+}
+
+export interface SuperbotManifest {
+  name: string
+  description: string
+  version?: string
+  card?: Omit<CardDefinition, 'skillId' | 'name' | 'description'>
+  settings?: SettingsSchema
+  schedule?: ScheduleConfig
+  agent?: AgentConfig
+}
+
+export interface SkillSettingsResponse {
+  schema: Record<string, SettingsField>
+  values: Record<string, unknown>
+}
+
+export interface SkillScheduleInfo {
+  skillId: string
+  name: string
+  schedule: ScheduleConfig
+  enabled: boolean
+  overrides?: { time?: string; times?: string[]; days?: string[] }
 }
 
 export interface CardItem {
