@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X } from 'lucide-react'
 import { useCards, useCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem } from '@/hooks/useSpaces'
-import type { CardItem } from '@/lib/types'
+import type { CardDefinition, CardItem } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   active: { bg: 'bg-sky-500/20', text: 'text-sky-400', label: 'Active' },
@@ -312,16 +312,13 @@ function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, 
   )
 }
 
-export function GoalSection() {
-  const { data: cards, isLoading: cardsLoading } = useCards()
-  const goalCard = cards?.find(c => c.skillId === 'goals')
-  const { data, isLoading: itemsLoading } = useCardItems(goalCard?.skillId || '')
+// Renderer interface: accepts a CardDefinition from the registry
+export function GoalRenderer({ card }: { card: CardDefinition }) {
+  const { data, isLoading } = useCardItems(card.skillId)
   const updateMutation = useUpdateCardItem()
   const deleteMutation = useDeleteCardItem()
   const createMutation = useCreateCardItem()
   const [showCompleted, setShowCompleted] = useState(false)
-
-  const isLoading = cardsLoading || (goalCard && itemsLoading)
 
   if (isLoading) {
     return (
@@ -336,25 +333,21 @@ export function GoalSection() {
     )
   }
 
-  if (!goalCard) {
-    return <p className="text-xs text-stone/40 py-2 text-center">No goals configured</p>
-  }
-
   const items = data?.items || []
   const activeItems = items.filter(i => i.status === 'active' || i.status === 'paused')
   const completedItems = items.filter(i => i.status === 'completed' || i.status === 'abandoned')
   const displayItems = showCompleted ? [...activeItems, ...completedItems] : activeItems
 
   const handleAction = (itemId: string, update: Record<string, unknown>) => {
-    updateMutation.mutate({ skillId: goalCard.skillId, itemId, update })
+    updateMutation.mutate({ skillId: card.skillId, itemId, update })
   }
 
   const handleDelete = (itemId: string) => {
-    deleteMutation.mutate({ skillId: goalCard.skillId, itemId })
+    deleteMutation.mutate({ skillId: card.skillId, itemId })
   }
 
   const handleCreate = (goal: Record<string, unknown>) => {
-    createMutation.mutate({ skillId: goalCard.skillId, item: goal })
+    createMutation.mutate({ skillId: card.skillId, item: goal })
   }
 
   return (
@@ -379,4 +372,29 @@ export function GoalSection() {
       <AddGoalForm onSubmit={handleCreate} isPending={createMutation.isPending} />
     </div>
   )
+}
+
+// Legacy wrapper: GoalSection finds its own card definition (used by GoalsDashboardSection)
+export function GoalSection() {
+  const { data: cards, isLoading } = useCards()
+  const goalCard = cards?.find(c => c.skillId === 'goals')
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2].map(i => (
+          <div key={i} className="rounded-lg border border-border-custom p-3 animate-pulse">
+            <div className="h-3.5 bg-surface rounded w-2/3 mb-2" />
+            <div className="h-3 bg-surface rounded w-1/3" />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (!goalCard) {
+    return <p className="text-xs text-stone/40 py-2 text-center">No goals configured</p>
+  }
+
+  return <GoalRenderer card={goalCard} />
 }

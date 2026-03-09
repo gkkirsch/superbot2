@@ -18,6 +18,8 @@ import { GoalSection } from '@/features/GoalSection'
 import { TipsRotator } from '@/features/TipsRotator'
 import { Send } from 'lucide-react'
 import { Target } from 'lucide-react'
+// Register all built-in card renderers on import
+import '@/features/registerRenderers'
 import type { DashboardConfig } from '@/lib/types'
 
 // --- Collapse state hook + animated wrapper ---
