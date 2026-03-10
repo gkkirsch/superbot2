@@ -48,5 +48,36 @@
         "params": { "field": "notes" }
       }
     ]
+  },
+
+  "settings": {
+    "schema": {
+      "checkSources": {
+        "type": "string",
+        "enum": ["all", "spaces-only", "manual-only"],
+        "label": "Progress check sources",
+        "description": "What to review when checking goal progress",
+        "default": "all"
+      },
+      "autoAddNotes": {
+        "type": "boolean",
+        "label": "Auto-add progress notes",
+        "description": "Automatically append progress notes during scheduled checks",
+        "default": true
+      }
+    }
+  },
+
+  "schedule": {
+    "default": {
+      "times": ["00:00", "06:00", "12:00", "18:00"],
+      "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    },
+    "configurable": true
+  },
+
+  "agent": {
+    "type": "space-worker",
+    "model": "haiku"
   }
 }

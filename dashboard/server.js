@@ -3480,8 +3480,9 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
     const allItems = await readCardItems(card.skillId, card.dataSource)
-    const items = allItems.filter(i => !i.status || i.status === 'pending')
-    res.json({ items, card })
+    // Return all items — let the client-side renderer handle filtering
+    // (each renderer knows its own defaultFilter logic)
+    res.json({ items: allItems, card })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
