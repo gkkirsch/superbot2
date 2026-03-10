@@ -4,6 +4,7 @@ import { ArrowLeft, Check, FileText, FolderOpen, Circle, Loader2 } from 'lucide-
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
+import { BacklogSection } from '@/features/BacklogSection'
 import { useSpace, useSpaceEscalations, useSessions } from '@/hooks/useSpaces'
 import { useQueryClient } from '@tanstack/react-query'
 import { startServer, stopServer, deployServer } from '@/lib/api'
@@ -371,6 +372,9 @@ export function SpaceDetail() {
                 </div>
               )}
             </section>
+
+            {/* Backlog */}
+            <BacklogSection slug={slug ?? ''} />
           </div>
         </div>
       </div>

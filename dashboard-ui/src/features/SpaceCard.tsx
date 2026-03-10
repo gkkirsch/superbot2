@@ -73,6 +73,9 @@ export function SpaceCard({ space, variant = 'full', style, workers = [] }: Spac
             {space.projects.length > 0 && (
               <span>{space.projects.length} project{space.projects.length !== 1 ? 's' : ''}</span>
             )}
+            {(space.backlogCount ?? 0) > 0 && (
+              <span className="text-stone/50">{space.backlogCount} idea{space.backlogCount !== 1 ? 's' : ''}</span>
+            )}
             {space.escalationCount > 0 && (
               <span className="text-sand">{space.escalationCount} esc</span>
             )}

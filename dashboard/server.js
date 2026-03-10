@@ -215,6 +215,10 @@ app.get('/api/spaces', async (_req, res) => {
       const draftEsc = await getEscalationsFromDir('untriaged')
       const escalationCount = [...pendingEsc, ...draftEsc].filter(e => e.space === slug).length
 
+      // Count incomplete backlog items
+      const backlogItems = await readJsonFile(join(spaceDir, 'backlog.json'))
+      const backlogCount = backlogItems ? backlogItems.filter(i => !i.completed).length : 0
+
       spaces.push({
         name: spaceJson.name,
         slug: spaceJson.slug || slug,
@@ -229,6 +233,7 @@ app.get('/api/spaces', async (_req, res) => {
         projectTaskCounts,
         projectCreatedAt,
         escalationCount,
+        backlogCount,
         lastUpdated: getLastUpdated(allTasks),
         ...getSpaceExtras(spaceJson),
       })
@@ -292,6 +297,10 @@ app.get('/api/spaces/:slug', async (req, res) => {
     const draftEsc = await getEscalationsFromDir('untriaged')
     const escalationCount = [...pendingEsc, ...draftEsc].filter(e => e.space === slug).length
 
+    // Count incomplete backlog items
+    const backlogItems = await readJsonFile(join(spaceDir, 'backlog.json'))
+    const backlogCount = backlogItems ? backlogItems.filter(i => !i.completed).length : 0
+
     // Build pendingTasks: pending + in_progress tasks across all projects
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
     const pendingTasks = allTasks
@@ -343,6 +352,7 @@ app.get('/api/spaces/:slug', async (req, res) => {
         projectTaskCounts,
         projectCreatedAt,
         escalationCount,
+        backlogCount,
         lastUpdated: getLastUpdated(allTasks),
         ...getSpaceExtras(spaceJson),
       },
@@ -912,6 +922,118 @@ app.get('/api/spaces/:slug/server-status', async (req, res) => {
       if (existing) runningProcesses.delete(slug)
       res.json({ running: false, ...extras })
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Space Backlog ---
+
+async function readBacklog(spaceDir) {
+  const data = await readJsonFile(join(spaceDir, 'backlog.json'))
+  if (!data) return []
+  return data.map(item => ({ ...item, notes: item.notes || [] }))
+}
+
+async function writeBacklog(spaceDir, items) {
+  await writeFile(join(spaceDir, 'backlog.json'), JSON.stringify(items, null, 2), 'utf-8')
+}
+
+app.get('/api/spaces/:slug/backlog', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const items = await readBacklog(spaceDir)
+    res.json({ items })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/spaces/:slug/backlog/pending', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const items = await readBacklog(spaceDir)
+    res.json({ items: items.filter(i => !i.completed) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/spaces/:slug/backlog', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const { text } = req.body
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'Missing or empty text' })
+    }
+    const items = await readBacklog(spaceDir)
+    const newItem = { id: Date.now().toString(), text: text.trim(), completed: false, notes: [], createdAt: new Date().toISOString() }
+    items.push(newItem)
+    await writeBacklog(spaceDir, items)
+    res.json({ item: newItem })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.put('/api/spaces/:slug/backlog/:id', async (req, res) => {
+  try {
+    const { slug, id } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const items = await readBacklog(spaceDir)
+    const idx = items.findIndex(i => i.id === id)
+    if (idx === -1) return res.status(404).json({ error: 'Backlog item not found' })
+    const { text, completed } = req.body
+    if (text !== undefined) items[idx].text = text
+    if (completed !== undefined) items[idx].completed = completed
+    await writeBacklog(spaceDir, items)
+    res.json({ item: items[idx] })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/spaces/:slug/backlog/:id', async (req, res) => {
+  try {
+    const { slug, id } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const items = await readBacklog(spaceDir)
+    const filtered = items.filter(i => i.id !== id)
+    if (filtered.length === items.length) return res.status(404).json({ error: 'Backlog item not found' })
+    await writeBacklog(spaceDir, filtered)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+function slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').slice(0, 50).replace(/-$/, '')
+}
+
+app.post('/api/spaces/:slug/backlog/:id/promote', async (req, res) => {
+  try {
+    const { slug, id } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const items = await readBacklog(spaceDir)
+    const idx = items.findIndex(i => i.id === id)
+    if (idx === -1) return res.status(404).json({ error: 'Backlog item not found' })
+    const projectName = slugify(items[idx].text)
+    const projectDir = join(spaceDir, 'plans', projectName)
+    if (existsSync(projectDir)) return res.status(409).json({ error: 'Project already exists' })
+    await mkdir(join(projectDir, 'tasks'), { recursive: true })
+    items[idx].completed = true
+    await writeBacklog(spaceDir, items)
+    res.json({ item: items[idx], project: projectName })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

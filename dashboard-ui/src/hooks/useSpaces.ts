@@ -46,8 +46,13 @@ import {
   saveSkillSettings,
   fetchSkillSchedules,
   toggleSkillSchedule,
+  fetchBacklog,
+  addBacklogItem,
+  updateBacklogItem,
+  deleteBacklogItem,
+  promoteBacklogItem,
 } from '@/lib/api'
-import type { DashboardConfig, TodoItem } from '@/lib/types'
+import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
 // --- Context files ---
 
@@ -266,6 +271,52 @@ export function useTodos() {
     toggle: toggleMutation.mutate,
     remove: removeMutation.mutate,
     updateText: updateTextMutation.mutate,
+  }
+}
+
+// --- Backlog ---
+
+export function useBacklog(slug: string) {
+  const queryClient = useQueryClient()
+  const queryKey = ['backlog', slug]
+  const query = useQuery({ queryKey, queryFn: () => fetchBacklog(slug), staleTime: 30_000, enabled: !!slug })
+
+  const addMutation = useMutation({
+    mutationFn: (text: string) => addBacklogItem(slug, text),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }) },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: (item: BacklogItem) => updateBacklogItem(slug, item.id, { completed: !item.completed }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }) },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => deleteBacklogItem(slug, id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }) },
+  })
+
+  const updateTextMutation = useMutation({
+    mutationFn: ({ id, text }: { id: string; text: string }) => updateBacklogItem(slug, id, { text }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey }) },
+  })
+
+  const promoteMutation = useMutation({
+    mutationFn: (id: string) => promoteBacklogItem(slug, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey })
+      queryClient.invalidateQueries({ queryKey: ['space', slug] })
+    },
+  })
+
+  return {
+    items: query.data || [],
+    isLoading: query.isLoading,
+    add: addMutation.mutate,
+    toggle: toggleMutation.mutate,
+    remove: removeMutation.mutate,
+    updateText: updateTextMutation.mutate,
+    promote: promoteMutation.mutate,
   }
 }
 

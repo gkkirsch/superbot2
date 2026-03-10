@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, BacklogItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
 
 export type { PluginDetail }
 
@@ -612,6 +612,50 @@ export async function deleteTodo(id: string): Promise<void> {
     method: 'DELETE',
   })
   if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+// --- Backlog ---
+
+export async function fetchBacklog(slug: string): Promise<BacklogItem[]> {
+  const data = await fetchJson<{ items: BacklogItem[] }>(`/spaces/${encodeURIComponent(slug)}/backlog`)
+  return data.items
+}
+
+export async function addBacklogItem(slug: string, text: string): Promise<BacklogItem> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/backlog`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.item
+}
+
+export async function updateBacklogItem(slug: string, id: string, updates: { text?: string; completed?: boolean }): Promise<BacklogItem> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/backlog/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.item
+}
+
+export async function deleteBacklogItem(slug: string, id: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/backlog/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+}
+
+export async function promoteBacklogItem(slug: string, id: string): Promise<{ item: BacklogItem; project: string }> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/backlog/${encodeURIComponent(id)}/promote`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
 }
 
 // --- Auto-triage rules ---

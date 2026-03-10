@@ -19,6 +19,7 @@ export interface SpaceOverview {
   projectTaskCounts?: Record<string, TaskCounts>
   projectCreatedAt?: Record<string, string>
   escalationCount: number
+  backlogCount?: number
   lastUpdated: string | null
   hasDevServer?: boolean
   hasDeploy?: boolean
@@ -266,6 +267,14 @@ export interface TodoItem {
   text: string
   completed: boolean
   notes?: TodoNote[]
+}
+
+export interface BacklogItem {
+  id: string
+  text: string
+  completed: boolean
+  notes?: TodoNote[]
+  createdAt: string
 }
 
 export interface ActiveWorker {
