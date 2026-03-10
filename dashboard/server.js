@@ -936,6 +936,28 @@ app.get('/api/status', async (_req, res) => {
   }
 })
 
+// --- GitHub PRs ---
+
+app.get('/api/github/prs', async (_req, res) => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      execFile('gh', [
+        'pr', 'list',
+        '--author', '@me',
+        '--state', 'open',
+        '--json', 'number,title,headRefName,url,statusCheckRollup,createdAt,reviewDecision,headRepository',
+      ], { timeout: 15000 }, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message))
+        resolve(stdout)
+      })
+    })
+    const prs = JSON.parse(result)
+    res.json({ prs })
+  } catch (err) {
+    res.json({ prs: [], error: err.message })
+  }
+})
+
 // --- iMessage integration ---
 
 app.get('/api/imessage/status', async (_req, res) => {

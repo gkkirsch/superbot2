@@ -408,6 +408,17 @@ export interface CardItem {
   [key: string]: unknown
 }
 
+export interface GitHubPR {
+  number: number
+  title: string
+  headRefName: string
+  url: string
+  createdAt: string
+  reviewDecision: string
+  statusCheckRollup: Array<{ context: string; state: string }>
+  headRepository: { name: string; id?: string }
+}
+
 export interface Escalation {
   id: string
   type: 'decision' | 'blocker' | 'question' | 'approval' | 'improvement' | 'agent_plan'

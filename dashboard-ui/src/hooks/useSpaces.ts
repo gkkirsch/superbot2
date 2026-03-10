@@ -45,6 +45,7 @@ import {
   saveSkillSettings,
   fetchSkillSchedules,
   toggleSkillSchedule,
+  fetchGithubPrs,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -307,6 +308,12 @@ export function useAutoTriageRules() {
 
 export function useActiveWorkers() {
   return useQuery({ queryKey: ['active-workers'], queryFn: fetchActiveWorkers, staleTime: 10_000, refetchInterval: 15_000 })
+}
+
+// --- GitHub PRs ---
+
+export function useGithubPrs() {
+  return useQuery({ queryKey: ['github-prs'], queryFn: fetchGithubPrs, staleTime: 300_000, refetchInterval: 300_000 })
 }
 
 // --- Knowledge ---

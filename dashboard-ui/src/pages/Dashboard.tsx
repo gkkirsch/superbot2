@@ -41,6 +41,7 @@ const SECTION_LABELS: Record<string, string> = {
   'goals': 'Goals',
   'chat': 'Chat',
   'tips': 'Tips',
+  'pull-requests': 'Pull Requests',
 }
 
 // --- Sortable section item ---

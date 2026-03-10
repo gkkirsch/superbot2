@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo, GitHubPR } from './types'
 
 export type { PluginDetail }
 
@@ -68,6 +68,13 @@ export async function fetchProjectDocuments(slug: string, project: string): Prom
 export async function fetchActiveWorkers(): Promise<ActiveWorker[]> {
   const data = await fetchJson<{ workers: ActiveWorker[] }>('/workers')
   return data.workers
+}
+
+// --- GitHub PRs ---
+
+export async function fetchGithubPrs(): Promise<GitHubPR[]> {
+  const data = await fetchJson<{ prs: GitHubPR[] }>('/github/prs')
+  return data.prs
 }
 
 // --- Escalations ---
