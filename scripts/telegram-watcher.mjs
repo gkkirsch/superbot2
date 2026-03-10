@@ -45,6 +45,12 @@ let typingInterval = null
 let waitingForReply = false
 let shuttingDown = false
 
+// Telegram conversation gating — only forward orchestrator replies when user
+// is actively chatting via Telegram, not when messages originate from dashboard
+let lastTelegramMessageTime = 0
+let replyBaseline = 0
+const TELEGRAM_CONVERSATION_TIMEOUT = 5 * 60 * 1000 // 5 minutes
+
 // In-memory map: short callback key -> full escalation ID
 // Populated when escalation cards are sent, used when callback buttons are clicked
 let callbackMap = new Map() // e.g. "e1" -> "esc-personal-assistant-email-triage-..."
@@ -476,6 +482,17 @@ async function handleTextMessage(text, msg) {
     lastUserMessageId = msg.message_id
     await saveMessageMap()
   }
+
+  // Activate Telegram conversation — set baseline to current inbox count so we
+  // only forward orchestrator replies that arrive AFTER this message
+  try {
+    const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
+    const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
+    replyBaseline = orchestratorReplies.length
+  } catch {
+    replyBaseline = lastSentReplyCount
+  }
+  lastTelegramMessageTime = Date.now()
 
   // Build the relayed text, prepending reply context if the user replied to a specific message
   const replyContext = msg?.reply_to_message ? buildReplyContext(msg.reply_to_message) : ''
@@ -963,11 +980,29 @@ async function checkForReplies() {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
 
-    if (orchestratorReplies.length <= lastSentReplyCount) {
+    // Only forward replies when the user is actively chatting via Telegram.
+    // When inactive, silently advance the counter so dashboard-originated
+    // messages don't accumulate and get dumped later.
+    const conversationActive = lastTelegramMessageTime > 0 &&
+      (Date.now() - lastTelegramMessageTime) < TELEGRAM_CONVERSATION_TIMEOUT
+
+    if (!conversationActive) {
+      if (orchestratorReplies.length > lastSentReplyCount) {
+        lastSentReplyCount = orchestratorReplies.length
+        await saveLastSentCount(lastSentReplyCount)
+      }
       return
     }
 
-    const newReplies = orchestratorReplies.slice(lastSentReplyCount)
+    // Use the baseline to skip messages that were already in the inbox before
+    // the user's Telegram message — these are dashboard-originated, not replies
+    const startIdx = Math.max(lastSentReplyCount, replyBaseline)
+
+    if (orchestratorReplies.length <= startIdx) {
+      return
+    }
+
+    const newReplies = orchestratorReplies.slice(startIdx)
 
     // Use lastUserMessageId for reply threading — the orchestrator reply
     // should thread back to the user's most recent message
@@ -978,7 +1013,7 @@ async function checkForReplies() {
       if (!text.trim()) continue
 
       // Track the inbox index for this reply (for future reverse-mapping)
-      const replyIdx = lastSentReplyCount + newReplies.indexOf(reply)
+      const replyIdx = startIdx + newReplies.indexOf(reply)
 
       // Check for image paths in the message
       const imagePaths = extractImagePaths(text)
