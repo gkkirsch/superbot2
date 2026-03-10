@@ -44,6 +44,7 @@ let sentEscalationIds = new Set()
 let typingInterval = null
 let waitingForReply = false
 let shuttingDown = false
+let checkingReplies = false
 
 // In-memory map: short callback key -> full escalation ID
 // Populated when escalation cards are sent, used when callback buttons are clicked
@@ -51,13 +52,22 @@ let callbackMap = new Map() // e.g. "e1" -> "esc-personal-assistant-email-triage
 let callbackCounter = 0
 
 // Message ID tracking for reply threading
-// lastUserMessageId: the Telegram message_id of the user's most recent non-command message
+//
+// userMessageAnchors: array of { inboxCountAtSend, telegramMessageId }
+//   When the user sends a message, we snapshot the current orchestrator inbox length.
+//   Orchestrator replies arriving after that snapshot are threaded to that user message.
+//   Multiple user messages create multiple anchors; each reply threads to the most recent
+//   anchor whose inboxCountAtSend <= the reply's inbox index.
+//
 // messageMap: maps inbox index -> Telegram message_id of the bot's sent reply
-// This lets us thread orchestrator replies back to the user's message,
-// and preserve reply context when the user replies to a specific bot message.
+//   Used for general bookkeeping (not directly for threading decisions).
+//
+// lastUserMessageId: fallback for replies when no anchor matches (e.g., unprompted updates)
 let lastUserMessageId = null
-let messageMap = {} // { inboxIdx: telegramMessageId, ... } + { lastUserMessageId }
+let userMessageAnchors = [] // [{ inboxCountAtSend, telegramMessageId }, ...]
+let messageMap = {} // { inboxIdx: telegramMessageId, ... }
 const MAX_MESSAGE_MAP_SIZE = 200 // Keep map bounded
+const MAX_ANCHORS = 100 // Keep anchors bounded
 
 // --- Helpers ---
 
@@ -369,24 +379,40 @@ async function loadMessageMap() {
   const data = await readJsonFile(MESSAGE_MAP_FILE)
   if (data && typeof data === 'object') {
     if (data.lastUserMessageId) lastUserMessageId = data.lastUserMessageId
-    return data
+    if (Array.isArray(data._userMessageAnchors)) {
+      userMessageAnchors = data._userMessageAnchors
+    }
+    // Load the index->messageId entries (excluding metadata keys)
+    const map = {}
+    for (const [k, v] of Object.entries(data)) {
+      if (k.startsWith('_') || k === 'lastUserMessageId') continue
+      map[k] = v
+    }
+    return map
   }
   return {}
 }
 
 async function saveMessageMap() {
   // Prune old entries to keep the map bounded
-  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId')
+  const keys = Object.keys(messageMap).filter(k => !k.startsWith('_'))
   if (keys.length > MAX_MESSAGE_MAP_SIZE) {
-    // Keep only the most recent entries (highest numeric keys)
     const numericKeys = keys.filter(k => !isNaN(parseInt(k, 10))).map(Number).sort((a, b) => a - b)
     const toRemove = numericKeys.slice(0, numericKeys.length - MAX_MESSAGE_MAP_SIZE)
     for (const k of toRemove) {
       delete messageMap[String(k)]
     }
   }
-  messageMap.lastUserMessageId = lastUserMessageId
-  await writeJsonFile(MESSAGE_MAP_FILE, messageMap)
+  // Prune old anchors
+  if (userMessageAnchors.length > MAX_ANCHORS) {
+    userMessageAnchors = userMessageAnchors.slice(userMessageAnchors.length - MAX_ANCHORS)
+  }
+  const toSave = {
+    ...messageMap,
+    lastUserMessageId,
+    _userMessageAnchors: userMessageAnchors,
+  }
+  await writeJsonFile(MESSAGE_MAP_FILE, toSave)
 }
 
 // --- Message processing ---
@@ -471,9 +497,27 @@ async function handleTextMessage(text, msg) {
   }
 
   // Regular message — relay to orchestrator
-  // Track the user's message ID for reply threading
+  // Track the user's message ID for reply threading.
+  // Snapshot the current inbox length so we can map future orchestrator replies
+  // back to this user message.
   if (msg && msg.message_id) {
     lastUserMessageId = msg.message_id
+
+    // Read current inbox length to create an anchor
+    let currentInboxCount = lastSentReplyCount
+    try {
+      const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
+      const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
+      currentInboxCount = orchestratorReplies.length
+    } catch {
+      // Use lastSentReplyCount as fallback
+    }
+
+    userMessageAnchors.push({
+      inboxCountAtSend: currentInboxCount,
+      telegramMessageId: msg.message_id,
+    })
+    log(`Anchor created: user msg ${msg.message_id} at inbox count ${currentInboxCount}`)
     await saveMessageMap()
   }
 
@@ -958,6 +1002,8 @@ async function handleCallbackQuery(callbackQuery) {
 
 async function checkForReplies() {
   if (!chatId) return
+  if (checkingReplies) return  // prevent overlapping polls
+  checkingReplies = true
 
   try {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
@@ -969,16 +1015,26 @@ async function checkForReplies() {
 
     const newReplies = orchestratorReplies.slice(lastSentReplyCount)
 
-    // Use lastUserMessageId for reply threading — the orchestrator reply
-    // should thread back to the user's most recent message
-    const replyToId = lastUserMessageId || null
-
-    for (const reply of newReplies) {
+    for (let ri = 0; ri < newReplies.length; ri++) {
+      const reply = newReplies[ri]
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
       // Track the inbox index for this reply (for future reverse-mapping)
-      const replyIdx = lastSentReplyCount + newReplies.indexOf(reply)
+      const replyIdx = lastSentReplyCount + ri
+
+      // Determine which user message to thread this reply to.
+      // Find the most recent anchor whose inboxCountAtSend <= replyIdx.
+      // This means: "the user message that was sent before this orchestrator reply appeared."
+      let replyToId = null
+      for (let ai = userMessageAnchors.length - 1; ai >= 0; ai--) {
+        if (userMessageAnchors[ai].inboxCountAtSend <= replyIdx) {
+          replyToId = userMessageAnchors[ai].telegramMessageId
+          break
+        }
+      }
+      // Fallback to lastUserMessageId if no anchor matches (e.g., unprompted bot update)
+      if (!replyToId) replyToId = lastUserMessageId || null
 
       // Check for image paths in the message
       const imagePaths = extractImagePaths(text)
@@ -1076,6 +1132,8 @@ async function checkForReplies() {
     await saveMessageMap()
   } catch (err) {
     logError(`Error checking for replies: ${err.message}`)
+  } finally {
+    checkingReplies = false
   }
 }
 
