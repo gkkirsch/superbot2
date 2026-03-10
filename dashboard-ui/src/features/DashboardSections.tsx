@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb, GitPullRequest, RefreshCw, ExternalLink, GitBranch } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
-import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useCards, useCardItems, useGithubPrs } from '@/hooks/useSpaces'
+import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useCards, useCardItems } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import type { Filter } from '@/features/CombinedEscalationsSection'
@@ -353,108 +353,6 @@ function TipsDashboardSection() {
   )
 }
 
-function StatusDot({ rollup }: { rollup: Array<{ state: string }> }) {
-  if (!rollup || rollup.length === 0) return <span className="h-2 w-2 rounded-full bg-stone/30 shrink-0" title="No checks" />
-  const hasFailure = rollup.some(c => c.state === 'FAILURE' || c.state === 'ERROR')
-  const hasPending = rollup.some(c => c.state === 'PENDING' || c.state === 'EXPECTED')
-  if (hasFailure) return <span className="h-2 w-2 rounded-full bg-ember shrink-0" title="Checks failing" />
-  if (hasPending) return <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0" title="Checks pending" />
-  return <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" title="Checks passing" />
-}
-
-function ReviewBadge({ decision }: { decision: string }) {
-  if (!decision) return null
-  const labels: Record<string, { text: string; className: string }> = {
-    APPROVED: { text: 'Approved', className: 'text-emerald-400 bg-emerald-400/10' },
-    CHANGES_REQUESTED: { text: 'Changes', className: 'text-ember bg-ember/10' },
-    REVIEW_REQUIRED: { text: 'Review needed', className: 'text-amber-400 bg-amber-400/10' },
-  }
-  const badge = labels[decision]
-  if (!badge) return null
-  return <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${badge.className}`}>{badge.text}</span>
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const days = Math.floor(diff / 86400000)
-  if (days > 0) return `${days}d ago`
-  const hours = Math.floor(diff / 3600000)
-  if (hours > 0) return `${hours}h ago`
-  const mins = Math.floor(diff / 60000)
-  return `${mins}m ago`
-}
-
-function PullRequestsDashboardSection() {
-  const [collapsed, toggle] = useCollapsedState('pull-requests', true)
-  const { data: prs, isLoading, refetch, isFetching } = useGithubPrs()
-  const prCount = prs?.length ?? 0
-  const queryClient = useQueryClient()
-
-  const handleRefresh = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    queryClient.invalidateQueries({ queryKey: ['github-prs'] })
-    refetch()
-  }
-
-  return (
-    <section className="group" data-section="pull-requests">
-      <SectionHeader
-        title="Pull Requests"
-        icon={GitPullRequest}
-        collapsed={collapsed}
-        onToggle={toggle}
-        badge={prCount}
-        action={
-          <button
-            onClick={handleRefresh}
-            className={`p-1 text-stone/50 hover:text-sand transition-colors rounded hover:bg-sand/10 ${isFetching ? 'animate-spin' : ''}`}
-            title="Refresh"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-        }
-      />
-      <CollapsibleContent collapsed={collapsed}>
-        {isLoading ? (
-          <p className="text-xs text-stone/50">Loading...</p>
-        ) : prCount === 0 ? (
-          <p className="text-xs text-stone/50">No open pull requests</p>
-        ) : (
-          <div className="space-y-2">
-            {prs!.map(pr => (
-              <a
-                key={pr.url}
-                href={pr.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-lg border border-stone/10 bg-surface/40 px-3 py-2.5 hover:border-sand/30 hover:bg-surface/60 transition-colors"
-              >
-                <div className="flex items-start gap-2">
-                  <StatusDot rollup={pr.statusCheckRollup} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-stone/60">{pr.headRepository?.name ?? 'unknown'}</span>
-                      <span className="text-[10px] text-stone/40">#{pr.number}</span>
-                      <ReviewBadge decision={pr.reviewDecision} />
-                    </div>
-                    <p className="text-sm text-parchment truncate">{pr.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <GitBranch className="h-3 w-3 text-stone/40" />
-                      <span className="text-[11px] text-stone/50 truncate">{pr.headRefName}</span>
-                      <span className="text-[10px] text-stone/30 ml-auto shrink-0">{timeAgo(pr.createdAt)}</span>
-                      <ExternalLink className="h-3 w-3 text-stone/30 shrink-0" />
-                    </div>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        )}
-      </CollapsibleContent>
-    </section>
-  )
-}
-
 // --- Section registry ---
 
 export interface SectionDef {
@@ -499,10 +397,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'tips',
     Component: TipsDashboardSection,
   },
-  'pull-requests': {
-    id: 'pull-requests',
-    Component: PullRequestsDashboardSection,
-  },
 }
 
 // --- Default layout ---
@@ -510,6 +404,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['pulse', 'pull-requests', 'goals', 'cards', 'escalations', 'schedule', 'todos'],
+  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'schedule', 'todos'],
   hidden: ['recent-activity', 'tips'],
 }
