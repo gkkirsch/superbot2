@@ -7,6 +7,7 @@ set -euo pipefail
 RECIPIENT="$1"
 IMAGE_PATH="$2"
 CONFIG_FILE="$HOME/.superbot2/config.json"
+SENT_LOG="$HOME/.superbot2/imessage-sent.log"
 
 if [[ -z "$RECIPIENT" || -z "$IMAGE_PATH" ]]; then
   echo "Usage: send-imessage-image.sh <recipient> <image-file-path>" >&2
@@ -21,6 +22,13 @@ fi
 # Resolve to absolute path
 IMAGE_PATH="$(cd "$(dirname "$IMAGE_PATH")" && pwd)/$(basename "$IMAGE_PATH")"
 
+# Log sent message for dedup (prevents watcher from re-processing our own messages)
+log_sent_image() {
+  local hash
+  hash=$(md5 -q "$IMAGE_PATH" 2>/dev/null || echo "image-$(date +%s)")
+  echo "$(date +%s)|$hash" >> "$SENT_LOG"
+}
+
 # Read the superbot2 Apple ID from config for service lookup
 APPLE_ID=$(jq -r '.imessage.appleId // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
 
@@ -31,13 +39,16 @@ ESCAPED_IMAGE_PATH="${IMAGE_PATH//\"/\\\"}"
 if [[ -n "$APPLE_ID" ]]; then
   # Send FROM the superbot2 account specifically
   ESCAPED_APPLE_ID="${APPLE_ID//\"/\\\"}"
-  osascript -e "
+  if osascript -e "
 tell application \"Messages\"
   set superbot2Service to (first service whose (name contains \"$ESCAPED_APPLE_ID\" or id contains \"$ESCAPED_APPLE_ID\"))
   set targetBuddy to buddy \"$ESCAPED_RECIPIENT\" of superbot2Service
   send POSIX file \"$ESCAPED_IMAGE_PATH\" to targetBuddy
 end tell
-" 2>/dev/null && exit 0
+" 2>/dev/null; then
+    log_sent_image
+    exit 0
+  fi
 fi
 
 # Fallback: use default iMessage service
@@ -48,3 +59,4 @@ tell application \"Messages\"
   send POSIX file \"$ESCAPED_IMAGE_PATH\" to targetBuddy
 end tell
 "
+log_sent_image

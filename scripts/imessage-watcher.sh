@@ -24,9 +24,11 @@ trap 'rm -f "$PID_FILE"' EXIT
 
 CONFIG_FILE="$HOME/.superbot2/config.json"
 ROWID_FILE="$HOME/.superbot2/imessage-last-rowid.txt"
+SENT_LOG="$HOME/.superbot2/imessage-sent.log"
 CHAT_DB="$HOME/Library/Messages/chat.db"
 API_URL="http://localhost:3274/api/messages"
 POLL_INTERVAL=5
+DEDUP_WINDOW=30  # seconds — skip messages matching content sent within this window
 
 # Read config
 if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -61,6 +63,38 @@ else
   echo "$LAST_ROWID" > "$ROWID_FILE"
 fi
 
+# Ensure sent log exists
+touch "$SENT_LOG"
+
+# Check if a message content hash was recently sent by superbot2
+is_sent_by_us() {
+  local content_hash="$1"
+  local now
+  now=$(date +%s)
+  while IFS='|' read -r sent_ts sent_hash; do
+    if [[ "$sent_hash" == "$content_hash" ]] && (( now - sent_ts < DEDUP_WINDOW )); then
+      return 0
+    fi
+  done < "$SENT_LOG"
+  return 1
+}
+
+# Remove sent log entries older than 2x the dedup window
+cleanup_sent_log() {
+  if [[ ! -s "$SENT_LOG" ]]; then
+    return
+  fi
+  local cutoff
+  cutoff=$(( $(date +%s) - DEDUP_WINDOW * 2 ))
+  local tmp="$SENT_LOG.tmp.$$"
+  while IFS='|' read -r sent_ts sent_hash; do
+    if [[ "$sent_ts" =~ ^[0-9]+$ ]] && (( sent_ts > cutoff )); then
+      echo "$sent_ts|$sent_hash"
+    fi
+  done < "$SENT_LOG" > "$tmp"
+  mv "$tmp" "$SENT_LOG"
+}
+
 echo "imessage-watcher: started (Apple ID: $APPLE_ID, last rowid: $LAST_ROWID)"
 
 while true; do
@@ -83,6 +117,14 @@ while true; do
   if [[ -n "$RESULTS" ]]; then
     while IFS='|' read -r ROWID TEXT DATE_VAL; do
       [[ -z "$ROWID" ]] && continue
+
+      # Dedup: skip messages that superbot2 just sent (prevents recursive loop)
+      CONTENT_HASH=$(echo -n "$TEXT" | md5)
+      if is_sent_by_us "$CONTENT_HASH"; then
+        echo "imessage-watcher: skipping own message (rowid=$ROWID): ${TEXT:0:50}..."
+        LAST_ROWID="$ROWID"
+        continue
+      fi
 
       echo "imessage-watcher: new message (rowid=$ROWID): ${TEXT:0:50}..."
 
@@ -107,6 +149,9 @@ while true; do
     # Update last rowid file
     echo "$LAST_ROWID" > "$ROWID_FILE"
   fi
+
+  # Periodically clean up old sent-log entries
+  cleanup_sent_log
 
   sleep "$POLL_INTERVAL"
 done
