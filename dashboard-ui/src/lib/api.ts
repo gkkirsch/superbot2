@@ -863,6 +863,15 @@ export async function createCardItem(skillId: string, item: Record<string, unkno
   return data.item
 }
 
+export async function refreshCardItems(skillId: string): Promise<CardItem[]> {
+  const response = await fetch(`${API_BASE}/cards/${encodeURIComponent(skillId)}/refresh`, {
+    method: 'POST',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  const data = await response.json()
+  return data.items
+}
+
 // --- Skill manifest & settings ---
 
 export async function fetchSkillManifest(skillId: string): Promise<SuperbotManifest & { skillId: string }> {

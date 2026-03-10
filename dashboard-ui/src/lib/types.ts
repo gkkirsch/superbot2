@@ -320,6 +320,7 @@ export interface CardDefinition {
   description: string
   dataSource: string
   renderer?: string
+  refreshCommand?: string
   hasSettings?: boolean
   itemSchema: Record<string, string | ItemSchemaField>
   display: {

@@ -4,6 +4,8 @@
 import { registerRenderer } from './cardRenderers'
 import { CardSkillSection } from './CardSection'
 import { GoalRenderer } from './GoalSection'
+import { GitHubPrsRenderer } from './GitHubPrsRenderer'
 
 registerRenderer('default', CardSkillSection)
 registerRenderer('goal-tracker', GoalRenderer)
+registerRenderer('github-prs', GitHubPrsRenderer)

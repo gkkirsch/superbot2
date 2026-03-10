@@ -40,6 +40,7 @@ import {
   updateCardItem,
   deleteCardItem,
   createCardItem,
+  refreshCardItems,
   fetchSkillManifest,
   fetchSkillSettings,
   saveSkillSettings,
@@ -418,6 +419,16 @@ export function useCreateCardItem() {
       createCardItem(skillId, item),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['card-items'] })
+    },
+  })
+}
+
+export function useRefreshCardItems() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (skillId: string) => refreshCardItems(skillId),
+    onSuccess: (_data, skillId) => {
+      qc.invalidateQueries({ queryKey: ['card-items', skillId] })
     },
   })
 }

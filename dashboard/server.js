@@ -3584,6 +3584,38 @@ app.post('/api/cards/:skillId/items', async (req, res) => {
   }
 })
 
+// --- Card refresh (generic — runs a skill's card.refreshCommand) ---
+
+app.post('/api/cards/:skillId/refresh', async (req, res) => {
+  try {
+    const { skillId } = req.params
+    await getCardDefinitions()
+    const manifest = _manifests.get(skillId)
+    if (!manifest) return res.status(404).json({ error: 'Skill not found' })
+    if (!manifest.card || !manifest.card.refreshCommand) {
+      return res.status(400).json({ error: 'Skill does not declare a refreshCommand' })
+    }
+
+    const baseDir = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
+    const cmd = manifest.card.refreshCommand
+
+    // Run the refresh command in the skill's directory
+    await new Promise((resolveP, rejectP) => {
+      execFile('bash', ['-c', cmd], { cwd: baseDir, timeout: 30000 }, (err, _stdout, stderr) => {
+        if (err) return rejectP(new Error(stderr || err.message))
+        resolveP()
+      })
+    })
+
+    // Return updated items
+    const dataSource = manifest.card.dataSource || 'data.jsonl'
+    const items = await readCardItems(skillId, dataSource)
+    res.json({ items })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Skill manifest & settings ---
 
 const SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')

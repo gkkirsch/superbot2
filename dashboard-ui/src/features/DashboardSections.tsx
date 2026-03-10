@@ -14,6 +14,7 @@ import type { ScheduleViewMode } from '@/features/ScheduleSection'
 import { TodoSection } from '@/features/TodoSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSkillSection } from '@/features/CardSection'
+import { getRendererOrDefault } from '@/features/cardRenderers'
 import { GoalSection } from '@/features/GoalSection'
 import { TipsRotator } from '@/features/TipsRotator'
 import { Send } from 'lucide-react'
@@ -293,6 +294,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
   const { data } = useCardItems(card.skillId)
   const defaultStatus = card.defaultFilter?.status || 'pending'
   const itemCount = data?.items?.filter(i => !i.status || i.status === defaultStatus).length ?? 0
+  const Renderer = getRendererOrDefault(card.renderer) || CardSkillSection
 
   return (
     <section className="group" data-section={`card:${card.skillId}`}>
@@ -304,7 +306,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
         badge={itemCount}
       />
       <CollapsibleContent collapsed={collapsed}>
-        <CardSkillSection card={card} />
+        <Renderer card={card} />
       </CollapsibleContent>
     </section>
   )
@@ -312,7 +314,8 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
 
 function CardsDashboardSection() {
   const { data: cards, isLoading } = useCards()
-  const pluginCards = cards?.filter(c => c.skillId !== 'goals' && (!c.renderer || c.renderer === 'default')) || []
+  // Show all cards except goals (which has its own section)
+  const pluginCards = cards?.filter(c => c.skillId !== 'goals') || []
 
   if (!isLoading && pluginCards.length === 0) return null
 
