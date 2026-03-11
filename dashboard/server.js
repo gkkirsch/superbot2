@@ -805,6 +805,82 @@ app.get('/api/all-tasks', async (req, res) => {
   }
 })
 
+// --- GET /api/latest-files ---
+
+app.get('/api/latest-files', async (_req, res) => {
+  try {
+    const spaceSlugs = await safeReaddir(SPACES_DIR)
+    const allFiles = []
+
+    for (const slug of spaceSlugs) {
+      const spaceDir = join(SPACES_DIR, slug)
+      try {
+        const s = await stat(spaceDir)
+        if (!s.isDirectory()) continue
+      } catch { continue }
+
+      const spaceJson = await readJsonFile(join(spaceDir, 'space.json'))
+      if (!spaceJson || !spaceJson.codeDir) continue
+
+      const codeDir = spaceJson.codeDir
+      try {
+        const s = await stat(codeDir)
+        if (!s.isDirectory()) continue
+      } catch { continue }
+
+      // Get recent git commits with file changes
+      const gitOutput = await new Promise((resolve, reject) => {
+        execFile('git', [
+          'log', '--pretty=format:%H%x00%s%x00%ai', '--name-only',
+          '-n', '30', '--diff-filter=ACMR'
+        ], { cwd: codeDir, timeout: 10000 }, (err, stdout) => {
+          if (err) return reject(err)
+          resolve(stdout)
+        })
+      })
+
+      // Parse git log output: each commit block separated by blank line
+      const blocks = gitOutput.toString().split('\n\n')
+      for (const block of blocks) {
+        if (!block.trim()) continue
+        const lines = block.split('\n')
+        if (lines.length < 2) continue
+
+        const [commitHash, commitMessage, commitDate] = lines[0].split('\0')
+        const files = lines.slice(1).filter(f => f.trim())
+
+        for (const file of files) {
+          allFiles.push({
+            filename: file.split('/').pop(),
+            path: file,
+            space: slug,
+            spaceName: spaceJson.name,
+            commitHash: commitHash?.slice(0, 7),
+            commitMessage: commitMessage?.slice(0, 80),
+            modifiedAt: commitDate,
+          })
+        }
+      }
+    }
+
+    // Sort by modification date descending, deduplicate by space+path (keep newest)
+    allFiles.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+    const seen = new Set()
+    const deduped = []
+    for (const f of allFiles) {
+      const key = `${f.space}:${f.path}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      deduped.push(f)
+      if (deduped.length >= 30) break
+    }
+
+    res.json({ files: deduped })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Dev server process management ---
 
 const runningProcesses = new Map() // slug -> { pid, command, cwd, startedAt }

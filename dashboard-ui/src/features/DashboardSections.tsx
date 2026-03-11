@@ -16,9 +16,9 @@ import { ChatSection } from '@/features/ChatSection'
 import { CardSkillSection } from '@/features/CardSection'
 import { getRendererOrDefault } from '@/features/cardRenderers'
 import { GoalSection } from '@/features/GoalSection'
+import { LatestFilesSection } from '@/features/LatestFilesSection'
 import { TipsRotator } from '@/features/TipsRotator'
-import { Send } from 'lucide-react'
-import { Target } from 'lucide-react'
+import { Send, Target, FileCode } from 'lucide-react'
 // Register all built-in card renderers on import
 import '@/features/registerRenderers'
 import type { DashboardConfig } from '@/lib/types'
@@ -344,6 +344,18 @@ function GoalsDashboardSection() {
   )
 }
 
+function LatestFilesDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('latest-files')
+  return (
+    <section className="group" data-section="latest-files">
+      <SectionHeader title="Latest Files" icon={FileCode} collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <LatestFilesSection />
+      </CollapsibleContent>
+    </section>
+  )
+}
+
 function TipsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('tips')
   return (
@@ -392,6 +404,10 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'goals',
     Component: GoalsDashboardSection,
   },
+  'latest-files': {
+    id: 'latest-files',
+    Component: LatestFilesDashboardSection,
+  },
   'chat': {
     id: 'chat',
     Component: ChatSection,
@@ -407,6 +423,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'schedule', 'todos'],
+  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'latest-files', 'schedule', 'todos'],
   hidden: ['recent-activity', 'tips'],
 }

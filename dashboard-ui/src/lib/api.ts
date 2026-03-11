@@ -867,6 +867,23 @@ export async function uploadKnowledgeFile(source: string, file: File): Promise<{
   return response.json()
 }
 
+// --- Latest files ---
+
+export interface LatestFile {
+  filename: string
+  path: string
+  space: string
+  spaceName: string
+  commitHash: string
+  commitMessage: string
+  modifiedAt: string
+}
+
+export async function fetchLatestFiles(): Promise<LatestFile[]> {
+  const data = await fetchJson<{ files: LatestFile[] }>('/latest-files')
+  return data.files
+}
+
 // --- Dashboard cards ---
 
 export async function fetchCards(): Promise<CardDefinition[]> {

@@ -51,6 +51,7 @@ import {
   updateBacklogItem,
   deleteBacklogItem,
   promoteBacklogItem,
+  fetchLatestFiles,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
@@ -420,6 +421,12 @@ export function useUploadKnowledge() {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
     },
   })
+}
+
+// --- Latest files ---
+
+export function useLatestFiles() {
+  return useQuery({ queryKey: ['latest-files'], queryFn: fetchLatestFiles, staleTime: 30_000 })
 }
 
 // --- Dashboard cards ---
