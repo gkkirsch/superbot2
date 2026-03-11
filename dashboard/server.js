@@ -809,9 +809,36 @@ app.get('/api/all-tasks', async (req, res) => {
 
 app.get('/api/latest-files', async (_req, res) => {
   try {
-    const spaceSlugs = await safeReaddir(SPACES_DIR)
     const allFiles = []
 
+    // Helper: collect .md files from a directory (non-recursive)
+    async function collectMd(dir, space, spaceName, category) {
+      try {
+        const entries = await readdir(dir)
+        for (const entry of entries) {
+          if (!entry.endsWith('.md')) continue
+          const filePath = join(dir, entry)
+          try {
+            const s = await stat(filePath)
+            if (!s.isFile()) continue
+            allFiles.push({
+              filename: entry,
+              path: filePath.replace(SUPERBOT_DIR + '/', ''),
+              space,
+              spaceName,
+              category,
+              modifiedAt: s.mtime.toISOString(),
+            })
+          } catch { /* skip unreadable */ }
+        }
+      } catch { /* dir doesn't exist */ }
+    }
+
+    // 1. Global knowledge
+    await collectMd(KNOWLEDGE_DIR, 'global', 'Global', 'Knowledge')
+
+    // 2. Per-space files
+    const spaceSlugs = await safeReaddir(SPACES_DIR)
     for (const slug of spaceSlugs) {
       const spaceDir = join(SPACES_DIR, slug)
       try {
@@ -820,67 +847,65 @@ app.get('/api/latest-files', async (_req, res) => {
       } catch { continue }
 
       const spaceJson = await readJsonFile(join(spaceDir, 'space.json'))
-      if (!spaceJson || !spaceJson.codeDir) continue
+      const spaceName = spaceJson?.name || slug
 
-      const codeDir = spaceJson.codeDir
-      try {
-        const s = await stat(codeDir)
-        if (!s.isDirectory()) continue
-      } catch { continue }
+      // Space knowledge
+      await collectMd(join(spaceDir, 'knowledge'), slug, spaceName, 'Knowledge')
 
-      // Get recent git commits with file changes
-      const gitOutput = await new Promise((resolve, reject) => {
-        execFile('git', [
-          'log', '--pretty=format:%H%x00%s%x00%ai', '--name-only',
-          '-n', '30', '--diff-filter=ACMR'
-        ], { cwd: codeDir, timeout: 10000 }, (err, stdout) => {
-          if (err) return reject(err)
-          resolve(stdout)
-        })
-      })
+      // Space-level .md files (OVERVIEW.md, plan.md, etc.)
+      await collectMd(spaceDir, slug, spaceName, 'Overview')
 
-      // Parse git log output: each commit block separated by blank line
-      const blocks = gitOutput.toString().split('\n\n')
-      for (const block of blocks) {
-        if (!block.trim()) continue
-        const lines = block.split('\n')
-        if (lines.length < 2) continue
+      // Project plans (spaces/*/plans/*/plan.md and spaces/*/projects/*/plan.md)
+      for (const planDir of ['plans', 'projects']) {
+        try {
+          const projects = await readdir(join(spaceDir, planDir))
+          for (const proj of projects) {
+            const projDir = join(spaceDir, planDir, proj)
+            try {
+              const s = await stat(projDir)
+              if (!s.isDirectory()) continue
+            } catch { continue }
+            await collectMd(projDir, slug, spaceName, 'Plan')
+          }
+        } catch { /* dir doesn't exist */ }
+      }
 
-        const [commitHash, commitMessage, commitDate] = lines[0].split('\0')
-        const files = lines.slice(1).filter(f => f.trim())
-
-        for (const file of files) {
-          // Only include documentation files (.md), skip source code
-          if (!file.endsWith('.md')) continue
-          // Skip docs inside build artifacts or dependencies
-          if (/\b(node_modules|dist|build)\b/.test(file)) continue
-
-          allFiles.push({
-            filename: file.split('/').pop(),
-            path: file,
-            space: slug,
-            spaceName: spaceJson.name,
-            commitHash: commitHash?.slice(0, 7),
-            commitMessage: commitMessage?.slice(0, 80),
-            modifiedAt: commitDate,
-          })
-        }
+      // Task files (spaces/*/plans/*/tasks/*.md and spaces/*/projects/*/tasks/*.md)
+      for (const planDir of ['plans', 'projects']) {
+        try {
+          const projects = await readdir(join(spaceDir, planDir))
+          for (const proj of projects) {
+            const tasksDir = join(spaceDir, planDir, proj, 'tasks')
+            await collectMd(tasksDir, slug, spaceName, 'Task')
+          }
+        } catch { /* skip */ }
       }
     }
 
-    // Sort by modification date descending, deduplicate by space+path (keep newest)
-    allFiles.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
-    const seen = new Set()
-    const deduped = []
-    for (const f of allFiles) {
-      const key = `${f.space}:${f.path}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      deduped.push(f)
-      if (deduped.length >= 30) break
-    }
+    // 3. Session summaries
+    try {
+      const sessions = await readdir(SESSIONS_DIR)
+      for (const entry of sessions) {
+        if (!entry.endsWith('.json')) continue
+        const filePath = join(SESSIONS_DIR, entry)
+        try {
+          const s = await stat(filePath)
+          if (!s.isFile()) continue
+          allFiles.push({
+            filename: entry,
+            path: 'sessions/' + entry,
+            space: 'global',
+            spaceName: 'Sessions',
+            category: 'Session',
+            modifiedAt: s.mtime.toISOString(),
+          })
+        } catch { /* skip */ }
+      }
+    } catch { /* no sessions dir */ }
 
-    res.json({ files: deduped })
+    // Sort by modification date descending, take top 30
+    allFiles.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+    res.json({ files: allFiles.slice(0, 30) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
