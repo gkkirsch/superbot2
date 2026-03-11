@@ -1,3 +1,0 @@
-{"id":"rem-001","status":"pending","title":"Review PRs","body":"Check open pull requests and provide feedback","category":"task","createdAt":"2026-03-08T08:00:00Z"}
-{"id":"rem-002","status":"pending","title":"Team standup","body":"Daily standup meeting at 9:30 AM","category":"meeting","createdAt":"2026-03-08T08:00:00Z"}
-{"id":"rem-003","status":"done","title":"Update docs","body":"Update the API documentation with new endpoints","category":"task","createdAt":"2026-03-07T08:00:00Z","updatedAt":"2026-03-07T14:00:00Z"}
