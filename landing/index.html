@@ -5,7 +5,7 @@
   <link rel="icon" href="/logo.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>superbot — Agent Orchestration for Claude Code</title>
-  <meta name="description" content="Orchestrate AI agents across all your projects. Persistent spaces with knowledge that compounds. 10x what you ship.">
+  <meta name="description" content="Orchestrate AI agents across all your projects. Persistent spaces, knowledge that survives sessions, and agents that never start from scratch. Built on your existing Claude Code account.">
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -26,13 +26,12 @@
             stone: '#706b63',
             sand: '#c4a882',
             moss: '#8a9a7b',
-            ember: '#dc504a',
+            ember: '#DC504A',
             codebg: '#111110',
             'border-custom': '#1f1f1e',
           },
           fontFamily: {
             mono: ['"Space Mono"', 'monospace'],
-            body: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
           },
         },
       },
@@ -41,577 +40,679 @@
 
   <style>
     html { scroll-behavior: smooth; }
-    body { background: #0a0a0a; color: #d4cdc4; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+    body { background: #0a0a0a; color: #d4cdc4; font-family: 'Space Mono', monospace; }
     ::selection { background: rgba(196, 168, 130, 0.25); color: #d4cdc4; }
 
+    /* Fade-up animations */
     @keyframes fade-up {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
+      0% { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
     }
-    .fade-up { animation: fade-up 0.6s ease-out both; }
-    .fade-up-d1 { animation: fade-up 0.6s ease-out 0.15s both; }
-    .fade-up-d2 { animation: fade-up 0.6s ease-out 0.3s both; }
-    .fade-up-d3 { animation: fade-up 0.6s ease-out 0.45s both; }
-    .fade-up-d4 { animation: fade-up 0.6s ease-out 0.6s both; }
+    .animate-fade-up { animation: .6s ease-out both fade-up; }
+    .animate-fade-up-delay { animation: .6s ease-out .15s both fade-up; }
+    .animate-fade-up-delay-2 { animation: .6s ease-out .3s both fade-up; }
 
+    /* Pulse dot */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+    .animate-pulse-dot { animation: 2s ease-in-out infinite pulse-dot; }
+
+    /* Ripple */
+    @keyframes ripple {
+      0% { opacity: .6; transform: scale(0); }
+      100% { opacity: 0; transform: scale(1); }
+    }
+
+    /* Marquee */
+    @keyframes marquee-left {
+      0% { transform: translate(0); }
+      100% { transform: translate(-50%); }
+    }
+    @keyframes marquee-right {
+      0% { transform: translate(-50%); }
+      100% { transform: translate(0); }
+    }
+    .marquee-track-left {
+      gap: 1rem;
+      animation: 80s linear infinite marquee-left;
+      display: flex;
+    }
+    .marquee-track-right {
+      gap: 1rem;
+      animation: 80s linear infinite marquee-right;
+      display: flex;
+    }
+
+    /* Cursor blink for cursor SVG */
+    @keyframes cursor-blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+    /* Scroll fade */
     .fade-up-scroll {
       opacity: 0; transform: translateY(20px);
       transition: opacity 0.6s ease-out, transform 0.6s ease-out;
     }
     .fade-up-scroll.visible { opacity: 1; transform: translateY(0); }
-
-    /* Terminal windows */
-    .terminal-window {
-      background: #0d0d0d;
-      border: 1px solid #1f1f1e;
-      border-radius: 0.75rem;
-      overflow: hidden;
-      box-shadow: 0 0 80px rgba(0,0,0,0.5), 0 0 120px rgba(196,168,130,0.03);
-    }
-    .terminal-header {
-      background: #141414;
-      border-bottom: 1px solid #1f1f1e;
-      padding: 0.625rem 0.875rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .terminal-dot { width: 7px; height: 7px; border-radius: 50%; }
-    .terminal-body {
-      padding: 0.875rem;
-      height: 180px;
-      overflow: hidden;
-      position: relative;
-    }
-    .terminal-body::after {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 40px;
-      background: linear-gradient(transparent, #0d0d0d);
-      pointer-events: none;
-    }
-    .terminal-line {
-      font-family: "Space Mono", monospace;
-      font-size: 11px;
-      line-height: 1.7;
-      white-space: nowrap;
-      overflow: hidden;
-      opacity: 0;
-      animation: terminal-appear 0.3s ease-out forwards;
-    }
-    @keyframes terminal-appear {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-    .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
-
-    /* Feature cards */
-    .feature-card {
-      background: rgba(20,20,20,0.5);
-      border: 1px solid #1f1f1e;
-      border-radius: 0.75rem;
-      padding: 1.5rem;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .feature-card:hover {
-      border-color: rgba(196, 168, 130, 0.25);
-      transform: translateY(-2px);
-    }
-
-    /* Space tree */
-    .space-tree {
-      font-family: "Space Mono", monospace;
-      font-size: 12px;
-      line-height: 1.9;
-    }
-
-    /* Copy button */
-    .copy-btn { transition: all 0.2s; }
-    .copy-btn:hover { background: rgba(196, 168, 130, 0.15); }
-    .copy-btn.copied { color: #8a9a7b; }
-
-    /* Dashboard mockup */
-    .dashboard-frame {
-      background: #0c0c0c;
-      border: 1px solid #1f1f1e;
-      border-radius: 0.75rem;
-      overflow: hidden;
-      box-shadow: 0 0 80px rgba(0,0,0,0.4);
-    }
-    .dashboard-titlebar {
-      background: #141414;
-      border-bottom: 1px solid #1f1f1e;
-      padding: 0.5rem 0.75rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .dashboard-dot { width: 8px; height: 8px; border-radius: 50%; }
-
-    /* How it works columns */
-    .step-icon {
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 1rem;
-    }
-
-    /* Nav install button */
-    .nav-install {
-      background: rgba(196, 168, 130, 0.1);
-      border: 1px solid rgba(196, 168, 130, 0.3);
-      color: #c4a882;
-      font-family: "Space Mono", monospace;
-      font-size: 0.8125rem;
-      padding: 0.375rem 1rem;
-      border-radius: 0.375rem;
-      transition: all 0.15s;
-    }
-    .nav-install:hover {
-      background: rgba(196, 168, 130, 0.2);
-      border-color: rgba(196, 168, 130, 0.5);
-    }
   </style>
 </head>
-<body>
+<body class="antialiased">
 
   <!-- Nav -->
-  <nav class="fixed top-0 w-full z-50 bg-ink/80 backdrop-blur-sm">
-    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-      <a href="#" class="flex items-center gap-2">
-        <img src="/logo.png" alt="SB" class="w-6 h-6">
-        <span class="font-mono font-bold text-parchment text-sm">superbot</span>
-      </a>
-      <div class="hidden md:flex items-center gap-6 text-sm">
-        <a href="#features" class="text-stone hover:text-parchment transition-colors">Features</a>
-        <a href="#how-it-works" class="text-stone hover:text-parchment transition-colors">How It Works</a>
-        <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="text-stone hover:text-parchment transition-colors">Docs</a>
-        <a href="#install" class="nav-install">Install</a>
-      </div>
-      <button onclick="toggleMobileNav()" class="md:hidden text-stone hover:text-parchment p-1" aria-label="Menu">
-        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-    <div id="mobile-nav" class="hidden md:hidden border-t border-border-custom bg-ink/95 backdrop-blur-sm">
-      <div class="flex flex-col px-6 py-4 gap-3 text-sm text-stone">
-        <a href="#features" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Features</a>
-        <a href="#how-it-works" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">How It Works</a>
-        <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Docs</a>
-        <a href="#install" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Install</a>
+  <nav class="fixed top-0 w-full z-50">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-end">
+      <div class="flex items-center gap-3">
+        <a href="/docs" class="text-xs font-mono text-stone hover:text-sand transition-colors px-3 py-1.5">Docs</a>
+        <a href="#install" class="text-xs font-mono text-stone hover:text-sand transition-colors px-3 py-1.5 rounded-full border border-border-custom hover:border-stone/40">Install</a>
       </div>
     </div>
   </nav>
 
   <!-- Hero -->
-  <section class="min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-8">
-    <div class="max-w-3xl text-center">
-      <!-- Logo -->
-      <img src="/superbot-logo.png" alt="SUPERBOT" class="h-14 md:h-20 mx-auto mb-10 fade-up drop-shadow-lg">
+  <section class="min-h-screen flex items-start justify-center px-6 pt-32">
+    <div class="max-w-4xl w-full text-center">
 
-      <h1 class="font-mono font-bold text-xl md:text-2xl text-parchment leading-snug mb-4 fade-up-d1">
-        <span class="text-parchment/80">Orchestrate AI agents across all your projects.</span><br>
-        <span class="text-sand">10x what you ship.</span>
-      </h1>
+      <!-- SUPERBOT Logo -->
+      <div class="animate-fade-up mb-8 flex items-center justify-center">
+        <img alt="SUPERBOT" class="h-10 md:h-14" src="/superbot-logo.png">
+      </div>
 
-      <p class="font-mono text-sm text-stone leading-relaxed max-w-xl mx-auto mb-8 fade-up-d2">
-        Built for engineers who want AI agents that work autonomously. Persistent spaces mean your agents remember everything &mdash; conventions, decisions, entire codebases. You set direction. They deliver code.
+      <!-- Hero copy — messaging updated -->
+      <p class="animate-fade-up-delay font-mono text-stone text-lg md:text-xl max-w-2xl mx-auto mb-4">
+        Orchestrate AI agents across all your projects.<span class="text-parchment"> Persistent spaces. Knowledge that survives sessions. Agents that never start from scratch.</span>
+      </p>
+      <p class="animate-fade-up-delay font-mono text-sand/70 text-sm max-w-xl mx-auto mb-10">
+        Uses your existing Claude Code account. No extra AI costs.
       </p>
 
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 fade-up-d3">
-        <a href="#install" class="bg-sand/40 border border-sand/50 text-parchment font-mono font-bold px-6 py-2.5 rounded-lg hover:bg-sand/50 transition-all text-sm">
-          Install
-        </a>
-        <a href="#spaces" class="border border-border-custom text-stone font-mono px-6 py-2.5 rounded-lg hover:border-stone/40 transition-colors text-sm">
-          Learn more
-        </a>
-      </div>
-    </div>
-
-    <!-- Agent activity terminals -->
-    <div class="max-w-5xl w-full mt-14 grid grid-cols-1 md:grid-cols-3 gap-4 fade-up-d4">
-      <div class="terminal-window">
-        <div class="terminal-header">
-          <div class="terminal-dot bg-moss pulse-dot"></div>
-          <span class="font-mono text-xs text-stone">meta</span>
-          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
-        </div>
-        <div class="terminal-body" id="term-meta"></div>
-      </div>
-      <div class="terminal-window">
-        <div class="terminal-header">
-          <div class="terminal-dot bg-sand pulse-dot" style="animation-delay: 0.5s"></div>
-          <span class="font-mono text-xs text-stone">api</span>
-          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
-        </div>
-        <div class="terminal-body" id="term-api"></div>
-      </div>
-      <div class="terminal-window">
-        <div class="terminal-header">
-          <div class="terminal-dot bg-moss pulse-dot" style="animation-delay: 1s"></div>
-          <span class="font-mono text-xs text-stone">frontend</span>
-          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
-        </div>
-        <div class="terminal-body" id="term-frontend"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Spaces -->
-  <section id="spaces" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto fade-up-scroll">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-        <div>
-          <p class="font-mono text-sand text-xs tracking-wider uppercase mb-4">Persistent Context</p>
-          <h2 class="font-mono font-bold text-2xl text-parchment mb-6 leading-tight">Agents that never forget.</h2>
-          <p class="text-stone leading-relaxed mb-6">
-            Every space is a persistent project environment. Knowledge, conventions, decisions, and research accumulate over time. When an agent starts work, it already knows everything &mdash; no re-briefing, no context loss, no repeating yourself.
-          </p>
-          <p class="text-stone leading-relaxed mb-8 text-sm">
-            Spaces hold plans, tasks, and escalations. Your agents work through structured project workflows, surfacing decisions to you only when they need to. Context compounds with every session.
-          </p>
-          <div class="flex items-center gap-3 text-sm">
-            <div class="w-2 h-2 bg-sand rounded-full"></div>
-            <span class="text-parchment">Works with your existing Claude Code account</span>
-          </div>
-        </div>
-
-        <!-- Space tree visualization -->
-        <div class="terminal-window">
-          <div class="terminal-header">
-            <div class="terminal-dot bg-sand"></div>
-            <span class="font-mono text-xs text-stone">space: meta</span>
-          </div>
-          <div class="p-5 space-tree text-stone">
-            <div class="text-parchment mb-1">~/.superbot2/spaces/meta/</div>
-            <div class="pl-4">
-              <div class="text-sand">knowledge/</div>
-              <div class="pl-4 text-stone/70">conventions.md <span class="text-stone/40">&mdash; coding standards</span></div>
-              <div class="pl-4 text-stone/70">decisions.md <span class="text-stone/40">&mdash; architectural log</span></div>
-              <div class="pl-4 text-stone/70">patterns.md <span class="text-stone/40">&mdash; reusable patterns</span></div>
-              <div class="pl-4 text-stone/70 mb-2">research.md <span class="text-stone/40">&mdash; API docs, findings</span></div>
-              <div class="text-sand">tasks/</div>
-              <div class="pl-4 text-moss">&#x2713; add-auth-endpoints</div>
-              <div class="pl-4 text-sand">&#x25B8; rewrite-landing-hero <span class="text-stone/40">&mdash; in progress</span></div>
-              <div class="pl-4 text-stone/40 mb-2">&#x25CB; deploy-staging <span class="text-stone/30">&mdash; blocked</span></div>
-              <div class="text-sand">plans/</div>
-              <div class="pl-4 text-stone/70 mb-2">landing-page/plan.md</div>
-              <div class="text-sand">escalations/</div>
-              <div class="pl-4 text-stone/70">"JWT vs sessions for auth?"</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Features -->
-  <section id="features" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto fade-up-scroll">
-      <h2 class="font-mono font-bold text-2xl text-parchment mb-4 text-center">Features</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto text-sm">Everything you need to orchestrate autonomous agents across your entire project portfolio.</p>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x25A3;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Browser Automation</h3>
-          <p class="text-stone text-sm leading-relaxed">Agents control a real Chrome browser. Fill forms, take screenshots, navigate sites, and automate web workflows with persistent sessions.</p>
-        </div>
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x23F0;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Schedules</h3>
-          <p class="text-stone text-sm leading-relaxed">Cron-like recurring tasks. Run heartbeats, analysis, and custom jobs on autopilot. Your agents work while you sleep.</p>
-        </div>
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x26A0;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Escalations</h3>
-          <p class="text-stone text-sm leading-relaxed">When agents hit decisions they can't make, they escalate to you. Architectural choices, scope questions, approvals &mdash; nothing falls through.</p>
-        </div>
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x2261;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Project Management</h3>
-          <p class="text-stone text-sm leading-relaxed">Plans, tasks, priorities, and acceptance criteria. Every space has a structured workflow with progress tracking across projects.</p>
-        </div>
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x25C8;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Dashboard</h3>
-          <p class="text-stone text-sm leading-relaxed">Real-time web UI. Chat with the orchestrator, manage escalations, schedule jobs, and monitor system health at a glance.</p>
-        </div>
-        <div class="feature-card">
-          <div class="text-sand text-lg mb-3">&#x2726;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Knowledge Persistence</h3>
-          <p class="text-stone text-sm leading-relaxed">Conventions, patterns, research, and decisions persist across sessions. Agents get smarter the more they work in a space.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- How It Works -->
-  <section id="how-it-works" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-4xl mx-auto fade-up-scroll">
-      <h2 class="font-mono font-bold text-2xl text-parchment mb-16 text-center">How it works</h2>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center mb-20">
-        <div>
-          <div class="step-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#706b63" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          </div>
-          <h3 class="font-mono font-bold text-parchment text-sm mb-3">Runs Itself</h3>
-          <p class="text-stone text-sm leading-relaxed">The orchestrator wakes on a schedule, reads your project state, decides what needs doing, and spawns AI agents to handle it.</p>
-        </div>
-        <div>
-          <div class="step-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#706b63" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          </div>
-          <h3 class="font-mono font-bold text-parchment text-sm mb-3">Manages Everything</h3>
-          <p class="text-stone text-sm leading-relaxed">Software projects, APIs, frontends, social media, research &mdash; define a space for any kind of work. Agents plan, execute, and ship.</p>
-        </div>
-        <div>
-          <div class="step-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#706b63" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </div>
-          <h3 class="font-mono font-bold text-parchment text-sm mb-3">Built on Claude Code</h3>
-          <p class="text-stone text-sm leading-relaxed">No new AI subscription. Superbot runs on your existing Claude Code plan. Every component &mdash; orchestrator, workers, skills &mdash; is a Claude Code primitive.</p>
-        </div>
+      <!-- CTA buttons -->
+      <div class="animate-fade-up-delay-2 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="#install" class="px-6 py-2.5 rounded-full bg-sand/10 border border-sand/20 text-sand font-mono text-sm hover:bg-sand/20 transition-all">Install</a>
+        <a href="/docs" class="px-6 py-2.5 rounded-full border border-border-custom text-stone font-mono text-sm hover:text-parchment hover:border-stone/40 transition-all">Read the docs</a>
       </div>
 
-      <!-- Dashboard mockup -->
-      <div class="dashboard-frame max-w-4xl mx-auto">
-        <div class="dashboard-titlebar">
-          <div class="dashboard-dot" style="background: rgba(255,95,87,0.7)"></div>
-          <div class="dashboard-dot" style="background: rgba(254,188,46,0.7)"></div>
-          <div class="dashboard-dot" style="background: rgba(40,200,64,0.7)"></div>
-          <span class="font-mono text-[10px] text-stone/50 ml-2">superbot</span>
-          <span class="font-mono text-[10px] text-stone/30 ml-1">dashboard</span>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-0 min-h-[360px]">
-          <!-- Left panel -->
-          <div class="border-r border-border-custom p-4">
-            <!-- Escalations -->
-            <div class="mb-6">
-              <div class="flex items-center gap-2 mb-3">
-                <span class="text-parchment text-xs font-mono font-bold">Escalations</span>
+      <!-- Browser mock animation -->
+      <div class="animate-fade-up-delay-2 mt-12">
+        <div class="max-w-3xl mx-auto">
+          <div class="rounded-xl border border-border-custom bg-[#0c0c0c] overflow-hidden" style="box-shadow: 0 0 80px rgba(0,0,0,0.5), 0 0 120px rgba(196,168,130,0.03);">
+
+            <!-- Window chrome -->
+            <div class="flex items-center gap-3 px-4 py-2.5 bg-[#141414] border-b border-border-custom">
+              <div class="flex gap-1.5">
+                <div class="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/70"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-[#febc2e]/70"></div>
+                <div class="w-2.5 h-2.5 rounded-full bg-[#28c840]/70"></div>
               </div>
-              <div class="space-y-2">
-                <div class="bg-surface/60 rounded-md p-2.5">
-                  <div class="text-[11px] text-parchment/80 mb-1">Instagram credentials expired &mdash; need re-login</div>
-                  <div class="flex gap-1.5">
-                    <span class="text-[9px] font-mono bg-ember/60 text-parchment px-1.5 py-0.5 rounded">blocker</span>
-                    <span class="text-[9px] font-mono text-stone/50">high</span>
+              <div class="flex items-center gap-2 bg-[#0c0c0c] rounded-t-md px-3 py-1 -mb-2.5 border border-border-custom border-b-0 ml-2">
+                <div class="w-3 h-3 rounded bg-sand/10"></div>
+                <span class="text-[9px] text-stone/50 font-mono max-w-[120px] truncate" id="browser-tab-label">superbot</span>
+              </div>
+              <div class="flex-1"></div>
+            </div>
+
+            <!-- URL bar -->
+            <div class="flex items-center gap-2 px-4 py-1.5 bg-[#111] border-b border-border-custom">
+              <div class="flex gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone/25"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-stone/25"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </div>
+              <div class="flex-1 bg-[#0a0a0a] rounded-md px-3 py-1 border border-[#1a1a1a]">
+                <span class="text-[10px] text-stone/50 font-mono" id="browser-url">localhost:5173</span>
+              </div>
+            </div>
+
+            <!-- Browser content area -->
+            <div class="relative h-[380px] bg-[#0a0a0a] overflow-hidden">
+
+              <!-- Scene 1: Dashboard -->
+              <div id="scene-dashboard" class="p-4 h-full overflow-hidden absolute inset-0 transition-opacity duration-500">
+                <!-- Top bar -->
+                <div class="h-8 flex items-center gap-3 mb-3 pb-3 border-b border-border-custom">
+                  <div class="w-5 h-5 rounded bg-sand/20 shrink-0"></div>
+                  <span class="text-[10px] font-mono text-parchment/60 whitespace-nowrap">superbot</span>
+                  <div class="flex-1"></div>
+                  <div class="flex gap-2">
+                    <div class="w-12 h-3 rounded bg-surface/80"></div>
+                    <div class="w-12 h-3 rounded bg-surface/80"></div>
                   </div>
                 </div>
-                <div class="bg-surface/60 rounded-md p-2.5">
-                  <div class="text-[11px] text-parchment/80 mb-1">Auth strategy for the new API &mdash; JWT or sessions?</div>
+                <!-- 2-col layout -->
+                <div class="grid grid-cols-[1fr_2fr] gap-3 h-[calc(100%-44px)]">
+                  <!-- Left panel -->
+                  <div class="space-y-2 overflow-hidden">
+                    <div class="h-5 flex items-center"><span class="text-[9px] font-mono text-stone/50 uppercase tracking-wider">Escalations</span></div>
+                    <div class="h-10 rounded-md border border-border-custom bg-surface/30 p-2 overflow-hidden" id="esc-1">
+                      <div class="flex items-center gap-1.5">
+                        <div class="w-1.5 h-1.5 shrink-0 rounded-full bg-ember/60"></div>
+                        <span class="text-[9px] text-parchment/70 truncate">Instagram creds expired</span>
+                      </div>
+                      <span class="text-[8px] text-stone/40 ml-3 truncate block">blocker · high</span>
+                    </div>
+                    <div class="h-10 rounded-md border border-border-custom bg-surface/30 p-2 overflow-hidden">
+                      <div class="flex items-center gap-1.5">
+                        <div class="w-1.5 h-1.5 shrink-0 rounded-full bg-sand/40"></div>
+                        <span class="text-[9px] text-parchment/70 truncate">Auth strategy — JWT or sessions?</span>
+                      </div>
+                      <span class="text-[8px] text-stone/40 ml-3 truncate block">decision · med</span>
+                    </div>
+                    <div class="h-5 flex items-center"><span class="text-[9px] font-mono text-stone/50 uppercase tracking-wider">Spaces</span></div>
+                    <div class="h-8 rounded-md border border-border-custom bg-surface/30 px-2 flex items-center gap-1.5 overflow-hidden">
+                      <div class="w-1.5 h-1.5 shrink-0 rounded-full bg-moss/60"></div>
+                      <span class="text-[9px] text-parchment/70 truncate">api</span>
+                      <span class="text-[8px] text-stone/40 ml-auto shrink-0">6 tasks</span>
+                    </div>
+                    <div class="h-8 rounded-md border border-border-custom bg-surface/30 px-2 flex items-center gap-1.5 overflow-hidden">
+                      <div class="w-1.5 h-1.5 shrink-0 rounded-full bg-moss/60"></div>
+                      <span class="text-[9px] text-parchment/70 truncate">social-media</span>
+                      <span class="text-[8px] text-stone/40 ml-auto shrink-0">3 tasks</span>
+                    </div>
+                  </div>
+                  <!-- Right panel: Chat -->
+                  <div class="flex flex-col border-l border-border-custom pl-3 overflow-hidden">
+                    <div class="h-5 flex items-center mb-2"><span class="text-[9px] font-mono text-stone/50 uppercase tracking-wider">Chat</span></div>
+                    <div class="space-y-2 flex-1 overflow-hidden">
+                      <div class="flex justify-end">
+                        <div class="h-7 bg-sand/10 rounded-lg rounded-br-sm px-2.5 flex items-center max-w-[75%]">
+                          <span class="text-[9px] text-parchment/80 truncate">Manage social media and build the API</span>
+                        </div>
+                      </div>
+                      <div>
+                        <span class="text-[8px] text-sand/40 mb-0.5 block">orchestrator</span>
+                        <div class="h-7 bg-surface/50 rounded-lg rounded-bl-sm px-2.5 flex items-center max-w-[80%]">
+                          <span class="text-[9px] text-stone/70 truncate">Spawning 2 workers. 9 tasks across both.</span>
+                        </div>
+                      </div>
+                      <div class="h-5 flex items-center justify-center">
+                        <span class="text-[8px] text-stone/20 font-mono whitespace-nowrap">→ social-media-worker · api-worker dispatched</span>
+                      </div>
+                    </div>
+                    <div class="h-8 mt-2 rounded-md border border-border-custom px-2.5 flex items-center gap-2">
+                      <span class="text-[9px] text-stone/30 flex-1 truncate">Message the orchestrator...</span>
+                      <div class="w-4 h-4 rounded bg-sand/10 flex items-center justify-center shrink-0">
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand/40"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Scene 2: Code Review / PR -->
+              <div id="scene-pr" class="p-4 h-full overflow-hidden absolute inset-0 transition-opacity duration-500 opacity-0">
+                <!-- File header -->
+                <div class="h-8 flex items-center gap-2 mb-3 pb-3 border-b border-border-custom">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-moss/60"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                  <span class="text-[10px] font-mono text-parchment/60">feat: add JWT authentication middleware</span>
+                  <div class="flex-1"></div>
+                  <span class="text-[9px] text-moss/40 font-mono">+21 −0</span>
+                </div>
+                <!-- Code diff -->
+                <div class="rounded-md border border-border-custom overflow-hidden bg-[#0c0c0c]">
+                  <div class="px-3 py-1.5 border-b border-border-custom bg-surface/30">
+                    <span class="text-[9px] text-stone/50 font-mono">src/middleware/auth.ts</span>
+                  </div>
+                  <div class="text-[10px] font-mono leading-relaxed">
+                    <div class="h-5 flex items-center px-3 text-stone/40 whitespace-nowrap overflow-hidden"><span class="text-stone/20 mr-2 w-5 text-right inline-block">12</span>import { verify } from 'jsonwebtoken'</div>
+                    <div class="h-5 flex items-center px-3 text-stone/40 whitespace-nowrap overflow-hidden"><span class="text-stone/20 mr-2 w-5 text-right inline-block">13</span></div>
+                    <div class="h-5 flex items-center px-3 text-stone/40 whitespace-nowrap overflow-hidden"><span class="text-stone/20 mr-2 w-5 text-right inline-block">14</span>export const authMiddleware = (req, res, next) =&gt; {</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+16</span>  const token = req.headers.authorization?.split(' ')[1]</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+17</span>  if (!token) return res.status(401).json({ error: 'No token' })</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+18</span>  const decoded = verify(token, process.env.JWT_SECRET!)</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+19</span>  req.user = decoded</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+20</span>  next()</div>
+                    <div class="h-5 flex items-center px-3 bg-moss/5 text-moss/60 whitespace-nowrap overflow-hidden"><span class="text-moss/30 mr-2">+21</span>}</div>
+                  </div>
+                </div>
+                <!-- PR buttons -->
+                <div class="h-8 flex items-center justify-end mt-3 gap-2">
+                  <div class="h-8 rounded-md border border-[#2a2a2a] bg-[#111] px-3 flex items-center">
+                    <span class="text-[9px] text-stone/50 whitespace-nowrap">Request changes</span>
+                  </div>
+                  <div id="approve-btn" class="h-8 rounded-md border border-moss/20 bg-moss/10 px-3 flex items-center transition-all duration-300">
+                    <span class="text-[9px] text-moss/70 font-medium whitespace-nowrap">Approve</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Scene 3: Browser Automation (Facebook) -->
+              <div id="scene-browser" class="p-4 h-full overflow-hidden absolute inset-0 transition-opacity duration-500 opacity-0">
+                <!-- Search bar -->
+                <div class="h-8 flex items-center gap-2 mb-3">
+                  <div class="w-6 h-6 rounded-full bg-sand/20 shrink-0 flex items-center justify-center">
+                    <span class="text-[8px] text-sand/60">f</span>
+                  </div>
+                  <div class="flex-1 bg-[#111] rounded-full px-3 py-1.5 border border-border-custom">
+                    <span class="text-[9px] text-stone/40">Search</span>
+                  </div>
                   <div class="flex gap-1.5">
-                    <span class="text-[9px] font-mono bg-sand/20 text-sand px-1.5 py-0.5 rounded">decision</span>
-                    <span class="text-[9px] font-mono text-stone/50">medium</span>
+                    <div class="w-6 h-6 rounded-full bg-surface/60"></div>
+                    <div class="w-6 h-6 rounded-full bg-surface/60"></div>
+                  </div>
+                </div>
+                <!-- Post -->
+                <div class="rounded-lg border border-border-custom bg-surface/30 p-3 mb-3">
+                  <div class="flex items-center gap-2 mb-2">
+                    <div class="w-7 h-7 rounded-full bg-sand/15"></div>
+                    <div>
+                      <span class="text-[9px] text-parchment/70 block">Tech Community</span>
+                      <span class="text-[8px] text-stone/30">2h ago</span>
+                    </div>
+                  </div>
+                  <p class="text-[9px] text-stone/60 leading-relaxed mb-2">Just deployed our new microservice architecture. The monitoring dashboard is looking clean...</p>
+                  <div class="h-20 rounded bg-[#111] border border-border-custom mb-2"></div>
+                  <div class="flex gap-3">
+                    <span class="text-[8px] text-stone/30">Like</span>
+                    <span class="text-[8px] text-stone/30">Comment</span>
+                    <span class="text-[8px] text-stone/30">Share</span>
+                  </div>
+                </div>
+                <!-- Comment -->
+                <div class="flex items-start gap-2">
+                  <div class="w-5 h-5 rounded-full bg-moss/20 shrink-0 mt-0.5"></div>
+                  <div class="flex-1 bg-surface/30 rounded-lg px-2.5 py-1.5 border border-border-custom">
+                    <span class="text-[9px] text-stone/60">Great architecture! Have you considered adding circuit breakers?</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Animated cursor -->
+              <svg id="cursor-svg" class="absolute pointer-events-none z-30 drop-shadow-lg" viewBox="0 0 20 24" fill="none" style="left:68%;top:92%;transition:left 0.8s cubic-bezier(.4,0,.2,1),top 0.8s cubic-bezier(.4,0,.2,1);width:20px;height:24px;">
+                <path d="M1 1L1 18.5L5.5 14L10 22L13 20.5L8.5 12.5L14.5 12.5L1 1Z" fill="#c4a882" stroke="#0a0a0a" stroke-width="1.5" stroke-linejoin="round"></path>
+              </svg>
+
+              <!-- Ripple effect -->
+              <div id="ripple" class="absolute pointer-events-none z-20 hidden" style="width:32px;height:32px;">
+                <div class="w-8 h-8 rounded-full border-2 border-sand/50" style="animation: .6s ease-out 0s 1 normal forwards running ripple;"></div>
+              </div>
+
+            </div>
+          </div>
+
+          <p class="text-center text-[10px] text-stone/25 mt-3 font-mono">AI cursor navigating autonomously</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Marquee Section -->
+  <section class="py-24 border-t border-border-custom overflow-hidden fade-up-scroll">
+    <div class="max-w-4xl mx-auto px-6 mb-12">
+      <h2 class="font-mono text-xl md:text-2xl text-parchment text-center">10x what you ship.</h2>
+    </div>
+    <div class="flex flex-col gap-4">
+      <!-- Row 1: left scroll -->
+      <div class="overflow-hidden">
+        <div class="marquee-track-left" style="animation-duration:80s;">
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Deploy a website</p><p class="text-stone text-xs leading-snug mt-1">From code to live URL, no manual steps</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Fix failing tests</p><p class="text-stone text-xs leading-snug mt-1">Diagnose, patch, and verify automatically</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Set up CI/CD</p><p class="text-stone text-xs leading-snug mt-1">Pipelines configured and running</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Build a REST API</p><p class="text-stone text-xs leading-snug mt-1">Endpoints, validation, and docs</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Migrate to TypeScript</p><p class="text-stone text-xs leading-snug mt-1">Automated codebase conversion</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Add authentication</p><p class="text-stone text-xs leading-snug mt-1">OAuth, JWT, or sessions — handled</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Refactor legacy code</p><p class="text-stone text-xs leading-snug mt-1">Clean up without breaking anything</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write unit tests</p><p class="text-stone text-xs leading-snug mt-1">Full coverage, no effort</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Set up a database</p><p class="text-stone text-xs leading-snug mt-1">Schema, migrations, and seed data</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Ship a CLI tool</p><p class="text-stone text-xs leading-snug mt-1">Args to npm publish in one shot</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Monitor your servers</p><p class="text-stone text-xs leading-snug mt-1">Alerts before your users notice</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Build a landing page</p><p class="text-stone text-xs leading-snug mt-1">Design to deploy, hands-free</p></div>
+          <!-- Duplicate for seamless loop -->
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Deploy a website</p><p class="text-stone text-xs leading-snug mt-1">From code to live URL, no manual steps</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Fix failing tests</p><p class="text-stone text-xs leading-snug mt-1">Diagnose, patch, and verify automatically</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Set up CI/CD</p><p class="text-stone text-xs leading-snug mt-1">Pipelines configured and running</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Build a REST API</p><p class="text-stone text-xs leading-snug mt-1">Endpoints, validation, and docs</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Migrate to TypeScript</p><p class="text-stone text-xs leading-snug mt-1">Automated codebase conversion</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Add authentication</p><p class="text-stone text-xs leading-snug mt-1">OAuth, JWT, or sessions — handled</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Refactor legacy code</p><p class="text-stone text-xs leading-snug mt-1">Clean up without breaking anything</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write unit tests</p><p class="text-stone text-xs leading-snug mt-1">Full coverage, no effort</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Set up a database</p><p class="text-stone text-xs leading-snug mt-1">Schema, migrations, and seed data</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Ship a CLI tool</p><p class="text-stone text-xs leading-snug mt-1">Args to npm publish in one shot</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Monitor your servers</p><p class="text-stone text-xs leading-snug mt-1">Alerts before your users notice</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Build a landing page</p><p class="text-stone text-xs leading-snug mt-1">Design to deploy, hands-free</p></div>
+        </div>
+      </div>
+      <!-- Row 2: right scroll -->
+      <div class="overflow-hidden">
+        <div class="marquee-track-right" style="animation-duration:100s;">
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Post on social media</p><p class="text-stone text-xs leading-snug mt-1">Captions, hashtags, and scheduling</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Reply to comments</p><p class="text-stone text-xs leading-snug mt-1">Engage across every platform</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Draft email campaigns</p><p class="text-stone text-xs leading-snug mt-1">Personalized outreach at scale</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write blog posts</p><p class="text-stone text-xs leading-snug mt-1">Research, write, and publish</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Schedule content</p><p class="text-stone text-xs leading-snug mt-1">Content calendar on autopilot</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Track brand mentions</p><p class="text-stone text-xs leading-snug mt-1">Know when people talk about you</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Create ad copy</p><p class="text-stone text-xs leading-snug mt-1">Headlines and CTAs that convert</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Send cold outreach</p><p class="text-stone text-xs leading-snug mt-1">Personalized emails that land</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Generate weekly reports</p><p class="text-stone text-xs leading-snug mt-1">Metrics compiled while you sleep</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Manage your inbox</p><p class="text-stone text-xs leading-snug mt-1">Triage, respond, and archive</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write press releases</p><p class="text-stone text-xs leading-snug mt-1">Newsworthy drafts, ready to send</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Find trending topics</p><p class="text-stone text-xs leading-snug mt-1">Stay ahead of the conversation</p></div>
+          <!-- Duplicate for loop -->
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Post on social media</p><p class="text-stone text-xs leading-snug mt-1">Captions, hashtags, and scheduling</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Reply to comments</p><p class="text-stone text-xs leading-snug mt-1">Engage across every platform</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Draft email campaigns</p><p class="text-stone text-xs leading-snug mt-1">Personalized outreach at scale</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write blog posts</p><p class="text-stone text-xs leading-snug mt-1">Research, write, and publish</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Schedule content</p><p class="text-stone text-xs leading-snug mt-1">Content calendar on autopilot</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Track brand mentions</p><p class="text-stone text-xs leading-snug mt-1">Know when people talk about you</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Create ad copy</p><p class="text-stone text-xs leading-snug mt-1">Headlines and CTAs that convert</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Send cold outreach</p><p class="text-stone text-xs leading-snug mt-1">Personalized emails that land</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Generate weekly reports</p><p class="text-stone text-xs leading-snug mt-1">Metrics compiled while you sleep</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Manage your inbox</p><p class="text-stone text-xs leading-snug mt-1">Triage, respond, and archive</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Write press releases</p><p class="text-stone text-xs leading-snug mt-1">Newsworthy drafts, ready to send</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Find trending topics</p><p class="text-stone text-xs leading-snug mt-1">Stay ahead of the conversation</p></div>
+        </div>
+      </div>
+      <!-- Row 3: left scroll -->
+      <div class="overflow-hidden">
+        <div class="marquee-track-left" style="animation-duration:90s;">
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Research competitors</p><p class="text-stone text-xs leading-snug mt-1">Market intel delivered daily</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Summarize documents</p><p class="text-stone text-xs leading-snug mt-1">Key points extracted instantly</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Translate content</p><p class="text-stone text-xs leading-snug mt-1">Multi-language support, automated</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Generate invoices</p><p class="text-stone text-xs leading-snug mt-1">Billing without lifting a finger</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Onboard new hires</p><p class="text-stone text-xs leading-snug mt-1">Docs, access, and checklists</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Sync data between apps</p><p class="text-stone text-xs leading-snug mt-1">Keep everything in lockstep</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Parse and extract PDFs</p><p class="text-stone text-xs leading-snug mt-1">Structured data from any file</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Monitor price changes</p><p class="text-stone text-xs leading-snug mt-1">Alerts when competitors move</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Create training materials</p><p class="text-stone text-xs leading-snug mt-1">SOPs and guides, auto-generated</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Draft contracts</p><p class="text-stone text-xs leading-snug mt-1">Templates filled, ready for review</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Track expenses</p><p class="text-stone text-xs leading-snug mt-1">Categorized and reported automatically</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Run nightly backups</p><p class="text-stone text-xs leading-snug mt-1">Set once, never think about it</p></div>
+          <!-- Duplicate for loop -->
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Research competitors</p><p class="text-stone text-xs leading-snug mt-1">Market intel delivered daily</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Summarize documents</p><p class="text-stone text-xs leading-snug mt-1">Key points extracted instantly</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Translate content</p><p class="text-stone text-xs leading-snug mt-1">Multi-language support, automated</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Generate invoices</p><p class="text-stone text-xs leading-snug mt-1">Billing without lifting a finger</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Onboard new hires</p><p class="text-stone text-xs leading-snug mt-1">Docs, access, and checklists</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Sync data between apps</p><p class="text-stone text-xs leading-snug mt-1">Keep everything in lockstep</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Parse and extract PDFs</p><p class="text-stone text-xs leading-snug mt-1">Structured data from any file</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Monitor price changes</p><p class="text-stone text-xs leading-snug mt-1">Alerts when competitors move</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Create training materials</p><p class="text-stone text-xs leading-snug mt-1">SOPs and guides, auto-generated</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Draft contracts</p><p class="text-stone text-xs leading-snug mt-1">Templates filled, ready for review</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Track expenses</p><p class="text-stone text-xs leading-snug mt-1">Categorized and reported automatically</p></div>
+          <div class="bg-zinc-800/80 rounded-2xl px-5 py-3 shrink-0 min-w-[220px] max-w-[280px]"><p class="text-parchment text-sm font-mono font-bold leading-tight">Run nightly backups</p><p class="text-stone text-xs leading-snug mt-1">Set once, never think about it</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="px-6 py-24 border-t border-border-custom fade-up-scroll">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="font-mono text-xl md:text-2xl text-parchment mb-10 text-center">How it works</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+        <div>
+          <div class="text-2xl mb-3 text-sand/60">&#x2B21;</div>
+          <h3 class="font-mono text-sm text-sand mb-2">Orchestrates Agents</h3>
+          <p class="text-stone text-sm leading-relaxed">The orchestrator triages work across all your projects, spawns workers into isolated spaces, and coordinates results. You set the direction — agents handle the rest.</p>
+        </div>
+        <div>
+          <div class="text-2xl mb-3 text-sand/60">&#x25A1;</div>
+          <h3 class="font-mono text-sm text-sand mb-2">Persistent Spaces</h3>
+          <p class="text-stone text-sm leading-relaxed">Every project gets its own space with plans, tasks, and knowledge. Agents write what they learn as they go. The next session picks up where the last one left off.</p>
+        </div>
+        <div>
+          <div class="text-2xl mb-3 text-sand/60">&#x25C8;</div>
+          <h3 class="font-mono text-sm text-sand mb-2">Built on Claude Code</h3>
+          <p class="text-stone text-sm leading-relaxed">No new AI subscription. Superbot runs on your existing Claude Code account. Every component — orchestrator, workers, skills — is a Claude Code primitive.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- The Dashboard -->
+  <section class="px-6 py-24 border-t border-border-custom fade-up-scroll">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="font-mono text-xl md:text-2xl text-parchment mb-3 text-center">The Dashboard</h2>
+      <p class="text-stone text-sm text-center mb-10 max-w-lg mx-auto">Your control center. Review agent decisions, chat with the orchestrator, and watch workers ship across all your spaces.</p>
+
+      <div class="rounded-xl border border-border-custom bg-surface/50 overflow-hidden" style="box-shadow: 0 0 80px rgba(0,0,0,0.4);">
+        <!-- Window chrome -->
+        <div class="flex items-center gap-2 px-4 py-2.5 bg-ink/80 border-b border-border-custom">
+          <div class="flex gap-1.5">
+            <div class="w-2.5 h-2.5 rounded-full bg-ember/60"></div>
+            <div class="w-2.5 h-2.5 rounded-full bg-sand/40"></div>
+            <div class="w-2.5 h-2.5 rounded-full bg-moss/40"></div>
+          </div>
+          <span class="text-[10px] font-mono text-stone/40 ml-2">superbot dashboard</span>
+        </div>
+
+        <!-- Dashboard content -->
+        <div class="grid grid-cols-1 md:grid-cols-[1fr_2fr] min-h-[360px]">
+          <!-- Left panel -->
+          <div class="border-r border-border-custom p-4 space-y-4">
+            <!-- Escalations -->
+            <div>
+              <div class="flex items-center gap-1.5 mb-3">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                <span class="font-mono text-xs text-parchment">Escalations</span>
+              </div>
+              <div class="rounded-lg border border-border-custom bg-surface/30 p-3 mb-2 hover:border-stone/30 transition-colors">
+                <div class="flex items-start gap-2">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <div class="min-w-0">
+                    <p class="text-[11px] text-parchment leading-snug truncate">Instagram credentials expired — need re-login</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="text-[9px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5">social</span>
+                      <span class="text-[9px] font-mono text-stone/50">blocker</span>
+                      <span class="text-[9px] font-mono text-ember">high</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rounded-lg border border-border-custom bg-surface/30 p-3 mb-2 hover:border-stone/30 transition-colors">
+                <div class="flex items-start gap-2">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <div class="min-w-0">
+                    <p class="text-[11px] text-parchment leading-snug truncate">Auth strategy for the new API — JWT or sessions?</p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span class="text-[9px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5">api</span>
+                      <span class="text-[9px] font-mono text-stone/50">decision</span>
+                      <span class="text-[9px] font-mono text-sand">medium</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
             <!-- Spaces -->
             <div>
-              <div class="flex items-center gap-2 mb-3">
-                <span class="text-parchment text-xs font-mono font-bold">Spaces</span>
+              <div class="flex items-center gap-1.5 mb-3">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand"><path d="M2 8l10-5 10 5-10 5-10-5z"></path><path d="M2 12l10 5 10-5"></path></svg>
+                <span class="font-mono text-xs text-parchment">Spaces</span>
               </div>
-              <div class="space-y-2">
-                <div class="flex items-center justify-between text-[11px]">
-                  <span class="text-parchment/70"><span class="text-moss/60 mr-1">&#x25CF;</span> api</span>
-                  <span class="text-stone/40 font-mono">5 tasks</span>
+              <div class="flex items-center justify-between rounded-lg border border-border-custom bg-surface/30 px-3 py-2 mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 rounded-full bg-moss animate-pulse-dot"></div>
+                  <span class="font-mono text-xs text-parchment">api</span>
                 </div>
-                <div class="flex items-center justify-between text-[11px]">
-                  <span class="text-parchment/70"><span class="text-sand/40 mr-1">&#x25CF;</span> social-media</span>
-                  <span class="text-stone/40 font-mono">7 tasks</span>
+                <span class="text-[10px] text-stone/50">6 tasks</span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg border border-border-custom bg-surface/30 px-3 py-2 mb-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 rounded-full bg-moss animate-pulse-dot"></div>
+                  <span class="font-mono text-xs text-parchment">social-media</span>
                 </div>
-                <div class="flex items-center justify-between text-[11px]">
-                  <span class="text-parchment/70"><span class="text-moss/60 mr-1">&#x25CF;</span> research</span>
-                  <span class="text-stone/40 font-mono">3 tasks</span>
+                <span class="text-[10px] text-stone/50">3 tasks</span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg border border-border-custom bg-surface/30 px-3 py-2 mb-2">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs text-parchment">research</span>
                 </div>
+                <span class="text-[10px] text-stone/50">2 tasks</span>
               </div>
             </div>
           </div>
+
           <!-- Right panel: Chat -->
-          <div class="p-4 flex flex-col">
-            <div class="flex items-center justify-between mb-4">
-              <span class="text-parchment text-xs font-mono font-bold">Chat</span>
-              <span class="text-[10px] font-mono text-sand/40">Manage social media and build the new API</span>
+          <div class="flex flex-col">
+            <div class="flex items-center gap-1.5 p-4 pb-3">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span class="font-mono text-xs text-parchment">Chat</span>
             </div>
-            <div class="flex-1 space-y-3 text-[11px]">
-              <div>
-                <div class="text-stone/50 font-mono mb-0.5">orchestrator</div>
-                <div class="text-parchment/70">On it. Spawning social-media-worker and api-worker...</div>
-              </div>
-              <div class="flex gap-2 items-center">
-                <div class="h-px flex-1 bg-border-custom"></div>
-                <span class="text-stone/25 text-[9px] font-mono">2 agents spawned</span>
-                <div class="h-px flex-1 bg-border-custom"></div>
+            <div class="flex-1 px-4 space-y-3 overflow-hidden">
+              <div class="flex justify-end">
+                <div class="max-w-[80%] rounded-2xl rounded-br-md bg-sand/10 px-3.5 py-2">
+                  <p class="text-[11px] text-parchment leading-relaxed">Manage social media and build the new API.</p>
+                </div>
               </div>
               <div>
-                <div class="text-stone/50 font-mono mb-0.5">worker</div>
-                <div class="text-parchment/70">Published 3 posts. Engaged 2 group discussions. Created escalation for expired Instagram credentials.</div>
+                <span class="text-[9px] font-mono text-sand/50 mb-0.5 block">orchestrator</span>
+                <div class="max-w-[85%] rounded-2xl rounded-bl-md bg-surface/60 px-3.5 py-2">
+                  <p class="text-[11px] text-stone leading-relaxed">On it. Spawning social-media-worker and api-worker...</p>
+                </div>
+              </div>
+              <div class="flex items-center justify-center"><span class="text-[9px] text-stone/25 font-mono">→ social-media-worker dispatched</span></div>
+              <div class="flex items-center justify-center"><span class="text-[9px] text-stone/25 font-mono">→ api-worker dispatched</span></div>
+              <div>
+                <span class="text-[9px] font-mono text-stone/50 mb-0.5 block">worker</span>
+                <div class="max-w-[85%] rounded-2xl rounded-bl-md bg-surface/60 px-3.5 py-2">
+                  <p class="text-[11px] text-stone leading-relaxed">Published 3 posts. Engaged 2 group discussions. Created escalation for expired Instagram credentials.</p>
+                </div>
               </div>
               <div>
-                <div class="text-stone/50 font-mono mb-0.5">orchestrator</div>
-                <div class="text-parchment/70">social-media done. api-worker building &mdash; 4/6 tasks complete.</div>
+                <span class="text-[9px] font-mono text-sand/50 mb-0.5 block">orchestrator</span>
+                <div class="max-w-[85%] rounded-2xl rounded-bl-md bg-surface/60 px-3.5 py-2">
+                  <p class="text-[11px] text-stone leading-relaxed">social-media done. api-worker building — 4/6 tasks complete.</p>
+                </div>
               </div>
             </div>
-            <div class="mt-4 bg-surface/30 border border-border-custom rounded-lg px-3 py-2.5 flex items-center">
-              <span class="text-stone/30 text-[11px] font-mono flex-1">Message the orchestrator...</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#706b63" stroke-width="2" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <div class="p-4 pt-2">
+              <div class="flex items-center gap-2 rounded-lg border border-border-custom bg-ink/60 px-3 py-2">
+                <span class="text-xs text-stone/30 flex-1">Message the orchestrator...</span>
+                <div class="w-5 h-5 rounded bg-sand/10 flex items-center justify-center">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-sand/40"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <p class="text-center text-stone/40 text-xs font-mono mt-4">Your control center. Review AI decisions, chat with the orchestrator, and watch agents ship across all your projects.</p>
     </div>
   </section>
 
   <!-- Install -->
-  <section id="install" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-3xl mx-auto text-center fade-up-scroll">
-      <h2 class="font-mono font-bold text-2xl text-parchment mb-4">Put it to work.</h2>
-      <p class="font-mono text-stone text-sm mb-10">One command. That's it.</p>
-
-      <div class="relative bg-codebg border border-border-custom rounded-xl p-5 text-left max-w-2xl mx-auto shadow-[inset_0_0_20px_rgba(196,168,130,0.05)]">
-        <div class="flex items-center justify-between gap-4">
-          <code class="text-sand text-sm font-mono break-all select-all">curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash</code>
-          <button onclick="copyInstall()" id="copy-btn" class="copy-btn flex-shrink-0 text-stone hover:text-parchment p-2 rounded-md" title="Copy to clipboard">
-            <svg id="copy-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            <svg id="check-icon" class="hidden" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
+  <section id="install" class="px-6 py-24 border-t border-border-custom fade-up-scroll">
+    <div class="max-w-2xl mx-auto text-center">
+      <p class="font-mono text-parchment text-lg mb-6">Put it to work.</p>
+      <div class="bg-codebg border border-border-custom rounded-xl p-5 text-left">
+        <p class="text-stone/40 text-[10px] font-mono uppercase tracking-wider mb-3">One command. That's it.</p>
+        <div class="flex items-center gap-3">
+          <span class="text-sand/40 select-none font-mono text-sm">$</span>
+          <code class="text-sand text-sm font-mono break-all flex-1 select-all">curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash</code>
+          <button onclick="copyInstall()" id="copy-btn" class="shrink-0 p-2 rounded-md text-stone hover:text-parchment hover:bg-sand/10 transition-all cursor-pointer" title="Copy to clipboard">
+            <svg id="copy-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <svg id="check-icon" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </button>
         </div>
       </div>
-
-      <p class="text-stone/50 text-xs mt-6">
-        Requires: Node.js, git, jq, and <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener" class="text-sand/60 hover:text-sand transition-colors">Claude Code</a>
-      </p>
+      <p class="text-stone/40 text-xs mt-4">Requires: Node.js, git, jq, and <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener" class="text-sand/50 hover:text-sand transition-colors">Claude Code</a></p>
     </div>
   </section>
 
   <!-- Footer -->
   <footer class="px-6 py-8 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="max-w-5xl mx-auto flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <img src="/logo.png" alt="SB" class="w-5 h-5">
-        <span class="font-mono text-sm text-parchment font-bold">superbot</span>
+        <img alt="SB" class="h-5 w-5 opacity-40" src="/logo.png">
+        <span class="font-mono text-sm text-stone/40">superbot</span>
       </div>
-      <span class="text-stone/40 text-sm">MIT License</span>
+      <span class="text-xs text-stone/30">MIT License</span>
     </div>
   </footer>
 
   <script>
-    // Terminal animation data
-    const terminals = {
-      'term-meta': [
-        { text: '\u25b8 Reading knowledge/conventions.md', color: '#706b63' },
-        { text: '\u25b8 Task: rewrite landing page hero', color: '#c4a882' },
-        { text: '\u25b8 Analyzing current messaging...', color: '#706b63' },
-        { text: '\u25b8 Writing landing/index.html', color: '#706b63' },
-        { text: '  847 lines written', color: 'rgba(112,107,99,0.6)' },
-        { text: '\u2713 Build successful', color: '#8a9a7b' },
-        { text: '\u25b8 Deploying to Cloudflare Pages', color: '#706b63' },
-        { text: '\u2713 Live at superbot2-landing.pages.dev', color: '#8a9a7b' },
-        { text: '\u25b8 Taking verification screenshot', color: '#706b63' },
-        { text: '\u2713 Desktop + mobile verified', color: '#8a9a7b' },
-        { text: '\u25b8 Committing: [meta] rewrite hero', color: '#c4a882' },
-        { text: '\u25b8 Moving to next task...', color: '#706b63' },
-      ],
-      'term-api': [
-        { text: '\u25b8 Loading space knowledge', color: '#706b63' },
-        { text: '\u25b8 Task: add auth endpoints', color: '#c4a882' },
-        { text: '\u25b8 Writing src/routes/auth.ts', color: '#706b63' },
-        { text: '\u25b8 Writing tests/auth.test.ts', color: '#706b63' },
-        { text: '\u25b8 Running test suite...', color: '#706b63' },
-        { text: '  \u2713 POST /auth/login', color: '#8a9a7b' },
-        { text: '  \u2713 POST /auth/register', color: '#8a9a7b' },
-        { text: '  \u2713 GET /auth/me', color: '#8a9a7b' },
-        { text: '\u2713 24/24 tests passing', color: '#8a9a7b' },
-        { text: '\u25b8 Code review: no critical issues', color: '#706b63' },
-        { text: '\u25b8 Committing: [api] add JWT auth', color: '#c4a882' },
-        { text: '\u25b8 Creating escalation...', color: '#706b63' },
-        { text: '  "Rate limiting strategy?"', color: '#DC504A' },
-      ],
-      'term-frontend': [
-        { text: '\u25b8 Reading plan.md', color: '#706b63' },
-        { text: '\u25b8 Task: implement dark mode', color: '#c4a882' },
-        { text: '\u25b8 Analyzing existing theme...', color: '#706b63' },
-        { text: '\u25b8 Writing ThemeToggle.tsx', color: '#706b63' },
-        { text: '\u25b8 Writing useTheme.ts', color: '#706b63' },
-        { text: '\u25b8 Running vitest...', color: '#706b63' },
-        { text: '\u2713 18/18 tests passing', color: '#8a9a7b' },
-        { text: '\u25b8 Building production bundle', color: '#706b63' },
-        { text: '\u2713 Build: 142kb gzipped', color: '#8a9a7b' },
-        { text: '\u25b8 Committing: [fe] add dark mode', color: '#c4a882' },
-        { text: '\u25b8 Updating knowledge/patterns.md', color: '#706b63' },
-        { text: '\u25b8 Moving to next task...', color: '#706b63' },
-      ],
-    };
-
-    function initTerminals() {
-      Object.entries(terminals).forEach(([id, lines], termIdx) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        let lineIdx = 0;
-        const maxVisible = 8;
-        function addLine() {
-          const line = lines[lineIdx % lines.length];
-          const div = document.createElement('div');
-          div.className = 'terminal-line';
-          div.style.color = line.color;
-          div.textContent = line.text;
-          el.appendChild(div);
-          while (el.children.length > maxVisible) el.removeChild(el.firstChild);
-          lineIdx++;
-          setTimeout(addLine, 800 + Math.random() * 1200);
-        }
-        setTimeout(addLine, termIdx * 600 + 300);
-      });
-    }
-
+    // Copy install command
     function copyInstall() {
-      const cmd = 'curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash';
-      navigator.clipboard.writeText(cmd).then(() => {
-        const btn = document.getElementById('copy-btn');
-        const copyIcon = document.getElementById('copy-icon');
-        const checkIcon = document.getElementById('check-icon');
-        btn.classList.add('copied');
-        copyIcon.classList.add('hidden');
-        checkIcon.classList.remove('hidden');
-        setTimeout(() => {
-          btn.classList.remove('copied');
-          copyIcon.classList.remove('hidden');
-          checkIcon.classList.add('hidden');
+      var cmd = 'curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash';
+      navigator.clipboard.writeText(cmd).then(function() {
+        var btn = document.getElementById('copy-btn');
+        document.getElementById('copy-icon').classList.add('hidden');
+        document.getElementById('check-icon').classList.remove('hidden');
+        setTimeout(function() {
+          document.getElementById('copy-icon').classList.remove('hidden');
+          document.getElementById('check-icon').classList.add('hidden');
         }, 2000);
       });
     }
 
-    function toggleMobileNav() {
-      document.getElementById('mobile-nav').classList.toggle('hidden');
-    }
-    function closeMobileNav() {
-      document.getElementById('mobile-nav').classList.add('hidden');
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
+    // Scroll-triggered fade-up animations
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
         if (entry.isIntersecting) entry.target.classList.add('visible');
       });
     }, { threshold: 0.1 });
-    document.querySelectorAll('.fade-up-scroll').forEach(el => observer.observe(el));
+    document.querySelectorAll('.fade-up-scroll').forEach(function(el) { observer.observe(el); });
 
-    initTerminals();
+    // Browser mock scene cycling + cursor animation
+    (function() {
+      var scenes = ['scene-dashboard', 'scene-pr', 'scene-browser'];
+      var urls = ['localhost:5173', 'github.com/superbot2/api/pull/42', 'facebook.com/groups/tech-community'];
+      var tabs = ['superbot', 'GitHub', 'Facebook'];
+      var cursorPositions = [
+        // Dashboard scene: cursor moves to chat input, then escalation, then space
+        [{l:68,t:92},{l:25,t:30},{l:15,t:70}],
+        // PR scene: cursor moves to code, then approve button
+        [{l:50,t:50},{l:80,t:82},{l:85,t:85}],
+        // Browser scene: cursor moves to comment box, then post
+        [{l:50,t:40},{l:30,t:85},{l:70,t:20}],
+      ];
+      var currentScene = 0;
+      var cursorStep = 0;
+      var cursor = document.getElementById('cursor-svg');
+      var ripple = document.getElementById('ripple');
+      var urlEl = document.getElementById('browser-url');
+      var tabEl = document.getElementById('browser-tab-label');
+      var esc1 = document.getElementById('esc-1');
+
+      function showRipple(l, t) {
+        ripple.style.left = 'calc(' + l + '% - 16px)';
+        ripple.style.top = 'calc(' + t + '% - 16px)';
+        ripple.classList.remove('hidden');
+        ripple.innerHTML = '<div class="w-8 h-8 rounded-full border-2 border-sand/50" style="animation:.6s ease-out 0s 1 normal forwards running ripple;"></div>';
+        setTimeout(function() { ripple.classList.add('hidden'); }, 600);
+      }
+
+      function moveCursor() {
+        var positions = cursorPositions[currentScene];
+        var pos = positions[cursorStep % positions.length];
+        cursor.style.left = pos.l + '%';
+        cursor.style.top = pos.t + '%';
+        showRipple(pos.l, pos.t);
+
+        // Highlight escalation when cursor is near it in dashboard scene
+        if (currentScene === 0 && cursorStep % positions.length === 1) {
+          esc1.style.borderColor = 'rgba(196,168,130,0.4)';
+          esc1.style.background = 'rgba(196,168,130,0.1)';
+          esc1.style.boxShadow = '0 0 12px rgba(196,168,130,0.15)';
+          setTimeout(function() {
+            esc1.style.borderColor = '';
+            esc1.style.background = '';
+            esc1.style.boxShadow = '';
+          }, 2000);
+        }
+
+        cursorStep++;
+      }
+
+      function switchScene() {
+        // Fade out current scene
+        document.getElementById(scenes[currentScene]).style.opacity = '0';
+        // Move to next scene
+        currentScene = (currentScene + 1) % scenes.length;
+        cursorStep = 0;
+        // Update browser chrome
+        urlEl.textContent = urls[currentScene];
+        tabEl.textContent = tabs[currentScene];
+        // Fade in new scene
+        setTimeout(function() {
+          document.getElementById(scenes[currentScene]).style.opacity = '1';
+          // Initial cursor position for new scene
+          var pos = cursorPositions[currentScene][0];
+          cursor.style.left = pos.l + '%';
+          cursor.style.top = pos.t + '%';
+        }, 300);
+      }
+
+      // Move cursor every 2s, switch scenes every 6s
+      setInterval(moveCursor, 2000);
+      setInterval(switchScene, 6000);
+    })();
   </script>
 
 </body>
