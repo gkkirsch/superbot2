@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>superbot2 — Autonomous AI Project Management</title>
-  <meta name="description" content="A persistent AI system that manages a portfolio of software projects autonomously. Orchestrator, space workers, dashboard, and more.">
+  <title>superbot2 — Agent Orchestration for Claude Code</title>
+  <meta name="description" content="Orchestrate AI agents across all your projects. Persistent spaces with knowledge that compounds. 10x what you ship.">
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -47,27 +47,97 @@
       from { opacity: 0; transform: translateY(20px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .fade-up {
-      animation: fade-up 0.6s ease-out both;
-    }
+    .fade-up { animation: fade-up 0.6s ease-out both; }
+    .fade-up-d1 { animation: fade-up 0.6s ease-out 0.1s both; }
+    .fade-up-d2 { animation: fade-up 0.6s ease-out 0.2s both; }
+    .fade-up-d3 { animation: fade-up 0.6s ease-out 0.3s both; }
+    .fade-up-d4 { animation: fade-up 0.6s ease-out 0.5s both; }
+
     .fade-up-scroll {
-      opacity: 0;
-      transform: translateY(20px);
+      opacity: 0; transform: translateY(20px);
       transition: opacity 0.6s ease-out, transform 0.6s ease-out;
     }
-    .fade-up-scroll.visible {
-      opacity: 1;
-      transform: translateY(0);
+    .fade-up-scroll.visible { opacity: 1; transform: translateY(0); }
+
+    /* Terminal windows */
+    .terminal-window {
+      background: #111110;
+      border: 1px solid #1f1f1e;
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    .terminal-header {
+      background: #181816;
+      border-bottom: 1px solid #1f1f1e;
+      padding: 0.5rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .terminal-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+    }
+    .terminal-body {
+      padding: 0.75rem;
+      height: 180px;
+      overflow: hidden;
+      position: relative;
+    }
+    .terminal-body::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 40px;
+      background: linear-gradient(transparent, #111110);
+      pointer-events: none;
+    }
+    .terminal-line {
+      font-family: "Space Mono", monospace;
+      font-size: 11px;
+      line-height: 1.7;
+      white-space: nowrap;
+      overflow: hidden;
+      opacity: 0;
+      animation: terminal-appear 0.3s ease-out forwards;
+    }
+    @keyframes terminal-appear {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+    /* Feature cards */
+    .feature-card {
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(196, 168, 130, 0.35);
+      transform: translateY(-2px);
     }
 
-    /* Architecture diagram */
+    /* Space tree */
+    .space-tree {
+      font-family: "Space Mono", monospace;
+      font-size: 12px;
+      line-height: 1.9;
+    }
+
+    /* Copy button */
+    .copy-btn { transition: all 0.2s; }
+    .copy-btn:hover { background: rgba(196, 168, 130, 0.15); }
+    .copy-btn.copied { color: #8a9a7b; }
+
+    /* Architecture */
     .arch-node {
       border: 1px solid #c4a882;
       background: rgba(196, 168, 130, 0.05);
       border-radius: 0.5rem;
       padding: 1rem 1.5rem;
       text-align: center;
-      position: relative;
     }
     .arch-connector {
       width: 2px;
@@ -86,30 +156,9 @@
       margin: 0 auto;
     }
 
-    /* Feature card hover */
-    .feature-card {
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .feature-card:hover {
-      border-color: rgba(196, 168, 130, 0.35);
-      transform: translateY(-2px);
-    }
-
-    /* Copy button feedback */
-    .copy-btn {
-      transition: all 0.2s;
-    }
-    .copy-btn:hover {
-      background: rgba(196, 168, 130, 0.15);
-    }
-    .copy-btn.copied {
-      color: #8a9a7b;
-    }
-
-    /* Screenshot placeholder */
-    .screenshot-placeholder {
-      background: linear-gradient(135deg, #141414 0%, #1a1a18 50%, #141414 100%);
-      border: 1px dashed #1f1f1e;
+    /* Hero gradient */
+    .hero-bg {
+      background: radial-gradient(ellipse at 50% 0%, rgba(196, 168, 130, 0.06) 0%, transparent 70%);
     }
   </style>
 </head>
@@ -120,9 +169,9 @@
     <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
       <a href="#" class="font-mono font-bold text-lg text-parchment">superbot2</a>
       <div class="hidden md:flex items-center gap-6 text-sm text-stone">
+        <a href="#spaces" class="hover:text-parchment transition-colors">Spaces</a>
         <a href="#features" class="hover:text-parchment transition-colors">Features</a>
-        <a href="#architecture" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" class="hover:text-parchment transition-colors">Dashboard</a>
+        <a href="#how-it-works" class="hover:text-parchment transition-colors">How It Works</a>
         <a href="#install" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -137,9 +186,9 @@
     <!-- Mobile nav -->
     <div id="mobile-nav" class="hidden md:hidden border-t border-border-custom bg-ink/95 backdrop-blur-sm">
       <div class="flex flex-col px-6 py-4 gap-3 text-sm text-stone">
+        <a href="#spaces" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Spaces</a>
         <a href="#features" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Features</a>
-        <a href="#architecture" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Dashboard</a>
+        <a href="#how-it-works" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">How It Works</a>
         <a href="#install" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/gkkirsch/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -147,164 +196,226 @@
   </nav>
 
   <!-- Hero -->
-  <section id="hero" class="min-h-screen flex items-center justify-center px-6 pt-20">
-    <div class="max-w-3xl text-center fade-up">
-      <p class="font-mono text-sand text-sm tracking-widest uppercase mb-6">Autonomous AI Project Management</p>
-      <h1 class="font-mono font-bold text-4xl md:text-6xl text-parchment mb-6 leading-tight">
-        superbot2
+  <section class="hero-bg min-h-screen flex flex-col items-center justify-center px-6 pt-20 pb-12">
+    <div class="max-w-3xl text-center">
+      <p class="font-mono text-sand text-sm tracking-widest uppercase mb-6 fade-up">Agent Orchestration for Claude Code</p>
+      <h1 class="font-mono font-bold text-5xl md:text-7xl text-parchment mb-6 leading-tight fade-up-d1">
+        10x what you ship.
       </h1>
-      <p class="text-lg md:text-xl text-stone max-w-2xl mx-auto mb-10 leading-relaxed">
-        A persistent AI system that manages a portfolio of software projects autonomously.
-        Orchestrator spawns workers. Workers ship code. You review the results.
+      <p class="text-lg md:text-xl text-stone max-w-2xl mx-auto mb-10 leading-relaxed fade-up-d2">
+        Orchestrate AI agents across all your projects simultaneously. Persistent spaces mean your agents remember everything &mdash; conventions, decisions, entire codebases. You set direction. They deliver code.
       </p>
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 fade-up-d3">
         <a href="#install" class="bg-sand text-ink font-mono font-bold px-8 py-3 rounded-lg hover:bg-sand/90 transition-colors">
           Install
         </a>
-        <a href="#features" class="border border-border-custom text-parchment font-mono px-8 py-3 rounded-lg hover:border-stone transition-colors">
+        <a href="#spaces" class="border border-border-custom text-parchment font-mono px-8 py-3 rounded-lg hover:border-stone transition-colors">
           Learn More
         </a>
+      </div>
+    </div>
+
+    <!-- Agent activity terminals -->
+    <div class="max-w-5xl w-full mt-16 grid grid-cols-1 md:grid-cols-3 gap-4 fade-up-d4">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dot bg-moss pulse-dot"></div>
+          <span class="font-mono text-xs text-stone">meta</span>
+          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
+        </div>
+        <div class="terminal-body" id="term-meta"></div>
+      </div>
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dot bg-sand pulse-dot" style="animation-delay: 0.5s"></div>
+          <span class="font-mono text-xs text-stone">api</span>
+          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
+        </div>
+        <div class="terminal-body" id="term-api"></div>
+      </div>
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dot bg-moss pulse-dot" style="animation-delay: 1s"></div>
+          <span class="font-mono text-xs text-stone">frontend</span>
+          <span class="font-mono text-[10px] text-stone/40 ml-auto">agent active</span>
+        </div>
+        <div class="terminal-body" id="term-frontend"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Spaces -->
+  <section id="spaces" class="px-6 py-24 border-t border-border-custom">
+    <div class="max-w-5xl mx-auto fade-up-scroll">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div>
+          <p class="font-mono text-sand text-sm tracking-widest uppercase mb-4">Persistent Context</p>
+          <h2 class="font-mono text-3xl md:text-4xl text-parchment mb-6 leading-tight">Agents that never forget.</h2>
+          <p class="text-stone text-lg leading-relaxed mb-6">
+            Every space is a persistent project environment. Knowledge, conventions, decisions, and research accumulate over time. When an agent starts work, it already knows everything &mdash; no re-briefing, no context loss, no repeating yourself.
+          </p>
+          <p class="text-stone leading-relaxed mb-8">
+            Spaces hold plans, tasks, and escalations. Your agents work through structured project workflows, surfacing decisions to you only when they need to. Context compounds with every session.
+          </p>
+          <div class="flex items-center gap-3 text-sm">
+            <div class="w-2 h-2 bg-sand rounded-full"></div>
+            <span class="text-parchment">Works with your existing Claude Code account</span>
+          </div>
+        </div>
+
+        <!-- Space tree visualization -->
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <div class="terminal-dot bg-sand"></div>
+            <span class="font-mono text-xs text-stone">space: meta</span>
+          </div>
+          <div class="p-5 space-tree text-stone">
+            <div class="text-parchment mb-1">~/.superbot2/spaces/meta/</div>
+            <div class="pl-4">
+              <div class="text-sand">knowledge/</div>
+              <div class="pl-4 text-stone/70">conventions.md <span class="text-stone/40">&mdash; coding standards</span></div>
+              <div class="pl-4 text-stone/70">decisions.md <span class="text-stone/40">&mdash; architectural log</span></div>
+              <div class="pl-4 text-stone/70">patterns.md <span class="text-stone/40">&mdash; reusable patterns</span></div>
+              <div class="pl-4 text-stone/70 mb-2">research.md <span class="text-stone/40">&mdash; API docs, findings</span></div>
+
+              <div class="text-sand">tasks/</div>
+              <div class="pl-4 text-moss">&#x2713; add-auth-endpoints</div>
+              <div class="pl-4 text-sand">&#x25B8; rewrite-landing-hero <span class="text-stone/40">&mdash; in progress</span></div>
+              <div class="pl-4 text-stone/40 mb-2">&#x25CB; deploy-staging <span class="text-stone/30">&mdash; blocked</span></div>
+
+              <div class="text-sand">plans/</div>
+              <div class="pl-4 text-stone/70 mb-2">landing-page/plan.md</div>
+
+              <div class="text-sand">escalations/</div>
+              <div class="pl-4 text-stone/70">"JWT vs sessions for auth?"</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Features -->
-  <section id="features" class="px-6 py-24">
+  <section id="features" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-5xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Features</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">Everything you need to run an autonomous software development operation.</p>
+      <p class="text-stone text-center mb-16 max-w-xl mx-auto">Everything you need to orchestrate autonomous agents across your entire project portfolio.</p>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <!-- Spaces -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- Browser Automation -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x25A1;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Spaces</h3>
-          <p class="text-stone text-sm leading-relaxed">Isolated project areas, each with its own plans, tasks, knowledge, and escalations.</p>
+          <div class="text-2xl mb-3">&#x25A3;</div>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Browser Automation</h3>
+          <p class="text-stone text-sm leading-relaxed">Agents control a real Chrome browser. Fill forms, take screenshots, navigate sites, and automate web workflows with persistent sessions.</p>
         </div>
 
-        <!-- Orchestrator -->
+        <!-- Schedules -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x2B21;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Orchestrator</h3>
-          <p class="text-stone text-sm leading-relaxed">Central brain that triages work, spawns space workers, and coordinates across projects.</p>
+          <div class="text-2xl mb-3">&#x23F0;</div>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Schedules</h3>
+          <p class="text-stone text-sm leading-relaxed">Cron-like recurring tasks. Run heartbeats, analysis, and custom jobs on autopilot. Your agents work while you sleep.</p>
+        </div>
+
+        <!-- Escalations -->
+        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
+          <div class="text-2xl mb-3">&#x26A0;</div>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Escalations</h3>
+          <p class="text-stone text-sm leading-relaxed">When agents hit decisions they can't make, they escalate to you. Architectural choices, scope questions, approvals &mdash; nothing falls through.</p>
+        </div>
+
+        <!-- Project Management -->
+        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
+          <div class="text-2xl mb-3">&#x2261;</div>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Project Management</h3>
+          <p class="text-stone text-sm leading-relaxed">Plans, tasks, priorities, and acceptance criteria. Every space has a structured workflow with progress tracking across projects.</p>
         </div>
 
         <!-- Dashboard -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x25C8;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Dashboard</h3>
-          <p class="text-stone text-sm leading-relaxed">Real-time web UI with chat, escalation management, scheduling, and system pulse.</p>
+          <p class="text-stone text-sm leading-relaxed">Real-time web UI. Chat with the orchestrator, manage escalations, schedule jobs, and monitor system health at a glance.</p>
         </div>
 
-        <!-- Hooks -->
-        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x2693;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Hooks</h3>
-          <p class="text-stone text-sm leading-relaxed">PM discipline enforcement. Workers can't go idle without updating tasks, distilling knowledge, and reporting.</p>
-        </div>
-
-        <!-- Knowledge -->
-        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x2261;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Knowledge</h3>
-          <p class="text-stone text-sm leading-relaxed">Persistent memory across sessions. Conventions, decisions, patterns, and research — nothing gets lost.</p>
-        </div>
-
-        <!-- Skills -->
+        <!-- Knowledge Persistence -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x2726;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Skills</h3>
-          <p class="text-stone text-sm leading-relaxed">Reusable capabilities: TDD, systematic debugging, brainstorming, implementation pipelines, and more.</p>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Knowledge Persistence</h3>
+          <p class="text-stone text-sm leading-relaxed">Conventions, patterns, research, and decisions persist across sessions. Agents get smarter the more they work in a space.</p>
         </div>
 
-        <!-- Scheduled Jobs -->
-        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x23F0;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Scheduled Jobs</h3>
-          <p class="text-stone text-sm leading-relaxed">Cron-like scheduler runs heartbeats, self-improvement analysis, and custom recurring tasks.</p>
-        </div>
-
-        <!-- Self-Improvement -->
-        <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
-          <div class="text-2xl mb-3">&#x21BB;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Self-Improvement</h3>
-          <p class="text-stone text-sm leading-relaxed">Analyzes its own conversation logs and suggests improvements to skills, hooks, and workflows.</p>
-        </div>
       </div>
     </div>
   </section>
 
-  <!-- Architecture -->
-  <section id="architecture" class="px-6 py-24 border-t border-border-custom">
+  <!-- How It Works -->
+  <section id="how-it-works" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-4xl mx-auto fade-up-scroll">
-      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Architecture</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A multi-agent system where the orchestrator delegates work to specialized space workers.</p>
+      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">How It Works</h2>
+      <p class="text-stone text-center mb-16 max-w-xl mx-auto">An orchestrator dispatches specialized agents to work across your project spaces simultaneously.</p>
 
-      <!-- Diagram -->
+      <!-- Architecture Diagram -->
       <div class="flex flex-col items-center gap-0">
+        <!-- You -->
+        <div class="arch-node border-parchment/40 w-48">
+          <div class="font-mono text-parchment text-sm font-bold">You</div>
+          <div class="text-stone text-xs mt-1">Set direction &middot; Review &middot; Decide</div>
+        </div>
+
+        <div class="arch-connector h-8"></div>
+        <div class="arch-arrow"></div>
 
         <!-- Orchestrator -->
-        <div class="arch-node border-sand/60 w-64">
+        <div class="arch-node border-sand/60 w-64 mt-2">
           <div class="font-mono text-sand text-sm font-bold">Orchestrator</div>
           <div class="text-stone text-xs mt-1">Triages &middot; Dispatches &middot; Coordinates</div>
         </div>
 
-        <!-- Connector down -->
         <div class="arch-connector h-8"></div>
         <div class="arch-arrow"></div>
-
-        <!-- Spawns label -->
-        <div class="text-stone text-xs font-mono my-2">spawns</div>
+        <div class="text-stone text-xs font-mono my-2">spawns agents</div>
 
         <!-- Workers row -->
         <div class="w-full">
           <div class="arch-connector-h w-3/4 mx-auto mb-0 hidden md:block"></div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-            <!-- Worker 1 -->
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
-                <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">meta</div>
+                <div class="font-mono text-parchment text-xs font-bold">Agent</div>
+                <div class="text-stone text-xs mt-1">meta space</div>
               </div>
-              <div class="arch-connector h-6"></div>
-              <div class="arch-arrow"></div>
-              <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">Meta Space</div>
+              <div class="arch-connector h-4"></div>
+              <div class="arch-node border-border-custom bg-surface/50 w-full">
+                <div class="font-mono text-parchment text-xs font-bold mb-1">Meta</div>
                 <div class="flex flex-wrap gap-1 justify-center">
                   <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">dashboard</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">landing-page</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">dev-workflow</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">landing</span>
                 </div>
               </div>
             </div>
-
-            <!-- Worker 2 -->
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
-                <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">api</div>
+                <div class="font-mono text-parchment text-xs font-bold">Agent</div>
+                <div class="text-stone text-xs mt-1">api space</div>
               </div>
-              <div class="arch-connector h-6"></div>
-              <div class="arch-arrow"></div>
-              <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">API Space</div>
+              <div class="arch-connector h-4"></div>
+              <div class="arch-node border-border-custom bg-surface/50 w-full">
+                <div class="font-mono text-parchment text-xs font-bold mb-1">API</div>
                 <div class="flex flex-wrap gap-1 justify-center">
                   <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">endpoints</span>
                   <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">auth</span>
                 </div>
               </div>
             </div>
-
-            <!-- Worker 3 -->
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
-                <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">frontend</div>
+                <div class="font-mono text-parchment text-xs font-bold">Agent</div>
+                <div class="text-stone text-xs mt-1">frontend space</div>
               </div>
-              <div class="arch-connector h-6"></div>
-              <div class="arch-arrow"></div>
-              <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">Frontend Space</div>
+              <div class="arch-connector h-4"></div>
+              <div class="arch-node border-border-custom bg-surface/50 w-full">
+                <div class="font-mono text-parchment text-xs font-bold mb-1">Frontend</div>
                 <div class="flex flex-wrap gap-1 justify-center">
                   <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">components</span>
                   <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">pages</span>
@@ -333,26 +444,12 @@
     </div>
   </section>
 
-  <!-- Dashboard Preview -->
-  <section id="dashboard" class="px-6 py-24 border-t border-border-custom">
-    <div class="max-w-5xl mx-auto fade-up-scroll">
-      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Dashboard</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A real-time web UI for managing escalations, chatting with the orchestrator, and monitoring system health.</p>
-
-      <div class="screenshot-placeholder rounded-lg aspect-video flex items-center justify-center max-w-4xl mx-auto">
-        <div class="text-center">
-          <div class="text-stone/40 text-sm font-mono mb-2">[ Dashboard Screenshot ]</div>
-          <div class="text-stone/25 text-xs">3-column layout: Escalations &middot; Chat &middot; System Status</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- Install -->
   <section id="install" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-3xl mx-auto text-center fade-up-scroll">
-      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4">Install</h2>
-      <p class="text-stone mb-10">One command. That's it.</p>
+      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4">Get Started</h2>
+      <p class="text-stone mb-2">One command. Uses your existing Claude Code CLI.</p>
+      <p class="text-stone/60 text-sm mb-10">No new accounts. No separate platform. Just your Claude Code and superbot2.</p>
 
       <div class="relative bg-codebg border border-border-custom rounded-lg p-6 text-left max-w-2xl mx-auto">
         <div class="flex items-center justify-between gap-4">
@@ -390,6 +487,81 @@
   </footer>
 
   <script>
+    // Terminal animation data
+    const terminals = {
+      'term-meta': [
+        { text: '\u25b8 Reading knowledge/conventions.md', color: '#706b63' },
+        { text: '\u25b8 Task: rewrite landing page hero', color: '#c4a882' },
+        { text: '\u25b8 Analyzing current messaging...', color: '#706b63' },
+        { text: '\u25b8 Writing landing/index.html', color: '#706b63' },
+        { text: '  847 lines written', color: 'rgba(112,107,99,0.6)' },
+        { text: '\u2713 Build successful', color: '#8a9a7b' },
+        { text: '\u25b8 Deploying to Cloudflare Pages', color: '#706b63' },
+        { text: '\u2713 Live at superbot2-landing.pages.dev', color: '#8a9a7b' },
+        { text: '\u25b8 Taking verification screenshot', color: '#706b63' },
+        { text: '\u2713 Desktop + mobile verified', color: '#8a9a7b' },
+        { text: '\u25b8 Committing: [meta] rewrite hero', color: '#c4a882' },
+        { text: '\u25b8 Moving to next task...', color: '#706b63' },
+      ],
+      'term-api': [
+        { text: '\u25b8 Loading space knowledge', color: '#706b63' },
+        { text: '\u25b8 Task: add auth endpoints', color: '#c4a882' },
+        { text: '\u25b8 Writing src/routes/auth.ts', color: '#706b63' },
+        { text: '\u25b8 Writing tests/auth.test.ts', color: '#706b63' },
+        { text: '\u25b8 Running test suite...', color: '#706b63' },
+        { text: '  \u2713 POST /auth/login', color: '#8a9a7b' },
+        { text: '  \u2713 POST /auth/register', color: '#8a9a7b' },
+        { text: '  \u2713 GET /auth/me', color: '#8a9a7b' },
+        { text: '\u2713 24/24 tests passing', color: '#8a9a7b' },
+        { text: '\u25b8 Code review: no critical issues', color: '#706b63' },
+        { text: '\u25b8 Committing: [api] add JWT auth', color: '#c4a882' },
+        { text: '\u25b8 Creating escalation...', color: '#706b63' },
+        { text: '  "Rate limiting strategy?"', color: '#DC504A' },
+      ],
+      'term-frontend': [
+        { text: '\u25b8 Reading plan.md', color: '#706b63' },
+        { text: '\u25b8 Task: implement dark mode', color: '#c4a882' },
+        { text: '\u25b8 Analyzing existing theme...', color: '#706b63' },
+        { text: '\u25b8 Writing ThemeToggle.tsx', color: '#706b63' },
+        { text: '\u25b8 Writing useTheme.ts', color: '#706b63' },
+        { text: '\u25b8 Running vitest...', color: '#706b63' },
+        { text: '\u2713 18/18 tests passing', color: '#8a9a7b' },
+        { text: '\u25b8 Building production bundle', color: '#706b63' },
+        { text: '\u2713 Build: 142kb gzipped', color: '#8a9a7b' },
+        { text: '\u25b8 Committing: [fe] add dark mode', color: '#c4a882' },
+        { text: '\u25b8 Updating knowledge/patterns.md', color: '#706b63' },
+        { text: '\u25b8 Moving to next task...', color: '#706b63' },
+      ],
+    };
+
+    function initTerminals() {
+      Object.entries(terminals).forEach(([id, lines], termIdx) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        let lineIdx = 0;
+        const maxVisible = 8;
+
+        function addLine() {
+          const line = lines[lineIdx % lines.length];
+          const div = document.createElement('div');
+          div.className = 'terminal-line';
+          div.style.color = line.color;
+          div.textContent = line.text;
+          el.appendChild(div);
+
+          while (el.children.length > maxVisible) {
+            el.removeChild(el.firstChild);
+          }
+
+          lineIdx++;
+          setTimeout(addLine, 800 + Math.random() * 1200);
+        }
+
+        setTimeout(addLine, termIdx * 600 + 300);
+      });
+    }
+
+    // Copy install command
     function copyInstall() {
       const cmd = 'curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash';
       navigator.clipboard.writeText(cmd).then(() => {
@@ -407,6 +579,7 @@
       });
     }
 
+    // Mobile nav
     function toggleMobileNav() {
       document.getElementById('mobile-nav').classList.toggle('hidden');
     }
@@ -417,12 +590,13 @@
     // Scroll-triggered fade-up animations
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-        }
+        if (entry.isIntersecting) entry.target.classList.add('visible');
       });
     }, { threshold: 0.1 });
     document.querySelectorAll('.fade-up-scroll').forEach(el => observer.observe(el));
+
+    // Initialize
+    initTerminals();
   </script>
 
 </body>
