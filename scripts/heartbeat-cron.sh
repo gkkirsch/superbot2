@@ -3,6 +3,34 @@
 set -eo pipefail
 shopt -s nullglob
 
+# Cross-platform md5 function
+md5_compat() {
+  if command -v md5sum &>/dev/null; then
+    # Linux: md5sum outputs "hash  filename"
+    md5sum "$1" | awk '{print $1}'
+  elif command -v md5 &>/dev/null; then
+    # macOS: md5 -q outputs just the hash
+    md5 -q "$1"
+  else
+    echo "Error: No md5 command found" >&2
+    return 1
+  fi
+}
+
+# Cross-platform stdin md5 function
+md5_stdin_compat() {
+  if command -v md5sum &>/dev/null; then
+    # Linux: md5sum outputs "hash  -"
+    md5sum | awk '{print $1}'
+  elif command -v md5 &>/dev/null; then
+    # macOS: md5 -q outputs just the hash
+    md5 -q
+  else
+    echo "Error: No md5 command found" >&2
+    return 1
+  fi
+}
+
 # Singleton guard — skip if a previous heartbeat run is still in progress
 PID_FILE="$HOME/.superbot2/.pids/heartbeat.pid"
 mkdir -p "$(dirname "$PID_FILE")"
@@ -59,23 +87,23 @@ compute_fingerprint() {
   local hash_input=""
 
   for f in "${untriaged_files[@]}"; do
-    [[ -f "$f" ]] && hash_input+="untriaged:$(md5 -q "$f")"
+    [[ -f "$f" ]] && hash_input+="untriaged:$(md5_compat "$f")"
   done
 
   for f in "${pending_files[@]}"; do
-    [[ -f "$f" ]] && hash_input+="needs_human:$(md5 -q "$f")"
+    [[ -f "$f" ]] && hash_input+="needs_human:$(md5_compat "$f")"
   done
 
   for f in "${resolved_files[@]}"; do
-    [[ -f "$f" ]] && hash_input+="resolved:$(md5 -q "$f")"
+    [[ -f "$f" ]] && hash_input+="resolved:$(md5_compat "$f")"
   done
 
   for f in "${knowledge_files[@]}"; do
-    [[ -f "$f" ]] && hash_input+="knowledge:$(md5 -q "$f")"
+    [[ -f "$f" ]] && hash_input+="knowledge:$(md5_compat "$f")"
   done
 
   if [[ -f "$memory_file" ]]; then
-    hash_input+="memory:$(md5 -q "$memory_file")"
+    hash_input+="memory:$(md5_compat "$memory_file")"
   fi
 
   # Include task files in fingerprint so task changes trigger heartbeat
@@ -84,7 +112,7 @@ compute_fingerprint() {
     for project_dir in "$space_dir"plans/*/; do
       [[ -d "$project_dir" ]] || continue
       for tf in "$project_dir"tasks/*.json; do
-        [[ -f "$tf" ]] && hash_input+="task:$(md5 -q "$tf")"
+        [[ -f "$tf" ]] && hash_input+="task:$(md5_compat "$tf")"
       done
     done
   done
@@ -94,7 +122,7 @@ compute_fingerprint() {
     return
   fi
 
-  echo -n "$hash_input" | md5
+  echo -n "$hash_input" | md5_stdin_compat
 }
 
 # --- Scan all projects for task status ---
@@ -240,7 +268,7 @@ echo "heartbeat: changes detected"
 # --- Compute per-file knowledge hashes for change tracking ---
 new_k_hashes=""
 for f in "${knowledge_files[@]}"; do
-  [[ -f "$f" ]] && new_k_hashes+="$(md5 -q "$f")  $(basename "$f")"$'\n'
+  [[ -f "$f" ]] && new_k_hashes+="$(md5_compat "$f")  $(basename "$f")"$'\n'
 done
 
 # --- Dedup: skip if unread heartbeat already in inbox ---
@@ -473,7 +501,7 @@ if [[ -n "$previous_fingerprint" ]]; then
   for f in "${knowledge_files[@]}"; do
     if [[ -f "$f" ]]; then
       fname=$(basename "$f")
-      fhash=$(md5 -q "$f")
+      fhash=$(md5_compat "$f")
 
       # Look up previous hash for this file
       prev_hash=""

@@ -1,41 +1,45 @@
 #!/bin/bash
-# Install superbot2 heartbeat as a macOS launchd agent
+# Install superbot2 heartbeat (macOS: launchd, Linux: cron job)
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO_DIR/scripts/heartbeat-cron.sh"
-PLIST_NAME="com.superbot2.heartbeat"
-PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
 SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.superbot2}"
 CONFIG_FILE="$SUPERBOT2_HOME/config.json"
 LOG_DIR="$SUPERBOT2_HOME/logs"
 
-# Default interval: 30 minutes (1800 seconds)
-INTERVAL=1800
+# Detect OS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  # macOS: use launchd
+  PLIST_NAME="com.superbot2.heartbeat"
+  PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
 
-# Read interval from config if available
-if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
-  configured_minutes=$(jq -r '.heartbeat.intervalMinutes // empty' "$CONFIG_FILE" 2>/dev/null || true)
-  if [[ -n "$configured_minutes" ]]; then
-    INTERVAL=$((configured_minutes * 60))
-    echo "Using configured interval: ${configured_minutes} minutes"
+  # Default interval: 30 minutes (1800 seconds)
+  INTERVAL=1800
+
+  # Read interval from config if available
+  if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
+    configured_minutes=$(jq -r '.heartbeat.intervalMinutes // empty' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -n "$configured_minutes" ]]; then
+      INTERVAL=$((configured_minutes * 60))
+      echo "Using configured interval: ${configured_minutes} minutes"
+    fi
   fi
-fi
 
-# Ensure log directory exists
-mkdir -p "$LOG_DIR"
+  # Ensure log directory exists
+  mkdir -p "$LOG_DIR"
 
-# Ensure heartbeat script is executable
-chmod +x "$SCRIPT"
+  # Ensure heartbeat script is executable
+  chmod +x "$SCRIPT"
 
-# Unload existing plist if present
-if launchctl list "$PLIST_NAME" &>/dev/null; then
-  echo "Unloading existing heartbeat..."
-  launchctl unload "$PLIST_PATH" 2>/dev/null || true
-fi
+  # Unload existing plist if present
+  if launchctl list "$PLIST_NAME" &>/dev/null; then
+    echo "Unloading existing heartbeat..."
+    launchctl unload "$PLIST_PATH" 2>/dev/null || true
+  fi
 
-# Write plist
-cat > "$PLIST_PATH" << EOF
+  # Write plist
+  cat > "$PLIST_PATH" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -66,11 +70,48 @@ cat > "$PLIST_PATH" << EOF
 </plist>
 EOF
 
-# Load plist
-launchctl load "$PLIST_PATH"
+  # Load plist
+  launchctl load "$PLIST_PATH"
 
-echo "Heartbeat installed and loaded."
-echo "  Plist: $PLIST_PATH"
-echo "  Script: $SCRIPT"
-echo "  Interval: $((INTERVAL / 60)) minutes"
-echo "  Logs: $LOG_DIR/heartbeat.log"
+  echo "Heartbeat installed and loaded (macOS launchd)."
+  echo "  Plist: $PLIST_PATH"
+  echo "  Script: $SCRIPT"
+  echo "  Interval: $((INTERVAL / 60)) minutes"
+  echo "  Logs: $LOG_DIR/heartbeat.log"
+
+else
+  # Linux: use cron job
+  CRON_TAG="superbot2-heartbeat"
+
+  # Default interval: 30 minutes
+  INTERVAL_MINUTES=30
+
+  # Read interval from config if available
+  if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
+    configured_minutes=$(jq -r '.heartbeat.intervalMinutes // empty' "$CONFIG_FILE" 2>/dev/null || true)
+    if [[ -n "$configured_minutes" ]]; then
+      INTERVAL_MINUTES="$configured_minutes"
+      echo "Using configured interval: ${INTERVAL_MINUTES} minutes"
+    fi
+  fi
+
+  # Ensure log directory exists
+  mkdir -p "$LOG_DIR"
+
+  # Ensure heartbeat script is executable
+  chmod +x "$SCRIPT"
+
+  # Remove existing cron job with our tag
+  crontab -l 2>/dev/null | grep -v "$CRON_TAG" | crontab - 2>/dev/null || true
+
+  # Add new cron job
+  (crontab -l 2>/dev/null || true; echo "*/${INTERVAL_MINUTES} * * * * SUPERBOT2_HOME=$SUPERBOT2_HOME SUPERBOT2_NAME=${SUPERBOT2_NAME:-superbot2} $SCRIPT > $LOG_DIR/heartbeat.log 2>&1 # $CRON_TAG") | crontab -
+
+  echo "Heartbeat installed as cron job (Linux)."
+  echo "  Script: $SCRIPT"
+  echo "  Interval: ${INTERVAL_MINUTES} minutes"
+  echo "  Logs: $LOG_DIR/heartbeat.log"
+  echo ""
+  echo "To verify: crontab -l | grep $CRON_TAG"
+  echo "To remove: crontab -l | grep -v $CRON_TAG | crontab -"
+fi

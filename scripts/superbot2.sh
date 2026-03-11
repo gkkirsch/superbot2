@@ -171,16 +171,50 @@ fi
 # --- Main loop with restart support ---
 rm -f "$RESTART_FLAG"
 
+# Detect OS
+detect_os() {
+  case "$(uname -s)" in
+    Darwin)  echo "macos" ;;
+    Linux)   echo "linux" ;;
+    *)       echo "unknown" ;;
+  esac
+}
+
+OS_TYPE=$(detect_os)
+
 # Ensure heartbeat is running
-if ! launchctl list com.superbot2.heartbeat &>/dev/null; then
+install_heartbeat() {
   echo "Installing heartbeat..."
   bash "$SCRIPT_DIR/install-heartbeat.sh"
+}
+
+if [[ "$OS_TYPE" == "macos" ]]; then
+  if ! launchctl list com.superbot2.heartbeat &>/dev/null; then
+    install_heartbeat
+  fi
+elif [[ "$OS_TYPE" == "linux" ]]; then
+  # For Linux, check if cron job exists
+  if ! crontab -l 2>/dev/null | grep -q "superbot2-heartbeat"; then
+    install_heartbeat
+  fi
 fi
 
 # Ensure scheduler is running
-if ! launchctl list com.superbot2.scheduler &>/dev/null; then
+install_scheduler() {
   echo "Installing scheduler..."
   bash "$SCRIPT_DIR/install-scheduler.sh"
+}
+
+if [[ "$OS_TYPE" == "macos" ]]; then
+  if ! launchctl list com.superbot2.scheduler &>/dev/null; then
+    install_scheduler
+  fi
+elif [[ "$OS_TYPE" == "linux" ]]; then
+  # For Linux, check if scheduler process is running
+  SCHED_PID_FILE="$DIR/.scheduler.pid"
+  if [[ ! -f "$SCHED_PID_FILE" ]] || ! kill -0 "$(cat "$SCHED_PID_FILE" 2>/dev/null)" 2>/dev/null; then
+    install_scheduler
+  fi
 fi
 
 # --- Start dashboard server ---
@@ -209,10 +243,26 @@ trap 'stop_dashboard; rm -f "$LAUNCHER_PID_FILE"; rm -f "$PID_FILE"' EXIT
 start_dashboard
 
 # Open dashboard in browser (after a short delay to let server start)
-sleep 1 && open "http://localhost:3274" &
+open_browser() {
+  if [[ "$OS_TYPE" == "macos" ]]; then
+    open "http://localhost:3274"
+  elif [[ "$OS_TYPE" == "linux" ]]; then
+    if command -v xdg-open &>/dev/null; then
+      xdg-open "http://localhost:3274" 2>/dev/null &
+    elif command -v gnome-open &>/dev/null; then
+      gnome-open "http://localhost:3274" 2>/dev/null &
+    else
+      echo "Dashboard running at http://localhost:3274"
+    fi
+  fi
+}
+sleep 1 && open_browser &
 
 # Start iMessage watcher (self-exits if not configured, has its own singleton guard)
-bash "$SCRIPT_DIR/imessage-watcher.sh" &
+# Only on macOS
+if [[ "$OS_TYPE" == "macos" ]]; then
+  bash "$SCRIPT_DIR/imessage-watcher.sh" &
+fi
 
 echo "Starting superbot2 orchestrator..."
 
