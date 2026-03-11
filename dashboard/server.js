@@ -3617,6 +3617,26 @@ async function getCardDefinitions() {
     } catch { /* no plugin cache dir */ }
   }
 
+  // 3. Scan skill-creator drafts for plugin cards (dev/testing)
+  const draftsDir = join(SUPERBOT_DIR, 'skill-creator', 'drafts')
+  try {
+    const drafts = await safeReaddir(draftsDir)
+    for (const draft of drafts) {
+      if (draft.startsWith('.')) continue
+      const draftDir = join(draftsDir, draft)
+      try { if (!(await stat(draftDir)).isDirectory()) continue } catch { continue }
+      const draftResult = await readSkillManifest(draftDir)
+      if (draftResult) {
+        const skillId = `draft__${draft}`
+        if (!cards.some(c => c.skillId === skillId)) {
+          _cardBaseDirs.set(skillId, draftDir)
+          _manifests.set(skillId, draftResult.manifest)
+          cards.push({ ...draftResult.card, skillId })
+        }
+      }
+    }
+  } catch { /* no drafts dir */ }
+
   return cards
 }
 
