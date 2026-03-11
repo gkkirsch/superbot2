@@ -850,6 +850,11 @@ app.get('/api/latest-files', async (_req, res) => {
         const files = lines.slice(1).filter(f => f.trim())
 
         for (const file of files) {
+          // Only include documentation files (.md), skip source code
+          if (!file.endsWith('.md')) continue
+          // Skip docs inside build artifacts or dependencies
+          if (/\b(node_modules|dist|build)\b/.test(file)) continue
+
           allFiles.push({
             filename: file.split('/').pop(),
             path: file,
