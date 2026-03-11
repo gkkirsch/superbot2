@@ -1789,11 +1789,11 @@ app.put('/api/user', async (req, res) => {
 const DEFAULT_DASHBOARD_CONFIG = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions'],
+  rightColumn: ['tips', 'goals', 'cards', 'escalations', 'spaces', 'pulse', 'latest-files', 'schedule', 'todos', 'knowledge', 'extensions'],
   hidden: ['recent-activity'],
 }
 
-const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals', 'tips']
+const VALID_SECTION_IDS = ['escalations', 'orchestrator-resolved', 'recent-activity', 'pulse', 'schedule', 'todos', 'knowledge', 'extensions', 'spaces', 'chat', 'workers', 'cards', 'goals', 'tips', 'latest-files']
 
 app.get('/api/dashboard-config', async (_req, res) => {
   try {
