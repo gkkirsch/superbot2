@@ -135,23 +135,41 @@ assemble_prompt() {
   echo "$prompt"
 }
 
-# --- Session ID: always generate fresh on startup ---
+# --- Session ID: reuse on restart, generate fresh on first start ---
 TEAM_DIR="$HOME/.claude/teams/superbot2"
 SESSION_FILE="$DIR/.orchestrator-session"
-SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
-echo "$SESSION_ID" > "$SESSION_FILE"
-echo "Generated session ID: $SESSION_ID"
 
-# Update team config with current session ID
+if [[ -f "$SESSION_FILE" ]]; then
+  # Reuse existing session — enables --resume to preserve conversation context
+  SESSION_ID=$(cat "$SESSION_FILE")
+  IS_RESTART=true
+  echo "Resuming session ID: $SESSION_ID"
+else
+  # First-ever start — generate fresh UUID
+  SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+  echo "$SESSION_ID" > "$SESSION_FILE"
+  IS_RESTART=false
+  echo "Generated session ID: $SESSION_ID"
+fi
+
+# Update team config with current session ID and clean stale members
 if [[ -f "$TEAM_DIR/config.json" ]] && command -v jq &>/dev/null; then
-  jq --arg sid "$SESSION_ID" '.leadSessionId = $sid' \
-    "$TEAM_DIR/config.json" > "$TEAM_DIR/config.json.tmp" \
+  jq --arg sid "$SESSION_ID" '
+    .leadSessionId = $sid |
+    .members = [.members[] | select(.name == "team-lead" or .name == "heartbeat")]
+  ' "$TEAM_DIR/config.json" > "$TEAM_DIR/config.json.tmp" \
     && mv "$TEAM_DIR/config.json.tmp" "$TEAM_DIR/config.json"
+
+  # Verify config update succeeded
+  UPDATED_SID=$(jq -r '.leadSessionId' "$TEAM_DIR/config.json" 2>/dev/null)
+  if [[ "$UPDATED_SID" != "$SESSION_ID" ]]; then
+    echo "ERROR: Failed to update leadSessionId in config.json (expected $SESSION_ID, got $UPDATED_SID)"
+    exit 1
+  fi
 fi
 
 # --- Main loop with restart support ---
 rm -f "$RESTART_FLAG"
-IS_RESTART=false
 
 # Ensure heartbeat is running
 if ! launchctl list com.superbot2.heartbeat &>/dev/null; then

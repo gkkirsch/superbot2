@@ -332,6 +332,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
         collapsed={collapsed}
         onToggle={toggle}
         badge={itemCount}
+        compact
         action={headerAction}
       />
       <CollapsibleContent collapsed={collapsed}>
