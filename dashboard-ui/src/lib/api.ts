@@ -883,6 +883,10 @@ export async function fetchLatestFiles(): Promise<LatestFile[]> {
   return data.files
 }
 
+export async function fetchFileContent(path: string): Promise<ContextFile> {
+  return fetchJson<ContextFile>(`/file-content?path=${encodeURIComponent(path)}`)
+}
+
 // --- Dashboard cards ---
 
 export async function fetchCards(): Promise<CardDefinition[]> {

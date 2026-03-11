@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FileText, File, Braces, User, Pencil, Trash2, Save, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useSaveKnowledge, useDeleteKnowledge, useSaveUser } from '@/hooks/useSpaces'
-import { fetchKnowledgeContent } from '@/lib/api'
+import { fetchKnowledgeContent, fetchFileContent } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 
@@ -58,17 +58,24 @@ export interface FileViewerProps {
   source: string
   filename: string
   isUser?: boolean
+  /** When provided, fetches content by path instead of source/filename. Read-only mode. */
+  filePath?: string
 }
 
-export function FileViewer({ open, onClose, source, filename, isUser }: FileViewerProps) {
+export function FileViewer({ open, onClose, source, filename, isUser, filePath }: FileViewerProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const readOnly = !!filePath
 
   const { data, isLoading } = useQuery({
-    queryKey: isUser ? ['context', 'user'] : ['knowledge-content', source, filename],
-    queryFn: isUser
-      ? () => fetch('/api/user').then(r => r.json())
-      : () => fetchKnowledgeContent(source, filename),
+    queryKey: filePath
+      ? ['file-content', filePath]
+      : isUser ? ['context', 'user'] : ['knowledge-content', source, filename],
+    queryFn: filePath
+      ? () => fetchFileContent(filePath)
+      : isUser
+        ? () => fetch('/api/user').then(r => r.json())
+        : () => fetchKnowledgeContent(source, filename),
     enabled: open,
     staleTime: 30_000,
   })
@@ -117,12 +124,12 @@ export function FileViewer({ open, onClose, source, filename, isUser }: FileView
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {!editing && (
+          {!readOnly && !editing && (
             <button onClick={startEdit} className="p-1.5 rounded-md text-stone/50 hover:text-sand hover:bg-sand/10 transition-colors" title="Edit">
               <Pencil className="h-4 w-4" />
             </button>
           )}
-          {!isUser && (
+          {!readOnly && !isUser && (
             <button onClick={handleDelete} className="p-1.5 rounded-md text-stone/50 hover:text-red-400 hover:bg-red-400/10 transition-colors" title="Delete">
               <Trash2 className="h-4 w-4" />
             </button>

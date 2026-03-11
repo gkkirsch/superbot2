@@ -911,6 +911,31 @@ app.get('/api/latest-files', async (_req, res) => {
   }
 })
 
+// --- GET /api/file-content ---
+
+app.get('/api/file-content', async (req, res) => {
+  try {
+    const rawPath = req.query.path
+    if (!rawPath || typeof rawPath !== 'string') {
+      return res.status(400).json({ error: 'Missing path parameter' })
+    }
+    // Sanitize: no directory traversal, must stay within SUPERBOT_DIR
+    const safePath = rawPath.replace(/\.\./g, '').replace(/\/+/g, '/')
+    const filePath = join(SUPERBOT_DIR, safePath)
+    if (!filePath.startsWith(SUPERBOT_DIR)) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+    const result = await readMarkdownFile(filePath)
+    if (result.exists) {
+      const s = await stat(filePath)
+      result.lastModified = s.mtime.toISOString()
+    }
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- Dev server process management ---
 
 const runningProcesses = new Map() // slug -> { pid, command, cwd, startedAt }

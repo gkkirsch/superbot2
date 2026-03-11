@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FileText, RefreshCw, FolderOpen } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLatestFiles } from '@/hooks/useSpaces'
+import { FileViewer } from '@/features/KnowledgeFileViewer'
 import type { LatestFile } from '@/lib/api'
 
 function timeAgo(dateStr: string): string {
@@ -19,9 +20,9 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function FileRow({ file }: { file: LatestFile }) {
+function FileRow({ file, onClick }: { file: LatestFile; onClick: () => void }) {
   return (
-    <div className="flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-surface/30 transition-colors group/row">
+    <div onClick={onClick} className="flex items-start gap-2.5 px-3 py-2 rounded-lg hover:bg-surface/30 transition-colors group/row cursor-pointer">
       <FileText className="h-3.5 w-3.5 text-stone/40 shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -43,6 +44,13 @@ export function LatestFilesSection() {
   const [showAll, setShowAll] = useState(false)
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerFile, setViewerFile] = useState<LatestFile | null>(null)
+
+  const openFile = (file: LatestFile) => {
+    setViewerFile(file)
+    setViewerOpen(true)
+  }
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -73,29 +81,41 @@ export function LatestFilesSection() {
   }
 
   return (
-    <div>
-      <div className="space-y-0.5">
-        {visible.map((file, i) => (
-          <FileRow key={`${file.space}:${file.path}:${i}`} file={file} />
-        ))}
-      </div>
-      <div className="flex items-center justify-between mt-2 px-1">
-        {files.length > 10 && (
+    <>
+      <div>
+        <div className="space-y-0.5">
+          {visible.map((file, i) => (
+            <FileRow key={`${file.space}:${file.path}:${i}`} file={file} onClick={() => openFile(file)} />
+          ))}
+        </div>
+        <div className="flex items-center justify-between mt-2 px-1">
+          {files.length > 10 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="text-[10px] text-stone/50 hover:text-sand transition-colors"
+            >
+              {showAll ? 'Show fewer' : `Show all ${files.length}`}
+            </button>
+          )}
           <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-[10px] text-stone/50 hover:text-sand transition-colors"
+            onClick={handleRefresh}
+            className="text-stone/40 hover:text-sand transition-colors p-1 rounded ml-auto"
+            title="Refresh"
           >
-            {showAll ? 'Show fewer' : `Show all ${files.length}`}
+            <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
-        )}
-        <button
-          onClick={handleRefresh}
-          className="text-stone/40 hover:text-sand transition-colors p-1 rounded ml-auto"
-          title="Refresh"
-        >
-          <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
-        </button>
+        </div>
       </div>
-    </div>
+
+      {viewerFile && (
+        <FileViewer
+          open={viewerOpen}
+          onClose={() => { setViewerOpen(false); setViewerFile(null) }}
+          source={viewerFile.space}
+          filename={viewerFile.filename}
+          filePath={viewerFile.path}
+        />
+      )}
+    </>
   )
 }
