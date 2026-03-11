@@ -18,18 +18,18 @@ export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, co
       className={`flex items-center justify-between transition-[margin] duration-300 ${isCollapsible ? (collapsed ? 'mb-1' : 'mb-4') : 'mb-4'} ${isCollapsible ? 'cursor-pointer select-none' : ''}`}
       onClick={isCollapsible ? onToggle : undefined}
     >
-      <div className="flex items-center gap-2">
-        <Icon className="h-5 w-5 text-sand" />
-        <h2 className="font-heading text-xl text-parchment">{title}</h2>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <Icon className="h-5 w-5 text-sand shrink-0" />
+        <h2 className="font-heading text-xl text-parchment truncate">{title}</h2>
         {collapsed && badge !== undefined && badge > 0 && (
-          <span className="ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sand/15 text-sand/80 leading-none">{badge}</span>
+          <span className="ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sand/15 text-sand/80 leading-none shrink-0">{badge}</span>
         )}
         {isCollapsible && (
-          <ChevronDown className={`h-4 w-4 text-stone/50 transition-transform duration-300 ${!collapsed ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-4 w-4 text-stone/50 transition-transform duration-300 shrink-0 ${!collapsed ? 'rotate-180' : ''}`} />
         )}
       </div>
       <div
-        className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+        className="flex items-center gap-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
         onClick={isCollapsible ? (e: React.MouseEvent) => e.stopPropagation() : undefined}
       >
         {action}

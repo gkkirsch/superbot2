@@ -18,7 +18,8 @@ import { getRendererOrDefault } from '@/features/cardRenderers'
 import { GoalSection } from '@/features/GoalSection'
 import { LatestFilesSection } from '@/features/LatestFilesSection'
 import { TipsRotator } from '@/features/TipsRotator'
-import { Send, Target, FileCode, Settings } from 'lucide-react'
+import { Send, Target, FileCode, Settings, RefreshCw } from 'lucide-react'
+import { useRefreshCardItems } from '@/hooks/useSpaces'
 // Register all built-in card renderers on import
 import '@/features/registerRenderers'
 import type { DashboardConfig } from '@/lib/types'
@@ -293,9 +294,35 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
   const [collapsed, toggle] = useCollapsedState(`card:${card.skillId}`)
   const [showSettings, setShowSettings] = useState(false)
   const { data } = useCardItems(card.skillId)
+  const refreshMutation = useRefreshCardItems()
   const defaultStatus = card.defaultFilter?.status || 'pending'
   const itemCount = data?.items?.filter(i => !i.status || i.status === defaultStatus).length ?? 0
   const Renderer = getRendererOrDefault(card.renderer) || CardSkillSection
+
+  const hasActions = card.hasSettings || card.refreshCommand
+  const headerAction = hasActions ? (
+    <div className="flex items-center gap-1">
+      {card.refreshCommand && (
+        <button
+          onClick={() => refreshMutation.mutate(card.skillId)}
+          disabled={refreshMutation.isPending}
+          className={`p-1 rounded transition-colors text-stone/40 hover:text-stone hover:bg-sand/10 ${refreshMutation.isPending ? 'animate-spin' : ''}`}
+          title="Refresh"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {card.hasSettings && (
+        <button
+          onClick={() => setShowSettings(v => !v)}
+          className={`p-1 rounded transition-colors ${showSettings ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone'}`}
+          title="Settings"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  ) : undefined
 
   return (
     <section className="group" data-section={`card:${card.skillId}`}>
@@ -305,15 +332,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
         collapsed={collapsed}
         onToggle={toggle}
         badge={itemCount}
-        action={card.hasSettings ? (
-          <button
-            onClick={() => setShowSettings(v => !v)}
-            className={`p-1 rounded transition-colors ${showSettings ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone'}`}
-            title="Settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-        ) : undefined}
+        action={headerAction}
       />
       <CollapsibleContent collapsed={collapsed}>
         <Renderer card={card} showSettings={showSettings} onCloseSettings={() => setShowSettings(false)} />

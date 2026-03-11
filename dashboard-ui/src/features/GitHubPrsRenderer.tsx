@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { RefreshCw, GitBranch, ExternalLink, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react'
-import { useCardItems, useRefreshCardItems } from '@/hooks/useSpaces'
+import { GitBranch, ExternalLink, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react'
+import { useCardItems } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem } from '@/lib/types'
 
 interface PRComment {
@@ -89,13 +89,8 @@ function CommentSection({ comments }: { comments: PRComment[] }) {
 
 export function GitHubPrsRenderer({ card }: { card: CardDefinition }) {
   const { data, isLoading } = useCardItems(card.skillId)
-  const refreshMutation = useRefreshCardItems()
 
   const items = data?.items || []
-
-  const handleRefresh = () => {
-    refreshMutation.mutate(card.skillId)
-  }
 
   if (isLoading) {
     return (
@@ -113,21 +108,6 @@ export function GitHubPrsRenderer({ card }: { card: CardDefinition }) {
 
   return (
     <div className="space-y-2">
-      {/* Refresh bar */}
-      <div className="flex items-center justify-end gap-2">
-        {refreshMutation.isError && (
-          <span className="text-[10px] text-ember">Refresh failed</span>
-        )}
-        <button
-          onClick={handleRefresh}
-          disabled={refreshMutation.isPending}
-          className={`p-1 text-stone/50 hover:text-sand transition-colors rounded hover:bg-sand/10 ${refreshMutation.isPending ? 'animate-spin' : ''}`}
-          title="Refresh PRs"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
       {items.length === 0 ? (
         <p className="text-xs text-stone/50 py-2 text-center">No open pull requests</p>
       ) : (
