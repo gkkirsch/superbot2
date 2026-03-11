@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 
-export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, collapsed, onToggle, badge }: {
+export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, collapsed, onToggle, badge, compact }: {
   title: string
   icon: React.ComponentType<{ className?: string }>
   linkTo?: string
@@ -10,17 +10,18 @@ export function SectionHeader({ title, icon: Icon, linkTo, linkLabel, action, co
   collapsed?: boolean
   onToggle?: () => void
   badge?: number
+  compact?: boolean
 }) {
   const isCollapsible = onToggle !== undefined
 
   return (
     <div
-      className={`flex items-center justify-between transition-[margin] duration-300 ${isCollapsible ? (collapsed ? 'mb-1' : 'mb-4') : 'mb-4'} ${isCollapsible ? 'cursor-pointer select-none' : ''}`}
+      className={`flex items-center justify-between transition-[margin] duration-300 ${isCollapsible ? (collapsed ? 'mb-1' : compact ? 'mb-2' : 'mb-4') : compact ? 'mb-2' : 'mb-4'} ${isCollapsible ? 'cursor-pointer select-none' : ''}`}
       onClick={isCollapsible ? onToggle : undefined}
     >
       <div className="flex items-center gap-2">
-        <Icon className="h-5 w-5 text-sand" />
-        <h2 className="font-heading text-xl text-parchment">{title}</h2>
+        <Icon className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} text-sand`} />
+        <h2 className={`font-heading ${compact ? 'text-sm' : 'text-xl'} text-parchment`}>{title}</h2>
         {collapsed && badge !== undefined && badge > 0 && (
           <span className="ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sand/15 text-sand/80 leading-none">{badge}</span>
         )}

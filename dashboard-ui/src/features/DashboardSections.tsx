@@ -305,6 +305,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
         collapsed={collapsed}
         onToggle={toggle}
         badge={itemCount}
+        compact
         action={card.hasSettings ? (
           <button
             onClick={() => setShowSettings(v => !v)}
