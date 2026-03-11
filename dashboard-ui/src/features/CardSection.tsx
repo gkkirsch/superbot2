@@ -1,6 +1,6 @@
 import { useState, type ComponentType } from 'react'
 import {
-  Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus, Settings,
+  Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus,
   type LucideProps,
 } from 'lucide-react'
 import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
@@ -260,14 +260,21 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
 
 // --- Card skill section (default renderer) ---
 
-export function CardSkillSection({ card }: { card: CardDefinition }) {
+interface CardSkillSectionProps {
+  card: CardDefinition
+  showSettings?: boolean
+  onCloseSettings?: () => void
+}
+
+export function CardSkillSection({ card, showSettings, onCloseSettings }: CardSkillSectionProps) {
   const { data, isLoading } = useCardItems(card.skillId)
   const updateMutation = useUpdateCardItem()
-  const [showSettings, setShowSettings] = useState(false)
+  const [showResolved, setShowResolved] = useState(false)
 
   const items = data?.items || []
   const defaultStatus = card.defaultFilter?.status || 'pending'
-  const filteredItems = items.filter(i => !i.status || i.status === defaultStatus)
+  const pendingItems = items.filter(i => !i.status || i.status === defaultStatus)
+  const resolvedItems = items.filter(i => i.status && i.status !== defaultStatus)
 
   const handleAction = (itemId: string, update: Record<string, unknown>) => {
     updateMutation.mutate({ skillId: card.skillId, itemId, update })
@@ -289,28 +296,15 @@ export function CardSkillSection({ card }: { card: CardDefinition }) {
 
   return (
     <div className="space-y-2">
-      {/* Settings gear (inline, opens settings form) */}
-      {card.hasSettings && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => setShowSettings(v => !v)}
-            className={`p-1 rounded transition-colors ${showSettings ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone'}`}
-            title="Settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Settings form (collapsible) */}
+      {/* Settings form (controlled by parent via SectionHeader gear icon) */}
       {showSettings && (
-        <SkillSettingsForm skillId={card.skillId} onClose={() => setShowSettings(false)} />
+        <SkillSettingsForm skillId={card.skillId} onClose={onCloseSettings || (() => {})} />
       )}
 
-      {filteredItems.length === 0 ? (
+      {pendingItems.length === 0 ? (
         <p className="text-xs text-stone/40 py-2 text-center">No items waiting for review</p>
       ) : (
-        filteredItems.map(item => (
+        pendingItems.map(item => (
           <CardItemRow
             key={item.id}
             item={item}
@@ -320,6 +314,25 @@ export function CardSkillSection({ card }: { card: CardDefinition }) {
           />
         ))
       )}
+
+      {/* Show resolved items toggle */}
+      {resolvedItems.length > 0 && (
+        <button
+          onClick={() => setShowResolved(v => !v)}
+          className="text-[11px] text-stone/40 hover:text-stone/60 transition-colors w-full text-center py-1"
+        >
+          {showResolved ? 'Hide' : 'Show'} {resolvedItems.length} resolved
+        </button>
+      )}
+      {showResolved && resolvedItems.map(item => (
+        <CardItemRow
+          key={item.id}
+          item={item}
+          card={card}
+          onAction={handleAction}
+          isPending={updateMutation.isPending}
+        />
+      ))}
     </div>
   )
 }

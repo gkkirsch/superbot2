@@ -7,6 +7,8 @@ import type { CardDefinition } from '@/lib/types'
 
 export interface CardRendererProps {
   card: CardDefinition
+  showSettings?: boolean
+  onCloseSettings?: () => void
 }
 
 const registry: Record<string, ComponentType<CardRendererProps>> = {}
