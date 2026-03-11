@@ -3781,11 +3781,14 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
 
     const filePath = resolveCardDataPath(card.skillId, card.dataSource)
     const release = await acquireFileLock(filePath)
+    let updatedItem = null
+    let oldStatus = null
     try {
       const items = await readCardItems(card.skillId, card.dataSource)
       const idx = items.findIndex(item => item.id === itemId)
       if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
+      oldStatus = items[idx].status
       for (const [key, value] of Object.entries(updates)) {
         if (!IMMUTABLE_CARD_FIELDS.has(key)) {
           items[idx][key] = value
@@ -3794,9 +3797,38 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       items[idx].updatedAt = new Date().toISOString()
 
       await writeCardItems(card.skillId, card.dataSource, items)
-      res.json({ item: items[idx] })
+      updatedItem = items[idx]
+      res.json({ item: updatedItem })
     } finally {
       release()
+    }
+
+    // Send notification to orchestrator if status changed and card has notifications configured
+    if (updatedItem && updates.status && updates.status !== oldStatus && card.notifications?.onStatusChange) {
+      const template = card.notifications.onStatusChange[updates.status]
+      if (template) {
+        try {
+          const message = template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+            if (key === 'skillId') return card.skillId
+            if (key === 'dataPath') return filePath
+            return String(updatedItem[key] ?? '')
+          })
+          const inboxPath = join(TEAM_INBOXES_DIR, 'team-lead.json')
+          const inbox = await readJsonFile(inboxPath) || []
+          inbox.push({
+            from: 'dashboard-user',
+            type: 'card_action',
+            text: message,
+            summary: `${card.name || card.skillId} ${updates.status}`,
+            timestamp: new Date().toISOString(),
+            read: false,
+            metadata: { skillId: card.skillId, itemId, status: updates.status },
+          })
+          await writeFile(inboxPath, JSON.stringify(inbox, null, 2), 'utf-8')
+        } catch (notifyErr) {
+          console.error('Failed to notify orchestrator of card action:', notifyErr.message)
+        }
+      }
     }
   } catch (err) {
     res.status(500).json({ error: err.message })
