@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, RefreshCw, GitCommit } from 'lucide-react'
+import { FileText, RefreshCw, FolderOpen } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLatestFiles } from '@/hooks/useSpaces'
 import type { LatestFile } from '@/lib/api'
@@ -29,8 +29,8 @@ function FileRow({ file }: { file: LatestFile }) {
           <span className="text-[10px] text-sand/60 shrink-0">{file.spaceName}</span>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
-          <GitCommit className="h-2.5 w-2.5 text-stone/30 shrink-0" />
-          <span className="text-[10px] text-stone/50 truncate">{file.commitMessage}</span>
+          <FolderOpen className="h-2.5 w-2.5 text-stone/30 shrink-0" />
+          <span className="text-[10px] text-stone/50 truncate">{file.category}</span>
         </div>
       </div>
       <span className="text-[10px] text-stone/40 shrink-0 mt-0.5">{timeAgo(file.modifiedAt)}</span>

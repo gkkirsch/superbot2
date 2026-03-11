@@ -874,8 +874,7 @@ export interface LatestFile {
   path: string
   space: string
   spaceName: string
-  commitHash: string
-  commitMessage: string
+  category: string
   modifiedAt: string
 }
 
