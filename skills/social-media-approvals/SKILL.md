@@ -16,7 +16,7 @@ This skill provides a dashboard card for reviewing social media drafts before po
 ## How It Works
 
 1. Social media workers draft posts and queue them via `queue-post.sh` (in this skill's directory)
-2. Drafts are stored in `data.jsonl` (in this skill's directory)
+2. Drafts are stored in `~/.superbot2/spaces/<space>/skill-data/social-media-approvals/data.jsonl` (space-scoped)
 3. The dashboard reads `superbot.json` and renders items with approve/reject/rewrite buttons
 4. Approved drafts are picked up by the next worker session and posted
 
@@ -48,7 +48,7 @@ Options:
 Workers check for approved items at session start:
 
 ```bash
-grep '"status":"approved"' $SUPERBOT2_APP_DIR/skills/social-media-approvals/data.jsonl
+grep '"status":"approved"' ~/.superbot2/spaces/<space>/skill-data/social-media-approvals/data.jsonl
 ```
 
 After posting, update the item status to "posted" via the dashboard API.
