@@ -383,7 +383,7 @@ export function Knowledge() {
       <div className="mx-auto max-w-5xl px-6 py-10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="font-heading text-2xl text-parchment">Knowledge</h1>
+          <h1 className="font-heading text-2xl text-parchment">Library</h1>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode('list')}

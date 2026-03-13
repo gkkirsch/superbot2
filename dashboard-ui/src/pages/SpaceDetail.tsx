@@ -286,7 +286,7 @@ export function SpaceDetail() {
             {/* Knowledge */}
             {knowledgeFiles.length > 0 && (
               <section>
-                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Knowledge</h2>
+                <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Library</h2>
                 <div className="divide-y divide-border-custom">
                   {knowledgeFiles.map((file) => (
                     <Link

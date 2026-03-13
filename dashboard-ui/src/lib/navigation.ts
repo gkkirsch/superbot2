@@ -11,7 +11,7 @@ export const topNavItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: Gauge, end: true },
   { to: '/spaces', label: 'Spaces', icon: LayoutGrid },
   { to: '/skills', label: 'Plugins', icon: Blocks },
-  { to: '/knowledge', label: 'Knowledge', icon: Library },
+  { to: '/knowledge', label: 'Library', icon: Library },
 ]
 
 export const docsNavItem: NavItem = { to: '/learn', label: 'Docs', icon: BookOpen }
