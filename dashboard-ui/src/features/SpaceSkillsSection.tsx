@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, X, Puzzle, Loader2 } from 'lucide-react'
+import { Plus, X, Puzzle, Loader2, Settings } from 'lucide-react'
 import { useSpaceSkills, useSkillManifests, useAttachSkill, useDetachSkill } from '@/hooks/useSpaces'
 import { getSkillIcon } from '@/lib/skillIcons'
 
@@ -13,6 +13,7 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
   const attachMut = useAttachSkill()
   const detachMut = useDetachSkill()
   const [showPicker, setShowPicker] = useState(false)
+  const [onboardingSkillId, setOnboardingSkillId] = useState<string | null>(null)
 
   // Space-scoped skills not yet attached
   const attachable = (allManifests ?? []).filter(
@@ -20,12 +21,19 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
   )
 
   function handleAttach(skillId: string) {
-    attachMut.mutate({ slug, skillId })
+    attachMut.mutate({ slug, skillId }, {
+      onSuccess: (data) => {
+        if (data.onboarding?.available) {
+          setOnboardingSkillId(skillId)
+        }
+      },
+    })
     setShowPicker(false)
   }
 
   function handleDetach(skillId: string) {
     detachMut.mutate({ slug, skillId })
+    if (onboardingSkillId === skillId) setOnboardingSkillId(null)
   }
 
   return (
@@ -68,6 +76,22 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* Onboarding hint — shown after attaching a skill that has onboarding */}
+      {onboardingSkillId && (
+        <div className="mb-3 rounded-lg border border-sand/20 bg-sand/5 px-3 py-2 flex items-center gap-2">
+          <Settings className="h-3.5 w-3.5 text-sand/60 shrink-0" />
+          <span className="text-xs text-sand/80 flex-1">
+            This skill has setup options. Configure it in settings.
+          </span>
+          <button
+            onClick={() => setOnboardingSkillId(null)}
+            className="text-stone/40 hover:text-stone transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
         </div>
       )}
 

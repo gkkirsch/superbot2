@@ -1237,7 +1237,10 @@ app.post('/api/spaces/:slug/skills/:skillId', async (req, res) => {
         await writeFile(schedPath, JSON.stringify(schedule, null, 2))
       }
     }
-    res.json({ success: true, skills: spaceJson.skills, onboarding: !!(manifest.onboarding) })
+    const onboarding = manifest.onboarding
+      ? { available: true, ...manifest.onboarding }
+      : null
+    res.json({ success: true, skills: spaceJson.skills, onboarding })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

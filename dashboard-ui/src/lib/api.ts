@@ -997,7 +997,13 @@ export async function fetchSpaceSkills(slug: string): Promise<SpaceSkillInfo[]> 
   return data.skills
 }
 
-export async function attachSkillToSpace(slug: string, skillId: string): Promise<{ success: boolean; skills: string[] }> {
+export interface AttachSkillResponse {
+  success: boolean
+  skills: string[]
+  onboarding: { available: boolean; settings?: string[]; knowledge?: string[]; schedule?: boolean; message?: string } | null
+}
+
+export async function attachSkillToSpace(slug: string, skillId: string): Promise<AttachSkillResponse> {
   const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/skills/${encodeURIComponent(skillId)}`, {
     method: 'POST',
   })
