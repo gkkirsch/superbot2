@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X } from 'lucide-react'
-import { useCards, useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem } from '@/hooks/useSpaces'
+import { useCards, useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem, useSpaces } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -222,11 +222,13 @@ function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
   )
 }
 
-function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, unknown>) => void; isPending: boolean }) {
+function AddGoalForm({ onSubmit, isPending, space }: { onSubmit: (goal: Record<string, unknown>) => void; isPending: boolean; space?: string }) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [dueDate, setDueDate] = useState('')
+  const [selectedSpace, setSelectedSpace] = useState(space || '')
+  const { data: spaces } = useSpaces()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -239,13 +241,16 @@ function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, 
       progress: '',
       dueDate: dueDate.trim(),
       notes: notes.trim(),
-      space: '',
+      space: selectedSpace,
     })
     setTitle('')
     setNotes('')
     setDueDate('')
+    setSelectedSpace(space || '')
     setOpen(false)
   }
+
+  const spaceOptions = spaces || []
 
   if (!open) {
     return (
@@ -272,6 +277,21 @@ function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, 
           required
         />
       </div>
+      {!space && spaceOptions.length > 0 && (
+        <div>
+          <label className="text-[10px] text-stone/50 uppercase tracking-wider block mb-1">Space</label>
+          <select
+            value={selectedSpace}
+            onChange={e => setSelectedSpace(e.target.value)}
+            className="w-full bg-surface/50 text-parchment text-xs rounded-md px-2 py-1.5 border border-sand/20 focus:border-sand/40 focus:outline-none"
+          >
+            <option value="">Select a space</option>
+            {spaceOptions.map(s => (
+              <option key={s.slug} value={s.slug}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <label className="text-[10px] text-stone/50 uppercase tracking-wider block mb-1">Notes <span className="normal-case">(optional)</span></label>
         <textarea
@@ -302,7 +322,7 @@ function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, 
         </button>
         <button
           type="button"
-          onClick={() => { setTitle(''); setNotes(''); setDueDate(''); setOpen(false) }}
+          onClick={() => { setTitle(''); setNotes(''); setDueDate(''); setSelectedSpace(space || ''); setOpen(false) }}
           className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
         >
           Cancel
@@ -371,7 +391,7 @@ export function GoalRenderer({ card, space }: { card: CardDefinition; space?: st
           {showCompleted ? 'Hide completed' : `Show ${completedItems.length} completed`}
         </button>
       )}
-      <AddGoalForm onSubmit={handleCreate} isPending={createMutation.isPending} />
+      <AddGoalForm onSubmit={handleCreate} isPending={createMutation.isPending} space={space} />
     </div>
   )
 }
