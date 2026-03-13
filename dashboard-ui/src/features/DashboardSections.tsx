@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
-import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useCards, useCardItems } from '@/hooks/useSpaces'
+import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useAllBacklog, useCards, useCardItems } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import type { Filter } from '@/features/CombinedEscalationsSection'
@@ -264,7 +264,10 @@ function TodoDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('todos')
   const [showCompleted, setShowCompleted] = useState(false)
   const { todos } = useTodos()
-  const incompleteTodoCount = todos?.filter(t => !t.completed).length ?? 0
+  const { items: spaceItems } = useAllBacklog()
+  const globalCount = todos?.filter(t => !t.completed).length ?? 0
+  const spaceCount = spaceItems?.filter(t => !t.completed).length ?? 0
+  const incompleteTodoCount = globalCount + spaceCount
   return (
     <section className="group" data-section="todos">
       <SectionHeader

@@ -616,6 +616,11 @@ export async function deleteTodo(id: string): Promise<void> {
 
 // --- Backlog ---
 
+export async function fetchAllBacklog(): Promise<(BacklogItem & { space: string; spaceName: string })[]> {
+  const data = await fetchJson<{ items: (BacklogItem & { space: string; spaceName: string })[] }>('/backlog/all')
+  return data.items
+}
+
 export async function fetchBacklog(slug: string): Promise<BacklogItem[]> {
   const data = await fetchJson<{ items: BacklogItem[] }>(`/spaces/${encodeURIComponent(slug)}/backlog`)
   return data.items

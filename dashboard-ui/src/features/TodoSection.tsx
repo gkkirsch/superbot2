@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, ChevronDown, ChevronUp, StickyNote, ClipboardList, Play, ListChecks } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useTodos, useTodoResearch } from '@/hooks/useSpaces'
+import { useTodos, useTodoResearch, useAllBacklog, useSpaces } from '@/hooks/useSpaces'
 import { sendMessageToOrchestrator } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
-import type { Escalation, TodoNote } from '@/lib/types'
+import type { Escalation, TodoNote, BacklogItem } from '@/lib/types'
 
 function findResearch(todoText: string, escalations: Escalation[]): Escalation | null {
   const lower = todoText.toLowerCase()
@@ -31,7 +31,7 @@ function findResearch(todoText: string, escalations: Escalation[]): Escalation |
 }
 
 interface TodoItemRowProps {
-  todo: { id: string; text: string; completed: boolean; notes?: TodoNote[] }
+  todo: { id: string; text: string; completed: boolean; notes?: TodoNote[]; space?: string; spaceName?: string }
   research: Escalation | null
   onToggle: () => void
   onRemove: () => void
@@ -107,6 +107,11 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, onEdit, wor
           >
             {todo.text}
           </button>
+        )}
+        {todo.space && (
+          <span className="text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5 shrink-0">
+            {todo.spaceName || todo.space}
+          </span>
         )}
         {hasExpandable && (
           <button
@@ -190,8 +195,11 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, onEdit, wor
 
 export function TodoSection({ showCompleted = false }: { showCompleted?: boolean }) {
   const { todos, isLoading, add, toggle, remove, updateText } = useTodos()
+  const { items: spaceItems, isLoading: spaceLoading, add: addToSpace, toggle: toggleSpace, remove: removeSpace, updateText: updateSpaceText } = useAllBacklog()
   const { data: agentPlans } = useTodoResearch()
+  const { data: spaces } = useSpaces()
   const [input, setInput] = useState('')
+  const [selectedSpace, setSelectedSpace] = useState('')
   const [sentTodoId, setSentTodoId] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -216,15 +224,58 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim()) return
-    add(input.trim())
+    if (selectedSpace) {
+      addToSpace({ slug: selectedSpace, text: input.trim() })
+    } else {
+      add(input.trim())
+    }
     setInput('')
   }
 
-  if (isLoading) return null
+  if (isLoading && spaceLoading) return null
 
-  const incomplete = todos.filter(t => !t.completed)
-  const completed = todos.filter(t => t.completed)
+  // Merge global todos + space backlog items
+  type MergedTodo = { id: string; text: string; completed: boolean; notes?: TodoNote[]; space?: string; spaceName?: string }
+  const globalTodos: MergedTodo[] = todos.map(t => ({ ...t }))
+  const spaceTodos: MergedTodo[] = spaceItems.map((item: BacklogItem & { space: string; spaceName: string }) => ({
+    id: item.id,
+    text: item.text,
+    completed: item.completed,
+    notes: item.notes,
+    space: item.space,
+    spaceName: item.spaceName,
+  }))
+  const allTodos = [...globalTodos, ...spaceTodos]
+
+  const incomplete = allTodos.filter(t => !t.completed)
+  const completed = allTodos.filter(t => t.completed)
   const plans = agentPlans || []
+
+  const handleToggle = (todo: MergedTodo) => {
+    if (todo.space) {
+      toggleSpace({ slug: todo.space, item: todo as BacklogItem })
+    } else {
+      toggle({ id: todo.id, text: todo.text, completed: todo.completed })
+    }
+  }
+
+  const handleRemove = (todo: MergedTodo) => {
+    if (todo.space) {
+      removeSpace({ slug: todo.space, id: todo.id })
+    } else {
+      remove(todo.id)
+    }
+  }
+
+  const handleEdit = (todo: MergedTodo, newText: string) => {
+    if (todo.space) {
+      updateSpaceText({ slug: todo.space, id: todo.id, text: newText })
+    } else {
+      updateText({ id: todo.id, text: newText })
+    }
+  }
+
+  const spaceOptions = spaces || []
 
   return (
     <div className="space-y-2">
@@ -236,6 +287,18 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
           placeholder="Add a todo..."
           className="flex-1 bg-surface/30 border border-stone/15 rounded-lg px-3 py-1.5 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40 transition-colors"
         />
+        {spaceOptions.length > 0 && (
+          <select
+            value={selectedSpace}
+            onChange={(e) => setSelectedSpace(e.target.value)}
+            className="bg-surface/30 border border-stone/15 rounded-lg px-2 py-1.5 text-xs text-stone focus:outline-none focus:border-sand/40 transition-colors"
+          >
+            <option value="">Global</option>
+            {spaceOptions.map(s => (
+              <option key={s.slug} value={s.slug}>{s.name}</option>
+            ))}
+          </select>
+        )}
         <button
           type="submit"
           disabled={!input.trim()}
@@ -255,13 +318,13 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
       <div className="space-y-0.5">
         {incomplete.map(todo => (
           <TodoItemRow
-            key={todo.id}
+            key={`${todo.space || 'global'}-${todo.id}`}
             todo={todo}
             research={findResearch(todo.text, plans)}
-            onToggle={() => toggle(todo)}
-            onRemove={() => remove(todo.id)}
+            onToggle={() => handleToggle(todo)}
+            onRemove={() => handleRemove(todo)}
             onWorkOn={() => handleWorkOn(todo)}
-            onEdit={(newText) => updateText({ id: todo.id, text: newText })}
+            onEdit={(newText) => handleEdit(todo, newText)}
             workPending={workOnMutation.isPending && sentTodoId === todo.id}
             workSent={!workOnMutation.isPending && sentTodoId === todo.id}
           />
@@ -272,13 +335,13 @@ export function TodoSection({ showCompleted = false }: { showCompleted?: boolean
         <div className="space-y-0.5 pt-1 border-t border-stone/10">
           {completed.map(todo => (
             <TodoItemRow
-              key={todo.id}
+              key={`${todo.space || 'global'}-${todo.id}`}
               todo={todo}
               research={findResearch(todo.text, plans)}
-              onToggle={() => toggle(todo)}
-              onRemove={() => remove(todo.id)}
+              onToggle={() => handleToggle(todo)}
+              onRemove={() => handleRemove(todo)}
               onWorkOn={() => {}}
-              onEdit={(newText) => updateText({ id: todo.id, text: newText })}
+              onEdit={(newText) => handleEdit(todo, newText)}
             />
           ))}
         </div>

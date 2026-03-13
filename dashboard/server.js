@@ -1072,6 +1072,26 @@ async function writeBacklog(spaceDir, items) {
   await writeFile(join(spaceDir, 'backlog.json'), JSON.stringify(items, null, 2), 'utf-8')
 }
 
+// Aggregate backlogs across all spaces
+app.get('/api/backlog/all', async (req, res) => {
+  try {
+    const spaceSlugs = await safeReaddir(SPACES_DIR)
+    const all = []
+    for (const slug of spaceSlugs) {
+      if (slug.startsWith('.')) continue
+      const spaceDir = join(SPACES_DIR, slug)
+      const spaceJson = await readJsonFile(join(spaceDir, 'space.json'))
+      const items = await readBacklog(spaceDir)
+      for (const item of items) {
+        all.push({ ...item, space: slug, spaceName: spaceJson?.name || slug })
+      }
+    }
+    res.json({ items: all })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.get('/api/spaces/:slug/backlog', async (req, res) => {
   try {
     const { slug } = req.params

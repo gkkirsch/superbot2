@@ -47,6 +47,7 @@ import {
   fetchSkillSchedules,
   toggleSkillSchedule,
   fetchBacklog,
+  fetchAllBacklog,
   addBacklogItem,
   updateBacklogItem,
   deleteBacklogItem,
@@ -323,6 +324,58 @@ export function useBacklog(slug: string) {
     remove: removeMutation.mutate,
     updateText: updateTextMutation.mutate,
     promote: promoteMutation.mutate,
+  }
+}
+
+// --- All backlog (aggregated across spaces) ---
+
+export function useAllBacklog() {
+  const queryClient = useQueryClient()
+  const query = useQuery({
+    queryKey: ['backlog-all'],
+    queryFn: fetchAllBacklog,
+    staleTime: 30_000,
+  })
+
+  const addMutation = useMutation({
+    mutationFn: ({ slug, text }: { slug: string; text: string }) => addBacklogItem(slug, text),
+    onSuccess: (_data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ['backlog-all'] })
+      queryClient.invalidateQueries({ queryKey: ['backlog', slug] })
+    },
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ slug, item }: { slug: string; item: BacklogItem }) => updateBacklogItem(slug, item.id, { completed: !item.completed }),
+    onSuccess: (_data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ['backlog-all'] })
+      queryClient.invalidateQueries({ queryKey: ['backlog', slug] })
+    },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: ({ slug, id }: { slug: string; id: string }) => deleteBacklogItem(slug, id),
+    onSuccess: (_data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ['backlog-all'] })
+      queryClient.invalidateQueries({ queryKey: ['backlog', slug] })
+    },
+  })
+
+  const updateTextMutation = useMutation({
+    mutationFn: ({ slug, id, text }: { slug: string; id: string; text: string }) => updateBacklogItem(slug, id, { text }),
+    onSuccess: (_data, { slug }) => {
+      queryClient.invalidateQueries({ queryKey: ['backlog-all'] })
+      queryClient.invalidateQueries({ queryKey: ['backlog', slug] })
+    },
+  })
+
+  return {
+    items: query.data || [],
+    isLoading: query.isLoading,
+    add: addMutation.mutate,
+    toggle: toggleMutation.mutate,
+    remove: removeMutation.mutate,
+    updateText: updateTextMutation.mutate,
   }
 }
 
