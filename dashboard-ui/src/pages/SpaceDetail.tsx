@@ -13,6 +13,7 @@ import { startServer, stopServer, deployServer } from '@/lib/api'
 import { useServerStatus } from '@/hooks/useSpaces'
 import { useState } from 'react'
 import { Play, Square, Rocket, ExternalLink, MessageCircleQuestion } from 'lucide-react'
+import type { SpaceOverview } from '@/lib/types'
 
 function DetailSkeleton() {
   return (
@@ -145,6 +146,64 @@ function SpaceActions({ slug }: { slug: string }) {
         </a>
       )}
     </div>
+  )
+}
+
+const PROJECTS_LIMIT = 5
+
+function ProjectsSection({ sortedProjects, space, slug }: { sortedProjects: string[]; space: SpaceOverview; slug: string }) {
+  const [showAll, setShowAll] = useState(false)
+  const visibleProjects = showAll ? sortedProjects : sortedProjects.slice(0, PROJECTS_LIMIT)
+  const hasMore = sortedProjects.length > PROJECTS_LIMIT
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <FolderOpen className="h-3.5 w-3.5 text-stone/50" />
+        <h2 className="text-xs text-stone uppercase tracking-wider">Projects</h2>
+      </div>
+      {sortedProjects.length === 0 ? (
+        <p className="text-sm text-stone/50">No projects yet</p>
+      ) : (
+        <div className="divide-y divide-border-custom">
+          {visibleProjects.map((project) => {
+            const counts = space.projectTaskCounts?.[project]
+            const allDone = counts && counts.total > 0 && counts.completed >= counts.total
+
+            return (
+              <Link
+                key={project}
+                to={`/spaces/${slug}/${project}`}
+                className="flex items-center justify-between py-2 text-sm text-parchment hover:text-sand transition-colors"
+              >
+                <span>{project}</span>
+                <span className="text-xs tabular-nums shrink-0 ml-2">
+                  {counts ? (
+                    allDone ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400">
+                        {counts.completed}/{counts.total} <Check className="h-3 w-3" />
+                      </span>
+                    ) : (
+                      <span className="text-stone/60">{counts.completed}/{counts.total}</span>
+                    )
+                  ) : (
+                    <span className="text-stone/40">pending</span>
+                  )}
+                </span>
+              </Link>
+            )
+          })}
+          {hasMore && (
+            <button
+              onClick={() => setShowAll(v => !v)}
+              className="w-full py-2 text-xs text-stone/50 hover:text-stone transition-colors"
+            >
+              {showAll ? 'Show less' : `Show all ${sortedProjects.length}`}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -312,45 +371,7 @@ export function SpaceDetail() {
             <SpaceScheduleSection slug={slug ?? ''} />
 
             {/* Projects */}
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <FolderOpen className="h-3.5 w-3.5 text-stone/50" />
-                <h2 className="text-xs text-stone uppercase tracking-wider">Projects</h2>
-              </div>
-              {sortedProjects.length === 0 ? (
-                <p className="text-sm text-stone/50">No projects yet</p>
-              ) : (
-                <div className="divide-y divide-border-custom">
-                  {sortedProjects.map((project) => {
-                    const counts = space!.projectTaskCounts?.[project]
-                    const allDone = counts && counts.total > 0 && counts.completed >= counts.total
-
-                    return (
-                      <Link
-                        key={project}
-                        to={`/spaces/${slug}/${project}`}
-                        className="flex items-center justify-between py-2 text-sm text-parchment hover:text-sand transition-colors"
-                      >
-                        <span>{project}</span>
-                        <span className="text-xs tabular-nums shrink-0 ml-2">
-                          {counts ? (
-                            allDone ? (
-                              <span className="inline-flex items-center gap-1 text-emerald-400">
-                                {counts.completed}/{counts.total} <Check className="h-3 w-3" />
-                              </span>
-                            ) : (
-                              <span className="text-stone/60">{counts.completed}/{counts.total}</span>
-                            )
-                          ) : (
-                            <span className="text-stone/40">pending</span>
-                          )}
-                        </span>
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
+            <ProjectsSection sortedProjects={sortedProjects} space={space!} slug={slug ?? ''} />
 
             {/* Backlog */}
             <BacklogSection slug={slug ?? ''} />
