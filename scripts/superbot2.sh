@@ -108,6 +108,68 @@ assemble_prompt() {
     done
   fi
 
+  # Skill orchestrator instructions — scan attached skills for orchestrator.heartbeat
+  local skill_instructions
+  local _orch_script
+  _orch_script=$(mktemp)
+  cat > "$_orch_script" << 'ORCHEOF'
+const fs = require('fs'), path = require('path');
+const dir = process.argv[1], repoDir = process.argv[2];
+const spacesDir = path.join(dir, 'spaces');
+const pluginCache = path.join(dir, '.claude/plugins/cache');
+const results = [];
+if (!fs.existsSync(spacesDir)) process.exit(0);
+for (const slug of fs.readdirSync(spacesDir)) {
+  const spaceFile = path.join(spacesDir, slug, 'space.json');
+  if (!fs.existsSync(spaceFile)) continue;
+  try {
+    const space = JSON.parse(fs.readFileSync(spaceFile, 'utf8'));
+    for (const skillId of (space.skills || [])) {
+      let manifest = null;
+      const repoPath = path.join(repoDir, 'skills', skillId, 'superbot.json');
+      if (fs.existsSync(repoPath)) {
+        manifest = JSON.parse(fs.readFileSync(repoPath, 'utf8'));
+      } else {
+        const match = skillId.match(/^(.+?)__(.+)$/);
+        if (match) {
+          const [, pluginName, skillName] = match;
+          if (fs.existsSync(pluginCache)) {
+            for (const mp of fs.readdirSync(pluginCache)) {
+              const pDir = path.join(pluginCache, mp, pluginName);
+              if (!fs.existsSync(pDir)) continue;
+              for (const ver of fs.readdirSync(pDir)) {
+                const sp = path.join(pDir, ver, 'skills', skillName, 'superbot.json');
+                if (fs.existsSync(sp)) { manifest = JSON.parse(fs.readFileSync(sp, 'utf8')); break; }
+              }
+              if (manifest) break;
+            }
+          }
+        }
+      }
+      if (manifest && manifest.orchestrator && manifest.orchestrator.heartbeat) {
+        const prio = manifest.orchestrator.priority || 'medium';
+        results.push({ skill: manifest.name || skillId, space: space.name || slug, priority: prio, instruction: manifest.orchestrator.heartbeat });
+      }
+    }
+  } catch {}
+}
+if (results.length > 0) {
+  const order = { high: 0, medium: 1, low: 2 };
+  results.sort((a, b) => (order[a.priority] || 1) - (order[b.priority] || 1));
+  let out = '';
+  for (const r of results) {
+    out += '\n- **' + r.skill + '** (' + r.space + ', ' + r.priority + '): ' + r.instruction;
+  }
+  console.log(out);
+}
+ORCHEOF
+  skill_instructions=$(node "$_orch_script" "$DIR" "$REPO_DIR" 2>/dev/null)
+  rm -f "$_orch_script"
+  if [[ -n "$skill_instructions" ]]; then
+    prompt+=$'\n\n## Skill Orchestrator Instructions\n\nThese skills have declared heartbeat instructions. During each heartbeat cycle, incorporate these into your work:\n'
+    prompt+="$skill_instructions"
+  fi
+
   # Pending escalations
   local pfiles=("$DIR"/escalations/pending/*.json)
   if [[ ${#pfiles[@]} -gt 0 ]]; then

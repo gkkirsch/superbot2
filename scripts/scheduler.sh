@@ -37,12 +37,37 @@ TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
 # Ensure log directory exists
 mkdir -p "$DIR/logs"
 
-# Extract schedule array
-SCHEDULE_DATA=$(jq -r '.schedule // []' "$CONFIG")
-[[ "$SCHEDULE_DATA" == "[]" ]] && exit 0
-
+# Extract schedule array from config.json + space schedule.json files
 SCHEDULE=$(mktemp)
-echo "$SCHEDULE_DATA" > "$SCHEDULE"
+node -e "
+const fs = require('fs'), path = require('path');
+const config = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+const globalJobs = (config.schedule || []);
+const spacesDir = path.join(process.argv[2], 'spaces');
+let spaceJobs = [];
+if (fs.existsSync(spacesDir)) {
+  for (const slug of fs.readdirSync(spacesDir)) {
+    const schedFile = path.join(spacesDir, slug, 'schedule.json');
+    if (!fs.existsSync(schedFile)) continue;
+    try {
+      const entries = JSON.parse(fs.readFileSync(schedFile, 'utf8'));
+      if (Array.isArray(entries)) {
+        for (const j of entries) {
+          // Skip skill-declared schedules (handled by skill system)
+          if (j.name && j.name.startsWith('skill:')) continue;
+          if (!j.space) j.space = slug;
+          spaceJobs.push(j);
+        }
+      }
+    } catch {}
+  }
+}
+const all = [...globalJobs, ...spaceJobs];
+console.log(JSON.stringify(all));
+" "$CONFIG" "$DIR" > "$SCHEDULE"
+
+SCHEDULE_DATA=$(cat "$SCHEDULE")
+[[ "$SCHEDULE_DATA" == "[]" ]] && { rm -f "$SCHEDULE"; exit 0; }
 
 # Ensure last-run tracker exists
 [[ ! -f "$LAST_RUN" ]] && echo '{}' > "$LAST_RUN"

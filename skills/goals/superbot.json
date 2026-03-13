@@ -78,6 +78,11 @@
     "configurable": true
   },
 
+  "orchestrator": {
+    "heartbeat": "Check active goals for progress. Review recent task completions and escalation resolutions in each space with active goals. Update goal notes with progress summaries. Flag any goals that are stalled or past due.",
+    "priority": "medium"
+  },
+
   "agent": {
     "type": "space-worker",
     "model": "haiku"
