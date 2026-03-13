@@ -1,11 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, X, Puzzle, Loader2, Settings } from 'lucide-react'
 import { useSpaceSkills, useSkillManifests, useAttachSkill, useDetachSkill, useCards } from '@/hooks/useSpaces'
 import { getSkillIcon } from '@/lib/skillIcons'
 import { getRendererOrDefault } from '@/features/cardRenderers'
 import { CardSkillSection } from '@/features/CardSection'
+import { SkillSettingsForm } from '@/features/SkillSettingsForm'
 import '@/features/registerRenderers'
 import type { CardDefinition } from '@/lib/types'
+
+interface OnboardingData {
+  skillId: string
+  message?: string
+  settings?: string[]
+  schedule?: boolean
+}
 
 interface SpaceSkillCardProps {
   card: CardDefinition
@@ -15,6 +23,82 @@ interface SpaceSkillCardProps {
 function SpaceSkillCard({ card, space }: SpaceSkillCardProps) {
   const Renderer = getRendererOrDefault(card.renderer) || CardSkillSection
   return <Renderer card={card} space={space} />
+}
+
+function OnboardingModal({ data, onClose }: { data: OnboardingData; onClose: () => void }) {
+  const [showSettings, setShowSettings] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface border border-border-custom rounded-xl w-full max-w-lg flex flex-col max-h-[80vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between p-6 pb-4 border-b border-border-custom">
+          <div className="min-w-0">
+            <h2 className="font-heading text-xl text-parchment">Set Up Skill</h2>
+            {data.message && (
+              <p className="text-sm text-stone mt-1.5">{data.message}</p>
+            )}
+          </div>
+          <button onClick={onClose} className="p-2 text-stone hover:text-parchment transition-colors shrink-0 ml-4">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto">
+          {!showSettings ? (
+            <div className="space-y-3">
+              {data.settings && data.settings.length > 0 && (
+                <div className="flex items-start gap-2.5">
+                  <Settings className="h-4 w-4 text-sand/60 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-parchment/80">Configure settings</p>
+                    <p className="text-xs text-stone/50 mt-0.5">Set up platforms, accounts, voice guidelines, and content rules</p>
+                  </div>
+                </div>
+              )}
+              {data.schedule && (
+                <div className="flex items-start gap-2.5">
+                  <Settings className="h-4 w-4 text-sand/60 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-parchment/80">Review schedule</p>
+                    <p className="text-xs text-stone/50 mt-0.5">This skill runs on a schedule — you can customize the timing</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <SkillSettingsForm skillId={data.skillId} onClose={() => { setShowSettings(false); onClose() }} />
+          )}
+        </div>
+
+        {!showSettings && (
+          <div className="flex items-center justify-end gap-3 p-6 pt-4 border-t border-border-custom">
+            <button
+              onClick={onClose}
+              className="text-xs text-stone hover:text-parchment transition-colors"
+            >
+              Skip for now
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-xs bg-sand/20 text-sand hover:bg-sand/30 px-3 py-1.5 rounded transition-colors"
+            >
+              Set Up Now
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 interface SpaceSkillsSectionProps {
@@ -28,7 +112,7 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
   const attachMut = useAttachSkill()
   const detachMut = useDetachSkill()
   const [showPicker, setShowPicker] = useState(false)
-  const [onboardingSkillId, setOnboardingSkillId] = useState<string | null>(null)
+  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null)
 
   // Space-scoped skills not yet attached
   const attachable = (allManifests ?? []).filter(
@@ -39,7 +123,12 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
     attachMut.mutate({ slug, skillId }, {
       onSuccess: (data) => {
         if (data.onboarding?.available) {
-          setOnboardingSkillId(skillId)
+          setOnboardingData({
+            skillId,
+            message: data.onboarding.message,
+            settings: data.onboarding.settings,
+            schedule: data.onboarding.schedule,
+          })
         }
       },
     })
@@ -48,7 +137,7 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
 
   function handleDetach(skillId: string) {
     detachMut.mutate({ slug, skillId })
-    if (onboardingSkillId === skillId) setOnboardingSkillId(null)
+    if (onboardingData?.skillId === skillId) setOnboardingData(null)
   }
 
   return (
@@ -94,20 +183,9 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
         </div>
       )}
 
-      {/* Onboarding hint */}
-      {onboardingSkillId && (
-        <div className="mb-3 rounded-lg border border-sand/20 bg-sand/5 px-3 py-2 flex items-center gap-2">
-          <Settings className="h-3.5 w-3.5 text-sand/60 shrink-0" />
-          <span className="text-xs text-sand/80 flex-1">
-            This skill has setup options. Configure it in settings.
-          </span>
-          <button
-            onClick={() => setOnboardingSkillId(null)}
-            className="text-stone/40 hover:text-stone transition-colors"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
+      {/* Onboarding modal */}
+      {onboardingData && (
+        <OnboardingModal data={onboardingData} onClose={() => setOnboardingData(null)} />
       )}
 
       {isLoading ? (
