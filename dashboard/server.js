@@ -1,7 +1,7 @@
 import express from 'express'
 import { readdir, readFile, writeFile, appendFile, rename, mkdir, mkdtemp, stat, rm, unlink, cp, chmod } from 'node:fs/promises'
 import { join, extname, resolve } from 'node:path'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, mkdirSync, copyFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { execFile, execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -3712,10 +3712,21 @@ function acquireFileLock(filePath) {
 }
 
 function resolveCardDataPath(skillId, dataSource) {
-  const base = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
-  const resolved = resolve(base, dataSource)
-  if (!resolved.startsWith(base + '/')) {
+  const dataDir = join(SKILL_DATA_DIR, skillId)
+  mkdirSync(dataDir, { recursive: true })
+  const resolved = resolve(dataDir, dataSource)
+  if (!resolved.startsWith(dataDir + '/')) {
     throw new Error('Invalid dataSource path')
+  }
+  // Auto-migrate from legacy location (plugin cache or repo skill dir) on first access
+  if (!existsSync(resolved)) {
+    const legacyBase = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
+    const legacyPath = resolve(legacyBase, dataSource)
+    if (existsSync(legacyPath)) {
+      try {
+        copyFileSync(legacyPath, resolved)
+      } catch { /* migration best-effort */ }
+    }
   }
   return resolved
 }
@@ -3906,7 +3917,11 @@ app.post('/api/cards/:skillId/refresh', async (req, res) => {
 
     // Run the refresh command in the skill's directory
     await new Promise((resolveP, rejectP) => {
-      execFile('bash', ['-c', cmd], { cwd: baseDir, timeout: 30000 }, (err, _stdout, stderr) => {
+      execFile('bash', ['-c', cmd], {
+        cwd: baseDir,
+        timeout: 30000,
+        env: { ...process.env, SKILL_DATA_DIR: join(SKILL_DATA_DIR, skillId) }
+      }, (err, _stdout, stderr) => {
         if (err) return rejectP(new Error(stderr || err.message))
         resolveP()
       })
@@ -3923,7 +3938,8 @@ app.post('/api/cards/:skillId/refresh', async (req, res) => {
 
 // --- Skill manifest & settings ---
 
-const SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
+const SKILL_DATA_DIR = join(SUPERBOT_DIR, 'skill-data')
+const LEGACY_SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
 
 app.get('/api/skills/:skillId/manifest', async (req, res) => {
   try {
@@ -3948,12 +3964,22 @@ app.get('/api/skills/:skillId/settings', async (req, res) => {
       return res.status(404).json({ error: 'Skill has no settings' })
     }
     const schema = manifest.settings.schema
-    // Read saved values
-    const settingsPath = join(SKILL_SETTINGS_DIR, skillId, 'settings.json')
+    // Read saved values — check new location first, then migrate from legacy
+    const settingsDir = join(SKILL_DATA_DIR, skillId)
+    const settingsPath = join(settingsDir, 'settings.json')
     let savedValues = {}
     try {
       savedValues = JSON.parse(await readFile(settingsPath, 'utf-8'))
-    } catch { /* no saved settings yet */ }
+    } catch {
+      // Try legacy location and migrate
+      const legacyPath = join(LEGACY_SKILL_SETTINGS_DIR, skillId, 'settings.json')
+      try {
+        savedValues = JSON.parse(await readFile(legacyPath, 'utf-8'))
+        // Auto-migrate to new location
+        await mkdir(settingsDir, { recursive: true })
+        await writeFile(settingsPath, JSON.stringify(savedValues, null, 2))
+      } catch { /* no saved settings yet */ }
+    }
     // Merge defaults
     const values = {}
     for (const [key, field] of Object.entries(schema)) {
@@ -3985,7 +4011,7 @@ app.put('/api/skills/:skillId/settings', async (req, res) => {
       }
     }
     // Ensure directory exists
-    const settingsDir = join(SKILL_SETTINGS_DIR, skillId)
+    const settingsDir = join(SKILL_DATA_DIR, skillId)
     await mkdir(settingsDir, { recursive: true })
     const settingsPath = join(settingsDir, 'settings.json')
     // Merge with existing values
