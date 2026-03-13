@@ -3572,6 +3572,8 @@ async function readSkillManifest(dir) {
       ...manifest.card,
       renderer: manifest.card.renderer || 'default',
       hasSettings: !!(manifest.settings && manifest.settings.schema),
+      ...(manifest.scope ? { scope: manifest.scope } : {}),
+      ...(manifest.icon ? { icon: manifest.icon } : {}),
     }
     return { card, manifest }
   } catch { /* no superbot.json */ }
@@ -3713,15 +3715,46 @@ function acquireFileLock(filePath) {
   return prev.then(() => release)
 }
 
-function resolveCardDataPath(skillId, dataSource) {
-  const dataDir = join(SKILL_DATA_DIR, skillId)
+/** Find all space slugs that have a given skill attached */
+function getSpacesForSkill(skillId) {
+  const spaces = []
+  try {
+    const entries = readdirSync(SPACES_DIR)
+    for (const slug of entries) {
+      if (slug.startsWith('.')) continue
+      try {
+        const spaceJson = JSON.parse(readFileSync(join(SPACES_DIR, slug, 'space.json'), 'utf-8'))
+        if (Array.isArray(spaceJson.skills) && spaceJson.skills.includes(skillId)) {
+          spaces.push(slug)
+        }
+      } catch { /* no space.json or invalid */ }
+    }
+  } catch { /* no spaces dir */ }
+  return spaces
+}
+
+/** Check if a skill is space-scoped by reading its manifest */
+function isSpaceScoped(skillId) {
+  const manifest = _manifests.get(skillId)
+  return manifest?.scope === 'space'
+}
+
+function resolveCardDataPath(skillId, dataSource, space) {
+  let dataDir
+  if (space) {
+    // Space-scoped path: ~/.superbot2/spaces/<space>/skill-data/<skillId>/
+    dataDir = join(SPACES_DIR, space, 'skill-data', skillId)
+  } else {
+    // Global path: ~/.superbot2/skill-data/<skillId>/
+    dataDir = join(SKILL_DATA_DIR, skillId)
+  }
   mkdirSync(dataDir, { recursive: true })
   const resolved = resolve(dataDir, dataSource)
   if (!resolved.startsWith(dataDir + '/')) {
     throw new Error('Invalid dataSource path')
   }
   // Auto-migrate from legacy location (plugin cache or repo skill dir) on first access
-  if (!existsSync(resolved)) {
+  if (!existsSync(resolved) && !space) {
     const legacyBase = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
     const legacyPath = resolve(legacyBase, dataSource)
     if (existsSync(legacyPath)) {
@@ -3733,8 +3766,7 @@ function resolveCardDataPath(skillId, dataSource) {
   return resolved
 }
 
-async function readCardItems(skillId, dataSource) {
-  const filePath = resolveCardDataPath(skillId, dataSource)
+async function readCardItemsFromPath(filePath) {
   try {
     const content = await readFile(filePath, 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
@@ -3744,10 +3776,39 @@ async function readCardItems(skillId, dataSource) {
   }
 }
 
-async function writeCardItems(skillId, dataSource, items) {
-  const filePath = resolveCardDataPath(skillId, dataSource)
+async function readCardItems(skillId, dataSource, space) {
+  if (space === undefined && isSpaceScoped(skillId)) {
+    // Aggregate across all spaces that have this skill attached
+    const spaces = getSpacesForSkill(skillId)
+    const allItems = []
+    for (const slug of spaces) {
+      const filePath = resolveCardDataPath(skillId, dataSource, slug)
+      const items = await readCardItemsFromPath(filePath)
+      allItems.push(...items)
+    }
+    return allItems
+  }
+  const filePath = resolveCardDataPath(skillId, dataSource, space)
+  return readCardItemsFromPath(filePath)
+}
+
+async function writeCardItems(skillId, dataSource, items, space) {
+  const filePath = resolveCardDataPath(skillId, dataSource, space)
   const content = items.map(item => JSON.stringify(item)).join('\n') + (items.length ? '\n' : '')
   await writeFile(filePath, content)
+}
+
+/** For space-scoped skills, find which space contains a given item by ID */
+async function findItemSpace(skillId, dataSource, itemId) {
+  const spaces = getSpacesForSkill(skillId)
+  for (const slug of spaces) {
+    const filePath = resolveCardDataPath(skillId, dataSource, slug)
+    const items = await readCardItemsFromPath(filePath)
+    if (items.some(item => item.id === itemId)) {
+      return slug
+    }
+  }
+  return null
 }
 
 app.get('/api/cards', async (_req, res) => {
@@ -3792,12 +3853,18 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${[...validStatuses].join(', ')}` })
     }
 
-    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    // For space-scoped skills, find which space has this item
+    const itemSpace = isSpaceScoped(skillId) ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
+    if (isSpaceScoped(skillId) && !itemSpace) {
+      return res.status(404).json({ error: 'Item not found in any space' })
+    }
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource, itemSpace)
     const release = await acquireFileLock(filePath)
     let updatedItem = null
     let oldStatus = null
     try {
-      const items = await readCardItems(card.skillId, card.dataSource)
+      const items = await readCardItems(card.skillId, card.dataSource, itemSpace)
       const idx = items.findIndex(item => item.id === itemId)
       if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
@@ -3809,7 +3876,7 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       }
       items[idx].updatedAt = new Date().toISOString()
 
-      await writeCardItems(card.skillId, card.dataSource, items)
+      await writeCardItems(card.skillId, card.dataSource, items, itemSpace)
       updatedItem = items[idx]
       res.json({ item: updatedItem })
     } finally {
@@ -3855,15 +3922,21 @@ app.delete('/api/cards/:skillId/items/:itemId', async (req, res) => {
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
 
-    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    // For space-scoped skills, find which space has this item
+    const itemSpace = isSpaceScoped(skillId) ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
+    if (isSpaceScoped(skillId) && !itemSpace) {
+      return res.status(404).json({ error: 'Item not found in any space' })
+    }
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource, itemSpace)
     const release = await acquireFileLock(filePath)
     try {
-      const items = await readCardItems(card.skillId, card.dataSource)
+      const items = await readCardItems(card.skillId, card.dataSource, itemSpace)
       const idx = items.findIndex(item => item.id === itemId)
       if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
       items.splice(idx, 1)
-      await writeCardItems(card.skillId, card.dataSource, items)
+      await writeCardItems(card.skillId, card.dataSource, items, itemSpace)
       res.json({ success: true })
     } finally {
       release()
@@ -3886,13 +3959,19 @@ app.post('/api/cards/:skillId/items', async (req, res) => {
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
 
-    const filePath = resolveCardDataPath(card.skillId, card.dataSource)
+    // For space-scoped skills, require a space field on the new item
+    const itemSpace = isSpaceScoped(skillId) ? (newItem.space || undefined) : undefined
+    if (isSpaceScoped(skillId) && !itemSpace) {
+      return res.status(400).json({ error: 'Space-scoped skills require a space field on new items' })
+    }
+
+    const filePath = resolveCardDataPath(card.skillId, card.dataSource, itemSpace)
     const release = await acquireFileLock(filePath)
     try {
-      const items = await readCardItems(card.skillId, card.dataSource)
+      const items = await readCardItems(card.skillId, card.dataSource, itemSpace)
       newItem.createdAt = new Date().toISOString()
       items.push(newItem)
-      await writeCardItems(card.skillId, card.dataSource, items)
+      await writeCardItems(card.skillId, card.dataSource, items, itemSpace)
       res.json({ item: newItem })
     } finally {
       release()
@@ -3916,23 +3995,44 @@ app.post('/api/cards/:skillId/refresh', async (req, res) => {
 
     const baseDir = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
     const cmd = manifest.card.refreshCommand
+    const spaceScoped = manifest.scope === 'space'
 
-    // Run the refresh command in the skill's directory
-    await new Promise((resolveP, rejectP) => {
-      execFile('bash', ['-c', cmd], {
-        cwd: baseDir,
-        timeout: 30000,
-        env: { ...process.env, SKILL_DATA_DIR: join(SKILL_DATA_DIR, skillId) }
-      }, (err, _stdout, stderr) => {
-        if (err) return rejectP(new Error(stderr || err.message))
-        resolveP()
+    if (spaceScoped) {
+      // For space-scoped skills, run refresh per-space and aggregate results
+      const spaces = getSpacesForSkill(skillId)
+      for (const slug of spaces) {
+        const spaceDataDir = join(SPACES_DIR, slug, 'skill-data', skillId)
+        mkdirSync(spaceDataDir, { recursive: true })
+        await new Promise((resolveP, rejectP) => {
+          execFile('bash', ['-c', cmd], {
+            cwd: baseDir,
+            timeout: 30000,
+            env: { ...process.env, SKILL_DATA_DIR: spaceDataDir, SPACE: slug }
+          }, (err, _stdout, stderr) => {
+            if (err) return rejectP(new Error(stderr || err.message))
+            resolveP()
+          })
+        })
+      }
+      const dataSource = manifest.card.dataSource || 'data.jsonl'
+      const items = await readCardItems(skillId, dataSource)
+      res.json({ items })
+    } else {
+      // Global skill — run once
+      await new Promise((resolveP, rejectP) => {
+        execFile('bash', ['-c', cmd], {
+          cwd: baseDir,
+          timeout: 30000,
+          env: { ...process.env, SKILL_DATA_DIR: join(SKILL_DATA_DIR, skillId) }
+        }, (err, _stdout, stderr) => {
+          if (err) return rejectP(new Error(stderr || err.message))
+          resolveP()
+        })
       })
-    })
-
-    // Return updated items
-    const dataSource = manifest.card.dataSource || 'data.jsonl'
-    const items = await readCardItems(skillId, dataSource)
-    res.json({ items })
+      const dataSource = manifest.card.dataSource || 'data.jsonl'
+      const items = await readCardItems(skillId, dataSource)
+      res.json({ items })
+    }
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
