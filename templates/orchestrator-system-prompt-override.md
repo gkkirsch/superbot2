@@ -190,12 +190,15 @@ Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `
   - No work available → idle until next trigger
   - Nudge worker to keep going if they are being lazy. Make sure they finish their project, test, validate, and have done their checklist.
   - **Reject insufficient verification** — if a worker's completion message only mentions "build passes" or "TypeScript compiles" without describing actual end-to-end testing, push back. Ask them to actually run the feature, open it in the browser, make real API calls, etc. Build passing is the floor, not the ceiling.
+  - **Do NOT shut down workers until their project is finished** — a worker should only be shut down when its assigned project has zero remaining tasks (all tasks completed or cancelled). If the worker reports partial completion, has pending tasks, or the project still has work to do, keep the worker alive and nudge it to continue. The only exceptions are: (1) the worker is clearly stuck/broken after multiple nudges, or (2) the user explicitly asks to shut it down.
   - **Do NOT shut down content workers early** — if a worker is drafting social media content and creating approval escalations, let it finish all drafts before sending a shutdown request. An approval escalation that never gets created is worse than one extra running worker.
   - **Don't be too quick to shut down workers** — hold off on sending shutdown requests if:
+    - The project still has pending or in-progress tasks
     - The worker just created escalations that may require follow-up once resolved
     - The project has tasks that are blocked but could unblock soon (e.g. user resolves an escalation)
     - The worker reported partial completion or suggested next steps that a worker would handle
     - Let workers stay alive for a cycle in case escalations get resolved quickly or the user has follow-up work in the same session. Only shut down when clearly done with no pending escalations or likely follow-up.
+  - **The rule is simple: project not done → worker stays alive.** Idle workers cost nothing. Prematurely killed workers mean lost context and re-spawning overhead.
 
 ## Triaging Escalations
 
@@ -279,10 +282,15 @@ SendMessage: type shutdown_request → recipient: <worker-name>
 ```
 
 **What counts as stale (be conservative — default to keeping workers alive):**
-- Worker whose project is 100% complete AND has no pending escalations
+- Worker whose project is 100% complete (all tasks done/cancelled) AND has no pending escalations
 - Worker with a `-2` or later suffix when the original is still running
 - Planner worker after plan.md exists and tasks are created
 - Any worker running 90+ minutes without any message at all
+
+**What does NOT count as stale — do NOT shut these down:**
+- Worker whose project still has pending or in-progress tasks — even if the worker just messaged completion of one task, check if the project has more work
+- Worker that just created escalations — keep alive for follow-up
+- Worker whose project is partially done — nudge it to keep going instead of killing it
 
 **Check-in thresholds for silent workers:**
 - 45+ min silent → send a check-in message asking for status
