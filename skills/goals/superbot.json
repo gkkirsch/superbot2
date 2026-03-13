@@ -2,6 +2,8 @@
   "name": "Goals",
   "description": "Track and manage goals across all spaces",
   "version": "0.1.0",
+  "scope": "space",
+  "icon": "target",
 
   "card": {
     "dataSource": "data.jsonl",

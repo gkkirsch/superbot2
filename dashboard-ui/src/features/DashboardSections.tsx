@@ -15,10 +15,9 @@ import { TodoSection } from '@/features/TodoSection'
 import { ChatSection } from '@/features/ChatSection'
 import { CardSkillSection } from '@/features/CardSection'
 import { getRendererOrDefault } from '@/features/cardRenderers'
-import { GoalSection } from '@/features/GoalSection'
 import { LatestFilesSection } from '@/features/LatestFilesSection'
 import { TipsRotator } from '@/features/TipsRotator'
-import { Send, Target, FileCode, Settings, RefreshCw } from 'lucide-react'
+import { Send, FileCode, Settings, RefreshCw } from 'lucide-react'
 import { useRefreshCardItems } from '@/hooks/useSpaces'
 // Register all built-in card renderers on import
 import '@/features/registerRenderers'
@@ -343,8 +342,7 @@ function SingleCardSection({ card }: { card: import('@/lib/types').CardDefinitio
 
 function CardsDashboardSection() {
   const { data: cards, isLoading } = useCards()
-  // Show all cards except goals (which has its own section)
-  const pluginCards = cards?.filter(c => c.skillId !== 'goals') || []
+  const pluginCards = cards || []
 
   if (!isLoading && pluginCards.length === 0) return null
 
@@ -354,22 +352,6 @@ function CardsDashboardSection() {
         <SingleCardSection key={card.skillId} card={card} />
       ))}
     </div>
-  )
-}
-
-function GoalsDashboardSection() {
-  const [collapsed, toggle] = useCollapsedState('goals')
-  const { data: goalCards } = useCards()
-  const goalCard = goalCards?.find(c => c.skillId === 'goals')
-  const { data: goalData } = useCardItems(goalCard?.skillId || '')
-  const activeGoalCount = goalData?.items?.filter(i => i.status !== 'completed').length ?? 0
-  return (
-    <section className="group" data-section="goals">
-      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} badge={activeGoalCount} />
-      <CollapsibleContent collapsed={collapsed}>
-        <GoalSection />
-      </CollapsibleContent>
-    </section>
   )
 }
 
@@ -429,10 +411,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'cards',
     Component: CardsDashboardSection,
   },
-  'goals': {
-    id: 'goals',
-    Component: GoalsDashboardSection,
-  },
   'latest-files': {
     id: 'latest-files',
     Component: LatestFilesDashboardSection,
@@ -452,6 +430,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'latest-files', 'schedule', 'todos'],
+  rightColumn: ['pulse', 'cards', 'escalations', 'latest-files', 'schedule', 'todos'],
   hidden: ['recent-activity', 'tips'],
 }
