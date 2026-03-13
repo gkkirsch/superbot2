@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2, Clock, Plus, ChevronDown, Puzzle } from 'lucide-react'
+import { X, Trash2, Clock, Plus, ChevronDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSchedule, useSkillSchedules, useToggleSkillSchedule } from '@/hooks/useSpaces'
-import { addScheduleJob, deleteScheduleJob, updateScheduleJob } from '@/lib/api'
+import { useSchedule, useSkillSchedules, useToggleSkillSchedule, useSpaceSchedule } from '@/hooks/useSpaces'
+import { addScheduleJob, deleteScheduleJob, updateScheduleJob, addSpaceScheduleJob, deleteSpaceScheduleJob, updateSpaceScheduleJob } from '@/lib/api'
 import type { ScheduledJob, SkillScheduleInfo } from '@/lib/types'
 
 const DAY_LABELS: Record<string, string> = {
@@ -150,25 +150,6 @@ function formatDays(days?: string[]): string {
   return sorted.map(d => DAY_LABELS[d]).join(', ')
 }
 
-function SkillBadge() {
-  return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider bg-sand/10 text-sand/60 shrink-0">
-      <Puzzle className="h-2.5 w-2.5" />
-      Skill
-    </span>
-  )
-}
-
-function SourceBadge({ source }: { source?: string }) {
-  if (!source || source === 'global') return null
-  const spaceName = source.startsWith('space:') ? source.slice(6) : source
-  return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium tracking-wider bg-sky-500/10 text-sky-400/70 shrink-0">
-      {spaceName}
-    </span>
-  )
-}
-
 function isSkillJob(name: string): boolean {
   return name.startsWith('skill:')
 }
@@ -191,7 +172,7 @@ export type ScheduleViewMode = 'timeline' | 'all-schedules'
 
 const DEFAULT_VISIBLE = 3
 
-function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () => void }) {
+function ScheduleEditModal({ job, onClose, space }: { job: ScheduledJob; onClose: () => void; space?: string }) {
   const queryClient = useQueryClient()
   const jobTimes = getJobTimes(job)
   const [form, setForm] = useState<ScheduledJob & { _times: string[] }>({
@@ -237,7 +218,7 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
         name: form.name,
         task: form.task,
       }
-      if (form.space) toSave.space = form.space
+      if (!space && form.space) toSave.space = form.space
       if (form.days && form.days.length > 0 && form.days.length < 7) toSave.days = form.days
 
       // Deduplicate and use times array if multiple, single time for backward compat
@@ -248,8 +229,13 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
         toSave.times = deduped
       }
 
-      await updateScheduleJob(originalName, toSave)
-      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      if (space) {
+        await updateSpaceScheduleJob(space, originalName, toSave)
+        queryClient.invalidateQueries({ queryKey: ['space-schedule', space] })
+      } else {
+        await updateScheduleJob(originalName, toSave)
+        queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      }
       onClose()
     } finally {
       setSaving(false)
@@ -259,8 +245,13 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      await deleteScheduleJob(originalName)
-      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      if (space) {
+        await deleteSpaceScheduleJob(space, originalName)
+        queryClient.invalidateQueries({ queryKey: ['space-schedule', space] })
+      } else {
+        await deleteScheduleJob(originalName)
+        queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      }
       onClose()
     } finally {
       setDeleting(false)
@@ -323,15 +314,17 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
               </button>
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
-            <input
-              type="text"
-              value={form.space || ''}
-              onChange={e => setForm({ ...form, space: e.target.value })}
-              className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
-            />
-          </div>
+          {!space && (
+            <div>
+              <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
+              <input
+                type="text"
+                value={form.space || ''}
+                onChange={e => setForm({ ...form, space: e.target.value })}
+                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs text-stone mb-1.5">Days</label>
             <div className="flex items-center gap-1">
@@ -391,7 +384,7 @@ function ScheduleEditModal({ job, onClose }: { job: ScheduledJob; onClose: () =>
   )
 }
 
-function ScheduleAddModal({ onClose }: { onClose: () => void }) {
+function ScheduleAddModal({ onClose, space }: { onClose: () => void; space?: string }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     name: '',
@@ -436,7 +429,7 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
         name: form.name,
         task: form.task,
       }
-      if (form.space) job.space = form.space
+      if (!space && form.space) job.space = form.space
       if (form.days.length > 0 && form.days.length < 7) job.days = form.days
 
       const deduped = dedupTimes(form._times)
@@ -446,8 +439,13 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
         job.times = deduped
       }
 
-      await addScheduleJob(job)
-      queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      if (space) {
+        await addSpaceScheduleJob(space, job)
+        queryClient.invalidateQueries({ queryKey: ['space-schedule', space] })
+      } else {
+        await addScheduleJob(job)
+        queryClient.invalidateQueries({ queryKey: ['schedule'] })
+      }
       onClose()
     } finally {
       setSaving(false)
@@ -511,15 +509,17 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
-            <input
-              type="text"
-              value={form.space}
-              onChange={e => setForm({ ...form, space: e.target.value })}
-              className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
-            />
-          </div>
+          {!space && (
+            <div>
+              <label className="block text-xs text-stone mb-1.5">Space (optional)</label>
+              <input
+                type="text"
+                value={form.space}
+                onChange={e => setForm({ ...form, space: e.target.value })}
+                className="w-full bg-ink border border-border-custom rounded px-3 py-1.5 text-sm text-parchment placeholder:text-stone/50 focus:outline-none focus:border-sand/50"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs text-stone mb-1.5">Days</label>
             <div className="flex items-center gap-1">
@@ -570,8 +570,10 @@ function ScheduleAddModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { adding: boolean; setAdding: (v: boolean) => void; viewMode?: ScheduleViewMode }) {
-  const { data, isLoading } = useSchedule()
+export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', space }: { adding: boolean; setAdding: (v: boolean) => void; viewMode?: ScheduleViewMode; space?: string }) {
+  // Always call both hooks — they're conditionally enabled internally
+  const globalQuery = useSchedule()
+  const spaceQuery = useSpaceSchedule(space)
   const { data: skillSchedules } = useSkillSchedules()
   const toggleSkillSchedule = useToggleSkillSchedule()
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
@@ -585,18 +587,25 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
     return () => clearInterval(interval)
   }, [])
 
+  const isLoading = space ? spaceQuery.isLoading : globalQuery.isLoading
+
   if (isLoading) {
     return <div className="h-20 rounded-lg bg-stone/5 animate-pulse" />
   }
 
-  const schedule = data?.schedule || []
+  const schedule = space
+    ? (spaceQuery.data || [])
+    : (globalQuery.data?.schedule || [])
 
-  // Merge enabled skill schedules that aren't already in the config schedule
-  const enabledSkillJobs = (skillSchedules || [])
+  // Merge enabled skill schedules (only for global, not space)
+  const enabledSkillJobs = space ? [] : (skillSchedules || [])
     .filter(s => s.enabled)
     .map(skillScheduleToJob)
     .filter(sj => !schedule.some(j => j.name === sj.name))
   const mergedSchedule = [...schedule, ...enabledSkillJobs]
+
+  // Force timeline mode for space view
+  const effectiveViewMode = space ? 'timeline' : viewMode
 
   const timeline = buildTimeline(mergedSchedule)
   const hasUpcoming = timeline.some(i => !i.isPast)
@@ -607,16 +616,18 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
   const visiblePastItems = pastExpanded ? pastItems : pastItems.slice(-DEFAULT_VISIBLE)
   const hiddenPastCount = pastItems.length - DEFAULT_VISIBLE
 
+  // In space mode, all items are clickable. In global mode, skill jobs are not.
+  const canEdit = (jobName: string) => !!space || !isSkillJob(jobName)
+
   // For all-schedules view: manual jobs + all skill schedules (enabled or not)
-  // Include space-sourced skill entries here since they don't appear in skillSchedules
-  const manualJobs = viewMode === 'all-schedules'
+  const manualJobs = effectiveViewMode === 'all-schedules'
     ? schedule.filter(j => !isSkillJob(j.name) || (j.source && j.source !== 'global')).sort((a, b) => a.name.localeCompare(b.name))
     : []
-  const allSkillSchedules = viewMode === 'all-schedules' ? (skillSchedules || []) : []
+  const allSkillSchedules = effectiveViewMode === 'all-schedules' ? (skillSchedules || []) : []
 
   return (
     <div className="space-y-2">
-      {viewMode === 'timeline' && (
+      {effectiveViewMode === 'timeline' && (
         <>
           {timeline.length === 0 && !nextDay && !adding && (
             <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
@@ -640,8 +651,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {visiblePastItems.map((item, idx) => (
                 <button
                   key={`past-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/30'}`}
+                  onClick={() => canEdit(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${canEdit(item.job.name) ? 'hover:bg-surface/30' : 'cursor-default'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
@@ -650,10 +661,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/40">
-                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
+                    {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
-                  {isSkillJob(item.job.name) && <SkillBadge />}
-                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
             </div>
@@ -670,8 +679,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {upcomingItems.map((item, idx) => (
                 <button
                   key={`upcoming-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/50'}`}
+                  onClick={() => canEdit(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${canEdit(item.job.name) ? 'hover:bg-surface/50' : 'cursor-default'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
@@ -680,10 +689,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/70">
-                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
+                    {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
-                  {isSkillJob(item.job.name) && <SkillBadge />}
-                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
             </div>
@@ -699,8 +706,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               {(tomorrowExpanded ? nextDay.items : nextDay.items.slice(0, 1)).map((item, idx) => (
                 <button
                   key={`next-${item.job.name}-${item.time}-${idx}`}
-                  onClick={() => !isSkillJob(item.job.name) && setEditingJob(item.job)}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${isSkillJob(item.job.name) ? 'cursor-default' : 'hover:bg-surface/50'}`}
+                  onClick={() => canEdit(item.job.name) && setEditingJob(item.job)}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${canEdit(item.job.name) ? 'hover:bg-surface/50' : 'cursor-default'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
                     <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
@@ -709,10 +716,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     </span>
                   </div>
                   <span className="text-sm truncate text-stone/70">
-                    {toTitleCase(item.job.name.replace(/^skill:/, ''))}
+                    {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
-                  {isSkillJob(item.job.name) && <SkillBadge />}
-                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
               {nextDay.items.length > 1 && (
@@ -729,7 +734,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
         </>
       )}
 
-      {viewMode === 'all-schedules' && (
+      {effectiveViewMode === 'all-schedules' && (
         <div className="space-y-1.5">
           {manualJobs.length === 0 && allSkillSchedules.length === 0 && !adding && (
             <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
@@ -750,8 +755,6 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                   <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
                     {toTitleCase(job.name.replace(/^skill:/, ''))}
                   </span>
-                  {isSkillJob(job.name) && <SkillBadge />}
-                  <SourceBadge source={job.source} />
                   <span className="text-xs text-stone/40 shrink-0">
                     {formatDays(job.days)}
                   </span>
@@ -799,7 +802,6 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                       <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
                         {s.name}
                       </span>
-                      <SkillBadge />
                       <span className="text-xs text-stone/40 shrink-0">
                         {formatDays(days)}
                       </span>
@@ -838,11 +840,11 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
       )}
 
       {adding && (
-        <ScheduleAddModal onClose={() => setAdding(false)} />
+        <ScheduleAddModal onClose={() => setAdding(false)} space={space} />
       )}
 
       {editingJob && (
-        <ScheduleEditModal job={editingJob} onClose={() => setEditingJob(null)} />
+        <ScheduleEditModal job={editingJob} onClose={() => setEditingJob(null)} space={space} />
       )}
     </div>
   )
