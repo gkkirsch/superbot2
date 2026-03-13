@@ -73,64 +73,66 @@ function TodoItemRow({ todo, research, onToggle, onRemove, onWorkOn, onEdit, wor
 
   return (
     <div>
-      <div className={`flex items-center gap-2 group rounded-lg px-2 py-1.5 transition-colors ${hasExpandable && !editing ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggle() }}
-          className={todo.completed
-            ? "h-4 w-4 shrink-0 rounded border border-sand/30 bg-sand/20 flex items-center justify-center transition-colors"
-            : "h-4 w-4 shrink-0 rounded border border-stone/30 hover:border-sand/50 transition-colors"
-          }
-        >
-          {todo.completed && (
-            <svg className="h-2.5 w-2.5 text-sand/70" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M2 6l3 3 5-5" />
-            </svg>
-          )}
-        </button>
-        {editing ? (
-          <input
-            ref={editRef}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={commitEdit}
-            onKeyDown={handleEditKeyDown}
-            className="flex-1 bg-surface/50 border border-sand/30 rounded px-1.5 py-0.5 text-sm text-parchment focus:outline-none focus:border-sand/60"
-          />
-        ) : (
-          <button
-            onClick={(e) => {
-              if (!todo.completed) { e.stopPropagation(); setEditing(true) }
-              else if (hasExpandable) setExpanded(!expanded)
-            }}
-            onDoubleClick={() => !todo.completed && setEditing(true)}
-            className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
-          >
-            {todo.text}
-          </button>
-        )}
+      <div className={`relative group rounded-lg px-2 py-1.5 transition-colors ${hasExpandable && !editing ? 'cursor-pointer hover:bg-surface/30' : 'hover:bg-surface/20'}`}>
         {todo.space && (
-          <span className="text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5 shrink-0">
+          <span className="absolute top-1 right-1 text-[10px] font-mono text-stone/50 bg-stone/10 rounded-full px-1.5 py-0.5">
             {todo.spaceName || todo.space}
           </span>
         )}
-        {hasExpandable && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setExpanded(!expanded)}
-            className="shrink-0 text-sand/40 hover:text-sand/70 transition-colors p-0.5"
-            title={expanded ? 'Collapse' : 'Expand notes'}
-          >
-            {expanded
-              ? <ChevronUp className="h-3.5 w-3.5" />
-              : <ChevronDown className="h-3.5 w-3.5" />
+            onClick={(e) => { e.stopPropagation(); onToggle() }}
+            className={todo.completed
+              ? "h-4 w-4 shrink-0 rounded border border-sand/30 bg-sand/20 flex items-center justify-center transition-colors"
+              : "h-4 w-4 shrink-0 rounded border border-stone/30 hover:border-sand/50 transition-colors"
             }
+          >
+            {todo.completed && (
+              <svg className="h-2.5 w-2.5 text-sand/70" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 6l3 3 5-5" />
+              </svg>
+            )}
           </button>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove() }}
-          className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          {editing ? (
+            <input
+              ref={editRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={handleEditKeyDown}
+              className="flex-1 bg-surface/50 border border-sand/30 rounded px-1.5 py-0.5 text-sm text-parchment focus:outline-none focus:border-sand/60"
+            />
+          ) : (
+            <button
+              onClick={(e) => {
+                if (!todo.completed) { e.stopPropagation(); setEditing(true) }
+                else if (hasExpandable) setExpanded(!expanded)
+              }}
+              onDoubleClick={() => !todo.completed && setEditing(true)}
+              className={`flex-1 text-left leading-snug text-sm ${todo.completed ? 'text-stone/40 line-through' : 'text-parchment/90'}`}
+            >
+              {todo.text}
+            </button>
+          )}
+          {hasExpandable && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="shrink-0 text-sand/40 hover:text-sand/70 transition-colors p-0.5"
+              title={expanded ? 'Collapse' : 'Expand notes'}
+            >
+              {expanded
+                ? <ChevronUp className="h-3.5 w-3.5" />
+                : <ChevronDown className="h-3.5 w-3.5" />
+              }
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove() }}
+            className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400/70 transition-all p-0.5"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {expanded && hasExpandable && (

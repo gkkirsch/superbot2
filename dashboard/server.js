@@ -3672,6 +3672,8 @@ async function getCardDefinitions() {
   // 2. Scan installed Claude Code plugins for superbot.json / CARD.json
   // Structure: ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
   // Check both superbot2's Claude config and user's personal Claude config
+  // Track repo skill names so plugins don't duplicate them
+  const repoSkillNames = new Set(cards.map(c => c.skillId))
   const pluginCacheDirs = [
     PLUGINS_CACHE_DIR,                                    // ~/.superbot2/.claude/plugins/cache/
     join(homedir(), '.claude', 'plugins', 'cache'),       // ~/.claude/plugins/cache/
@@ -3694,7 +3696,8 @@ async function getCardDefinitions() {
           const rootResult = await readSkillManifest(versionDir)
           if (rootResult) {
             const skillId = `plugin__${plugin}`
-            if (!cards.some(c => c.skillId === skillId)) {
+            // Skip if this plugin duplicates a repo skill
+            if (!repoSkillNames.has(plugin) && !cards.some(c => c.skillId === skillId)) {
               _cardBaseDirs.set(skillId, versionDir)
               _manifests.set(skillId, rootResult.manifest)
               cards.push({ ...rootResult.card, skillId })
@@ -3712,7 +3715,8 @@ async function getCardDefinitions() {
               const skillResult = await readSkillManifest(skillDir)
               if (skillResult) {
                 const skillId = plugin === skill ? `plugin__${plugin}` : `plugin__${plugin}__${skill}`
-                if (!cards.some(c => c.skillId === skillId)) {
+                // Skip if this skill duplicates a repo skill
+                if (!repoSkillNames.has(skill) && !cards.some(c => c.skillId === skillId)) {
                   _cardBaseDirs.set(skillId, skillDir)
                   _manifests.set(skillId, skillResult.manifest)
                   cards.push({ ...skillResult.card, skillId })
