@@ -608,8 +608,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
   const hiddenPastCount = pastItems.length - DEFAULT_VISIBLE
 
   // For all-schedules view: manual jobs + all skill schedules (enabled or not)
+  // Include space-sourced skill entries here since they don't appear in skillSchedules
   const manualJobs = viewMode === 'all-schedules'
-    ? schedule.filter(j => !isSkillJob(j.name)).sort((a, b) => a.name.localeCompare(b.name))
+    ? schedule.filter(j => !isSkillJob(j.name) || (j.source && j.source !== 'global')).sort((a, b) => a.name.localeCompare(b.name))
     : []
   const allSkillSchedules = viewMode === 'all-schedules' ? (skillSchedules || []) : []
 
@@ -747,8 +748,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
-                    {toTitleCase(job.name)}
+                    {toTitleCase(job.name.replace(/^skill:/, ''))}
                   </span>
+                  {isSkillJob(job.name) && <SkillBadge />}
                   <SourceBadge source={job.source} />
                   <span className="text-xs text-stone/40 shrink-0">
                     {formatDays(job.days)}
