@@ -31,7 +31,7 @@ Click "Add goal" on the Goals card. Fill in the title, optional notes, and optio
 
 ### Via Script
 ```bash
-bash ~/dev/superbot2/skills/goals/add-goal.sh '<title>' <space> \
+bash $SUPERBOT2_APP_DIR/skills/goals/add-goal.sh '<title>' <space> \
   --progress '0/10' \
   --due '2026-06-01' \
   --notes 'context about this goal'
@@ -57,8 +57,8 @@ Every 6 hours (00:00, 06:00, 12:00, 18:00), the skill runs `check-progress.sh` w
 
 Run manually:
 ```bash
-bash ~/dev/superbot2/skills/goals/check-progress.sh
-bash ~/dev/superbot2/skills/goals/check-progress.sh --dry-run  # preview only
+bash $SUPERBOT2_APP_DIR/skills/goals/check-progress.sh
+bash $SUPERBOT2_APP_DIR/skills/goals/check-progress.sh --dry-run  # preview only
 ```
 
 ## Settings

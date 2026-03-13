@@ -154,7 +154,7 @@ function isSkillJob(name: string): boolean {
   return name.startsWith('skill:')
 }
 
-/** Extract space slug from source field, e.g. "space:x-authority" → "x-authority" */
+/** Extract space slug from source field, e.g. "space:my-app" → "my-app" */
 function getSpaceSlug(source?: string): string | null {
   if (!source || !source.startsWith('space:')) return null
   return source.slice(6)

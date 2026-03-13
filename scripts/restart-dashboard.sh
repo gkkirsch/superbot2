@@ -7,7 +7,7 @@ SUPERBOT2_HOME="${SUPERBOT2_HOME:-$HOME/.$SUPERBOT2_NAME}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # If dashboard not found at REPO_DIR (e.g. running from ~/.superbot2/scripts/), fall back to dev location
 if [[ ! -f "$REPO_DIR/dashboard/server.js" ]]; then
-  REPO_DIR="$HOME/dev/superbot2"
+  REPO_DIR="${SUPERBOT2_APP_DIR:-$HOME/dev/superbot2}"
 fi
 PID_FILE="$SUPERBOT2_HOME/dashboard.pid"
 

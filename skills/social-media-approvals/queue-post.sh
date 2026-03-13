@@ -14,7 +14,7 @@
 #   --context "why this reply"   - Context for why this engagement
 #
 # Examples:
-#   queue-post.sh facebook hostreply 'great tip about react hooks' \
+#   queue-post.sh facebook my-project 'great tip about react hooks' \
 #     --target '@reactdev' \
 #     --post-url 'https://facebook.com/groups/123/posts/456' \
 #     --excerpt 'TIL you can use useReducer for...' \
@@ -49,9 +49,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Write to persistent skill-data directory (survives plugin uninstall)
-PLUGIN_NAME="social-media-approvals"
-SKILL_DATA_DIR="${SKILL_DATA_DIR:-${HOME}/.superbot2/skill-data/plugin__${PLUGIN_NAME}}"
+# Write to space-scoped skill-data directory
+SKILL_NAME="social-media-approvals"
+SKILL_DATA_DIR="${SKILL_DATA_DIR:-${HOME}/.superbot2/spaces/${SPACE}/skill-data/${SKILL_NAME}}"
 mkdir -p "$SKILL_DATA_DIR"
 JSONL_FILE="$SKILL_DATA_DIR/data.jsonl"
 

@@ -20,6 +20,7 @@ const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const SKILL_DATA_DIR = join(SUPERBOT_DIR, 'skill-data')
 const LEGACY_SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
+const MARKETPLACE_API_BASE = process.env.SUPERBOT2_MARKETPLACE_URL || 'https://superchargeclaudecode.com'
 
 app.use(express.json({ limit: '50mb' }))
 
@@ -3059,7 +3060,7 @@ async function fetchPluginMeta(name) {
   if (cached && (now - cached.fetchedAt) < 600_000) return cached.data
 
   try {
-    const response = await fetch(`https://superchargeclaudecode.com/api/plugins/${encodeURIComponent(name)}`)
+    const response = await fetch(`${MARKETPLACE_API_BASE}/api/plugins/${encodeURIComponent(name)}`)
     if (!response.ok) return null
     const plugin = await response.json()
     const files = plugin.files || []
@@ -3068,7 +3069,7 @@ async function fetchPluginMeta(name) {
     // Try to fetch plugin.json for keywords
     let keywords = []
     try {
-      const pjResponse = await fetch(`https://superchargeclaudecode.com/api/plugins/${encodeURIComponent(name)}/.claude-plugin/plugin.json`, { redirect: 'follow' })
+      const pjResponse = await fetch(`${MARKETPLACE_API_BASE}/api/plugins/${encodeURIComponent(name)}/.claude-plugin/plugin.json`, { redirect: 'follow' })
       if (pjResponse.ok) {
         const pj = await pjResponse.json()
         keywords = pj.keywords || []
@@ -3096,7 +3097,7 @@ app.get('/api/plugins/:name/details', async (req, res) => {
       return res.json(cached.data)
     }
 
-    const response = await fetch(`https://superchargeclaudecode.com/api/plugins/${encodeURIComponent(name)}`)
+    const response = await fetch(`${MARKETPLACE_API_BASE}/api/plugins/${encodeURIComponent(name)}`)
     if (!response.ok) {
       return res.status(response.status).json({ error: 'Plugin not found' })
     }
@@ -3195,7 +3196,7 @@ app.get('/api/plugins/:name/files/{*filePath}', async (req, res) => {
   try {
     const { name } = req.params
     const filePath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
-    const url = `https://superchargeclaudecode.com/api/plugins/${encodeURIComponent(name)}/${filePath}`
+    const url = `${MARKETPLACE_API_BASE}/api/plugins/${encodeURIComponent(name)}/${filePath}`
     const response = await fetch(url, { redirect: 'follow' })
     if (!response.ok) {
       return res.status(response.status).json({ error: 'File not found' })
@@ -4274,7 +4275,7 @@ async function getSpaceSlugs() {
   const now = Date.now()
   if (_spaceSlugsCache && now - _spaceSlugsTime < 60_000) return _spaceSlugsCache
   const entries = await safeReaddir(SPACES_DIR)
-  // Sort longest-first so "x-authority" matches before "x" would
+  // Sort longest-first so longer slugs match before shorter ones would
   _spaceSlugsCache = entries.sort((a, b) => b.length - a.length)
   _spaceSlugsTime = now
   return _spaceSlugsCache

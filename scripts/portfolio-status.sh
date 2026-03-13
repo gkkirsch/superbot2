@@ -20,7 +20,7 @@
 #
 #   Escalations:
 #     untriaged: 2
-#       → [kidsvids/agent-chat] "Agent chat feature complete — what's next?" (approval, medium)
+#       → [my-webapp/agent-chat] "Agent chat feature complete — what's next?" (approval, medium)
 #       → [api/rate-limiting] "Which rate limit algorithm?" (decision, high)
 #     needs_human: 1
 #       → [auth/jwt-refresh] "Redis vs Memcached for token store?" (decision, high)

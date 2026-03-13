@@ -25,7 +25,7 @@ This skill provides a dashboard card for reviewing social media drafts before po
 Queue a draft using the skill's built-in script:
 
 ```bash
-bash ~/dev/superbot2/skills/social-media-approvals/queue-post.sh <platform> <space> '<draft text>' \
+bash $SUPERBOT2_APP_DIR/skills/social-media-approvals/queue-post.sh <platform> <space> '<draft text>' \
   --target '@handle or group name' \
   --post-url 'https://...' \
   --excerpt 'original post excerpt' \
@@ -48,7 +48,7 @@ Options:
 Workers check for approved items at session start:
 
 ```bash
-grep '"status":"approved"' ~/dev/superbot2/skills/social-media-approvals/data.jsonl
+grep '"status":"approved"' $SUPERBOT2_APP_DIR/skills/social-media-approvals/data.jsonl
 ```
 
 After posting, update the item status to "posted" via the dashboard API.

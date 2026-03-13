@@ -114,7 +114,7 @@ When a task involves creating a new Claude Code skill or plugin, **always save t
 
 Never write a new user-created skill directly to `~/.superbot2/skills/`. It goes to drafts first so the user can review and test it via the skill creator UI before promoting it to active.
 
-Exception: superbot2 system skills that are part of the dev repo itself (`~/dev/superbot2/skills/`) are not user-created drafts — those get synced to `~/.superbot2/skills/` as part of the dev workflow.
+Exception: superbot2 system skills that are part of the dev repo itself (`$SUPERBOT2_APP_DIR/skills/`) are not user-created drafts — those get synced to `~/.superbot2/skills/` as part of the dev workflow.
 
 ### Research
 
@@ -297,12 +297,12 @@ If you are working in the `meta` space and modify any of these files, you MUST s
 
 | Runtime (modified here) | Dev repo (sync here) |
 |------------------------|---------------------|
-| `~/.superbot2/ORCHESTRATOR_GUIDE.md` | `~/dev/superbot2/templates/ORCHESTRATOR_GUIDE.md` |
-| `~/.superbot2/SPACE_WORKER_GUIDE.md` | `~/dev/superbot2/templates/SPACE_WORKER_GUIDE.md` |
-| `~/.superbot2/templates/*.md` | `~/dev/superbot2/templates/*.md` |
-| `~/.superbot2/scripts/*.sh` | `~/dev/superbot2/scripts/*.sh` |
-| `~/.superbot2/skills/<name>/` | `~/dev/superbot2/skills/<name>/` |
-| `~/.claude/agents/space-worker.md` | `~/dev/superbot2/agents/space-worker.md` |
+| `~/.superbot2/ORCHESTRATOR_GUIDE.md` | `$SUPERBOT2_APP_DIR/templates/ORCHESTRATOR_GUIDE.md` |
+| `~/.superbot2/SPACE_WORKER_GUIDE.md` | `$SUPERBOT2_APP_DIR/templates/SPACE_WORKER_GUIDE.md` |
+| `~/.superbot2/templates/*.md` | `$SUPERBOT2_APP_DIR/templates/*.md` |
+| `~/.superbot2/scripts/*.sh` | `$SUPERBOT2_APP_DIR/scripts/*.sh` |
+| `~/.superbot2/skills/<name>/` | `$SUPERBOT2_APP_DIR/skills/<name>/` |
+| `~/.claude/agents/space-worker.md` | `$SUPERBOT2_APP_DIR/agents/space-worker.md` |
 
 **How to sync:**
 1. `diff <runtime-file> <dev-file>` — always diff first
@@ -349,12 +349,10 @@ When setting up a new web app space or adding a dev server to an existing one, u
 Space JSON location: `~/.superbot2/spaces/<slug>/space.json`
 
 The dashboard uses this to show "Start Dev Server" and "View" links. Without it, no one can easily run the app. Always fill it in — pick an unused port (check other spaces to avoid conflicts). Common port assignments:
-- kidsvids: 5175
-- supercharge: 5174
+- my-webapp: 5175
+- my-api: 5176
 - dashboard: 3274
-- penguins: 5176
-- hostreply: 5178
-- consulting: 5180
+- my-saas: 5178
 
 ## Rules
 

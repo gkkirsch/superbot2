@@ -92,7 +92,7 @@ rm -f ~/.superbot2/.heartbeat-last-fingerprint
 echo '[]' > ~/.claude/teams/superbot2/inboxes/team-lead.json
 
 # 2. Run setup (re-deploys templates, creates team config)
-bash ~/dev/superbot2/scripts/setup.sh
+bash $SUPERBOT2_APP_DIR/scripts/setup.sh
 
 # 3. Create pane
 tmux split-window -h -l 100
@@ -128,7 +128,7 @@ The heartbeat writes to the inbox and Claude Code delivers it automatically:
 cat ~/.claude/teams/superbot2/inboxes/team-lead.json | jq .
 
 # Manually trigger a heartbeat
-bash ~/dev/superbot2/scripts/heartbeat-cron.sh
+bash $SUPERBOT2_APP_DIR/scripts/heartbeat-cron.sh
 ```
 
 When delivered, you'll see `@heartbeat>` in the pane output.
