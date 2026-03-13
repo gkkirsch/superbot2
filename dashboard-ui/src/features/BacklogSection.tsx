@@ -153,7 +153,7 @@ export function BacklogSection({ slug }: { slug: string }) {
     <section>
       <div className="flex items-center gap-2 mb-3">
         <Lightbulb className="h-3.5 w-3.5 text-stone/50" />
-        <h2 className="text-xs text-stone uppercase tracking-wider">Backlog</h2>
+        <h2 className="text-xs text-stone uppercase tracking-wider">Todo</h2>
       </div>
 
       <div className="space-y-2">
@@ -162,7 +162,7 @@ export function BacklogSection({ slug }: { slug: string }) {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Add a backlog idea..."
+            placeholder="Add a todo..."
             className="flex-1 bg-surface/30 border border-stone/15 rounded-lg px-3 py-1.5 text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-sand/40 transition-colors"
           />
           <button
@@ -177,7 +177,7 @@ export function BacklogSection({ slug }: { slug: string }) {
         {incomplete.length === 0 && completed.length === 0 && (
           <div className="rounded-lg border border-border-custom bg-surface/50 py-4 flex items-center gap-2.5 px-4">
             <Lightbulb className="h-4 w-4 text-stone/30 shrink-0" />
-            <p className="text-xs text-stone/50">No backlog items</p>
+            <p className="text-xs text-stone/50">No todo items</p>
           </div>
         )}
 
