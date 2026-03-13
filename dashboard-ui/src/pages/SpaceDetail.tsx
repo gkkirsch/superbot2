@@ -333,6 +333,9 @@ export function SpaceDetail() {
 
           {/* Right column */}
           <div className="space-y-8">
+            {/* Skills */}
+            <SpaceSkillsSection slug={slug ?? ''} />
+
             {/* Projects */}
             <section>
               <div className="flex items-center gap-2 mb-3">
@@ -373,9 +376,6 @@ export function SpaceDetail() {
                 </div>
               )}
             </section>
-
-            {/* Skills */}
-            <SpaceSkillsSection slug={slug ?? ''} />
 
             {/* Backlog */}
             <BacklogSection slug={slug ?? ''} />
