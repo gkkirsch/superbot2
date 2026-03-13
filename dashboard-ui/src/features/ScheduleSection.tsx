@@ -154,6 +154,22 @@ function isSkillJob(name: string): boolean {
   return name.startsWith('skill:')
 }
 
+/** Extract space slug from source field, e.g. "space:x-authority" → "x-authority" */
+function getSpaceSlug(source?: string): string | null {
+  if (!source || !source.startsWith('space:')) return null
+  return source.slice(6)
+}
+
+function SpaceBadge({ source }: { source?: string }) {
+  const slug = getSpaceSlug(source)
+  if (!slug) return null
+  return (
+    <span className="text-[10px] bg-sand/10 text-sand/60 px-1.5 py-0.5 rounded-full shrink-0">
+      {slug}
+    </span>
+  )
+}
+
 /** Convert skill schedule info to a ScheduledJob for display in the timeline */
 function skillScheduleToJob(s: SkillScheduleInfo): ScheduledJob {
   const time = s.overrides?.time ?? s.schedule.default.time
@@ -593,12 +609,9 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
     return <div className="h-20 rounded-lg bg-stone/5 animate-pulse" />
   }
 
-  const rawSchedule = space
+  const schedule = space
     ? (spaceQuery.data || [])
     : (globalQuery.data?.schedule || [])
-
-  // Main dashboard: only show global schedules (space schedules appear on space pages)
-  const schedule = space ? rawSchedule : rawSchedule.filter(j => !j.source || j.source === 'global')
 
   // Merge enabled skill schedules (only for global, not space)
   const enabledSkillJobs = space ? [] : (skillSchedules || [])
@@ -666,6 +679,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   <span className="text-sm truncate text-stone/40">
                     {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
+                  {!space && <SpaceBadge source={item.job.source} />}
                 </button>
               ))}
             </div>
@@ -694,6 +708,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   <span className="text-sm truncate text-stone/70">
                     {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
+                  {!space && <SpaceBadge source={item.job.source} />}
                 </button>
               ))}
             </div>
@@ -721,6 +736,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   <span className="text-sm truncate text-stone/70">
                     {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
+                  {!space && <SpaceBadge source={item.job.source} />}
                 </button>
               ))}
               {nextDay.items.length > 1 && (
@@ -758,6 +774,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
                     {toTitleCase(job.name.replace(/^skill:/, ''))}
                   </span>
+                  {!space && <SpaceBadge source={job.source} />}
                   <span className="text-xs text-stone/40 shrink-0">
                     {formatDays(job.days)}
                   </span>
