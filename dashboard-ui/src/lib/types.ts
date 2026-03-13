@@ -15,6 +15,7 @@ export interface SpaceOverview {
   slug: string
   status: string
   projects: string[]
+  skills?: string[]
   taskCounts: TaskCounts
   projectTaskCounts?: Record<string, TaskCounts>
   projectCreatedAt?: Record<string, string>
@@ -84,6 +85,7 @@ export interface ScheduledJob {
   days?: string[]
   task: string
   space?: string
+  source?: string
 }
 
 export interface ScheduleData {
@@ -112,6 +114,8 @@ export interface SkillInfo {
   pluginId?: string
   pluginName?: string
   needsConfig?: boolean
+  scope?: 'space' | 'global'
+  icon?: string
 }
 
 export interface AgentInfo {
@@ -331,6 +335,8 @@ export interface CardDefinition {
   renderer?: string
   refreshCommand?: string
   hasSettings?: boolean
+  scope?: 'space' | 'global'
+  icon?: string
   itemSchema: Record<string, string | ItemSchemaField>
   display: {
     title: string
@@ -380,6 +386,8 @@ export interface SuperbotManifest {
   name: string
   description: string
   version?: string
+  scope?: 'space' | 'global'
+  icon?: string
   card?: Omit<CardDefinition, 'skillId' | 'name' | 'description'>
   settings?: SettingsSchema
   schedule?: ScheduleConfig
