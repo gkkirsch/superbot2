@@ -1172,6 +1172,101 @@ app.post('/api/spaces/:slug/backlog/:id/promote', async (req, res) => {
   }
 })
 
+// --- Space skills (attach/detach) ---
+
+app.get('/api/spaces/:slug/skills', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const spaceJson = await readJsonFile(join(spaceDir, 'space.json')) || {}
+    const skillIds = Array.isArray(spaceJson.skills) ? spaceJson.skills : []
+    // Load manifests for each attached skill
+    await getCardDefinitions()
+    const skills = skillIds.map(id => {
+      const manifest = _manifests.get(id)
+      return {
+        skillId: id,
+        name: manifest?.name || id,
+        description: manifest?.description || '',
+        icon: manifest?.icon || null,
+        hasSettings: !!(manifest?.settings?.schema),
+        hasSchedule: !!(manifest?.schedule),
+      }
+    }).filter(s => s.name)
+    res.json({ skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/spaces/:slug/skills/:skillId', async (req, res) => {
+  try {
+    const { slug, skillId } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    // Verify skill exists and is space-scoped
+    await getCardDefinitions()
+    const manifest = _manifests.get(skillId)
+    if (!manifest) return res.status(404).json({ error: 'Skill not found' })
+    if (manifest.scope !== 'space') return res.status(400).json({ error: 'Only scope:space skills can be attached to spaces' })
+    // Read space.json and add skill
+    const spaceJsonPath = join(spaceDir, 'space.json')
+    const spaceJson = await readJsonFile(spaceJsonPath) || {}
+    if (!Array.isArray(spaceJson.skills)) spaceJson.skills = []
+    if (spaceJson.skills.includes(skillId)) return res.status(409).json({ error: 'Skill already attached' })
+    spaceJson.skills.push(skillId)
+    await writeFile(spaceJsonPath, JSON.stringify(spaceJson, null, 2))
+    // Create space skill-data directory
+    const skillDataDir = join(spaceDir, 'skill-data', skillId)
+    await mkdir(skillDataDir, { recursive: true })
+    res.json({ success: true, skills: spaceJson.skills, onboarding: !!(manifest.onboarding) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/spaces/:slug/skills/:skillId', async (req, res) => {
+  try {
+    const { slug, skillId } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const spaceJsonPath = join(spaceDir, 'space.json')
+    const spaceJson = await readJsonFile(spaceJsonPath) || {}
+    if (!Array.isArray(spaceJson.skills) || !spaceJson.skills.includes(skillId)) {
+      return res.status(404).json({ error: 'Skill not attached to this space' })
+    }
+    // Remove from skills array (keep data directory — non-destructive)
+    spaceJson.skills = spaceJson.skills.filter(id => id !== skillId)
+    await writeFile(spaceJsonPath, JSON.stringify(spaceJson, null, 2))
+    res.json({ success: true, skills: spaceJson.skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/skills', async (_req, res) => {
+  try {
+    await getCardDefinitions()
+    const skills = []
+    for (const [skillId, manifest] of _manifests) {
+      skills.push({
+        skillId,
+        name: manifest.name,
+        description: manifest.description || '',
+        scope: manifest.scope || 'global',
+        icon: manifest.icon || null,
+        hasCard: !!manifest.card,
+        hasSettings: !!(manifest.settings?.schema),
+        hasSchedule: !!manifest.schedule,
+      })
+    }
+    res.json({ skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- System status ---
 
 app.get('/api/status', async (_req, res) => {
