@@ -159,6 +159,16 @@ function SkillBadge() {
   )
 }
 
+function SourceBadge({ source }: { source?: string }) {
+  if (!source || source === 'global') return null
+  const spaceName = source.startsWith('space:') ? source.slice(6) : source
+  return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium tracking-wider bg-sky-500/10 text-sky-400/70 shrink-0">
+      {spaceName}
+    </span>
+  )
+}
+
 function isSkillJob(name: string): boolean {
   return name.startsWith('skill:')
 }
@@ -642,6 +652,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
                   {isSkillJob(item.job.name) && <SkillBadge />}
+                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
             </div>
@@ -671,6 +682,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
                   {isSkillJob(item.job.name) && <SkillBadge />}
+                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
             </div>
@@ -699,6 +711,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                     {toTitleCase(item.job.name.replace(/^skill:/, ''))}
                   </span>
                   {isSkillJob(item.job.name) && <SkillBadge />}
+                  <SourceBadge source={item.job.source} />
                 </button>
               ))}
               {nextDay.items.length > 1 && (
@@ -736,6 +749,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline' }: { 
                   <span className="text-sm text-stone/70 truncate min-w-0 flex-1">
                     {toTitleCase(job.name)}
                   </span>
+                  <SourceBadge source={job.source} />
                   <span className="text-xs text-stone/40 shrink-0">
                     {formatDays(job.days)}
                   </span>
