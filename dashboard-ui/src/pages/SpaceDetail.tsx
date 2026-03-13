@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Check, FileText, FolderOpen, Circle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, FileText, FolderOpen, Loader2 } from 'lucide-react'
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
@@ -156,7 +156,6 @@ export function SpaceDetail() {
 
   const space = data?.space
   const projects = data?.projects ?? []
-  const pendingTasks = data?.pendingTasks ?? []
   const knowledgeFiles = data?.knowledgeFiles ?? []
   const pendingEscalations = (escalations ?? []).filter(e => e.status === 'needs_human')
 
@@ -205,9 +204,6 @@ export function SpaceDetail() {
   if (headingMatch) {
     overviewText = overviewText.slice(headingMatch[0].length).trim()
   }
-
-  const displayTasks = pendingTasks.slice(0, 15)
-  const extraTaskCount = pendingTasks.length - 15
 
   return (
     <div className="min-h-screen bg-ink">
@@ -286,31 +282,6 @@ export function SpaceDetail() {
                 </div>
               </section>
             )}
-
-            {/* Outstanding Tasks */}
-            <section>
-              <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Outstanding Tasks</h2>
-              {displayTasks.length === 0 ? (
-                <p className="text-sm text-stone/50">All caught up</p>
-              ) : (
-                <div className="divide-y divide-border-custom">
-                  {displayTasks.map((task) => (
-                    <div key={task.id} className="flex items-start gap-2 py-2">
-                      {task.status === 'in_progress' ? (
-                        <Loader2 className="h-3.5 w-3.5 text-amber-400 animate-spin mt-0.5 shrink-0" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 text-stone/40 mt-0.5 shrink-0" />
-                      )}
-                      <span className="text-sm text-parchment flex-1 leading-snug">{task.subject}</span>
-                      <span className="text-xs text-stone/50 shrink-0">{task.project}</span>
-                    </div>
-                  ))}
-                  {extraTaskCount > 0 && (
-                    <div className="py-2 text-xs text-stone/50">+{extraTaskCount} more</div>
-                  )}
-                </div>
-              )}
-            </section>
 
             {/* Knowledge */}
             {knowledgeFiles.length > 0 && (
