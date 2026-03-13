@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X } from 'lucide-react'
-import { useCards, useCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem } from '@/hooks/useSpaces'
+import { useCards, useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -313,8 +313,10 @@ function AddGoalForm({ onSubmit, isPending }: { onSubmit: (goal: Record<string, 
 }
 
 // Renderer interface: accepts a CardDefinition from the registry
-export function GoalRenderer({ card }: { card: CardDefinition }) {
-  const { data, isLoading } = useCardItems(card.skillId)
+export function GoalRenderer({ card, space }: { card: CardDefinition; space?: string }) {
+  const globalQuery = useCardItems(space ? '' : card.skillId)
+  const spaceQuery = useSpaceCardItems(space ? card.skillId : '', space ?? '')
+  const { data, isLoading } = space ? spaceQuery : globalQuery
   const updateMutation = useUpdateCardItem()
   const deleteMutation = useDeleteCardItem()
   const createMutation = useCreateCardItem()

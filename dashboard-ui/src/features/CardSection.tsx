@@ -3,7 +3,7 @@ import {
   Check, X, PenLine, Loader2, ExternalLink, Pause, Play, Trash2, Plus,
   type LucideProps,
 } from 'lucide-react'
-import { useCards, useCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
+import { useCards, useCardItems, useSpaceCardItems, useUpdateCardItem } from '@/hooks/useSpaces'
 import { SkillSettingsForm } from '@/features/SkillSettingsForm'
 import type { CardDefinition, CardItem, CardAction } from '@/lib/types'
 
@@ -264,10 +264,13 @@ interface CardSkillSectionProps {
   card: CardDefinition
   showSettings?: boolean
   onCloseSettings?: () => void
+  space?: string
 }
 
-export function CardSkillSection({ card, showSettings, onCloseSettings }: CardSkillSectionProps) {
-  const { data, isLoading } = useCardItems(card.skillId)
+export function CardSkillSection({ card, showSettings, onCloseSettings, space }: CardSkillSectionProps) {
+  const globalQuery = useCardItems(space ? '' : card.skillId)
+  const spaceQuery = useSpaceCardItems(space ? card.skillId : '', space ?? '')
+  const { data, isLoading } = space ? spaceQuery : globalQuery
   const updateMutation = useUpdateCardItem()
   const [showResolved, setShowResolved] = useState(false)
 

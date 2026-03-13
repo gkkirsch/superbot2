@@ -894,8 +894,9 @@ export async function fetchCards(): Promise<CardDefinition[]> {
   return data.cards
 }
 
-export async function fetchCardItems(skillId: string): Promise<{ items: CardItem[]; card: CardDefinition }> {
-  return fetchJson<{ items: CardItem[]; card: CardDefinition }>(`/cards/${encodeURIComponent(skillId)}/items`)
+export async function fetchCardItems(skillId: string, space?: string): Promise<{ items: CardItem[]; card: CardDefinition }> {
+  const qs = space ? `?space=${encodeURIComponent(space)}` : ''
+  return fetchJson<{ items: CardItem[]; card: CardDefinition }>(`/cards/${encodeURIComponent(skillId)}/items${qs}`)
 }
 
 export async function updateCardItem(skillId: string, itemId: string, update: Record<string, unknown>): Promise<CardItem> {

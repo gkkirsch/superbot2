@@ -450,6 +450,16 @@ export function useCardItems(skillId: string) {
   })
 }
 
+export function useSpaceCardItems(skillId: string, space: string) {
+  return useQuery({
+    queryKey: ['card-items', skillId, 'space', space],
+    queryFn: () => fetchCardItems(skillId, space),
+    enabled: !!skillId && !!space,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  })
+}
+
 export function useUpdateCardItem() {
   const qc = useQueryClient()
   return useMutation({

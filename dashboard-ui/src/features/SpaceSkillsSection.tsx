@@ -1,7 +1,21 @@
 import { useState } from 'react'
 import { Plus, X, Puzzle, Loader2, Settings } from 'lucide-react'
-import { useSpaceSkills, useSkillManifests, useAttachSkill, useDetachSkill } from '@/hooks/useSpaces'
+import { useSpaceSkills, useSkillManifests, useAttachSkill, useDetachSkill, useCards } from '@/hooks/useSpaces'
 import { getSkillIcon } from '@/lib/skillIcons'
+import { getRendererOrDefault } from '@/features/cardRenderers'
+import { CardSkillSection } from '@/features/CardSection'
+import '@/features/registerRenderers'
+import type { CardDefinition } from '@/lib/types'
+
+interface SpaceSkillCardProps {
+  card: CardDefinition
+  space: string
+}
+
+function SpaceSkillCard({ card, space }: SpaceSkillCardProps) {
+  const Renderer = getRendererOrDefault(card.renderer) || CardSkillSection
+  return <Renderer card={card} space={space} />
+}
 
 interface SpaceSkillsSectionProps {
   slug: string
@@ -10,6 +24,7 @@ interface SpaceSkillsSectionProps {
 export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
   const { data: attached, isLoading } = useSpaceSkills(slug)
   const { data: allManifests } = useSkillManifests()
+  const { data: cards } = useCards()
   const attachMut = useAttachSkill()
   const detachMut = useDetachSkill()
   const [showPicker, setShowPicker] = useState(false)
@@ -79,7 +94,7 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
         </div>
       )}
 
-      {/* Onboarding hint — shown after attaching a skill that has onboarding */}
+      {/* Onboarding hint */}
       {onboardingSkillId && (
         <div className="mb-3 rounded-lg border border-sand/20 bg-sand/5 px-3 py-2 flex items-center gap-2">
           <Settings className="h-3.5 w-3.5 text-sand/60 shrink-0" />
@@ -103,26 +118,31 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
       ) : !attached || attached.length === 0 ? (
         <p className="text-sm text-stone/50">No skills attached</p>
       ) : (
-        <div className="divide-y divide-border-custom">
+        <div className="space-y-4">
           {attached.map(skill => {
             const Icon = getSkillIcon(skill.icon)
+            const card = cards?.find(c => c.skillId === skill.skillId)
             return (
-              <div key={skill.skillId} className="flex items-center gap-2 py-2 group">
-                <Icon className="h-4 w-4 text-stone/60 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <span className="text-sm text-parchment">{skill.name}</span>
-                  {skill.description && (
-                    <span className="ml-1.5 text-xs text-stone/50">{skill.description}</span>
-                  )}
+              <div key={skill.skillId}>
+                {/* Skill header with name + detach */}
+                <div className="flex items-center gap-2 mb-2 group">
+                  <Icon className="h-4 w-4 text-stone/60 shrink-0" />
+                  <span className="text-sm text-parchment font-medium flex-1">{skill.name}</span>
+                  <button
+                    onClick={() => handleDetach(skill.skillId)}
+                    disabled={detachMut.isPending}
+                    className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400 transition-all disabled:opacity-50"
+                    title="Detach skill"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleDetach(skill.skillId)}
-                  disabled={detachMut.isPending}
-                  className="opacity-0 group-hover:opacity-100 text-stone/40 hover:text-red-400 transition-all disabled:opacity-50"
-                  title="Detach skill"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {/* Interactive card content */}
+                {card ? (
+                  <SpaceSkillCard card={card} space={slug} />
+                ) : (
+                  <p className="text-xs text-stone/40">{skill.description}</p>
+                )}
               </div>
             )
           })}

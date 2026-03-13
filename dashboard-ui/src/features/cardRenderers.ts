@@ -9,6 +9,7 @@ export interface CardRendererProps {
   card: CardDefinition
   showSettings?: boolean
   onCloseSettings?: () => void
+  space?: string
 }
 
 const registry: Record<string, ComponentType<CardRendererProps>> = {}
