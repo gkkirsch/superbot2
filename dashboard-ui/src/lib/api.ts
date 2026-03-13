@@ -997,6 +997,11 @@ export async function fetchSpaceSkills(slug: string): Promise<SpaceSkillInfo[]> 
   return data.skills
 }
 
+export async function fetchSpaceSchedule(slug: string): Promise<ScheduledJob[]> {
+  const data = await fetchJson<{ schedule: ScheduledJob[] }>(`/spaces/${encodeURIComponent(slug)}/schedule`)
+  return data.schedule
+}
+
 export interface AttachSkillResponse {
   success: boolean
   skills: string[]

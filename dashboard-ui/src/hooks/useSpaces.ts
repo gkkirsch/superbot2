@@ -56,6 +56,7 @@ import {
   attachSkillToSpace,
   detachSkillFromSpace,
   fetchSkillManifests,
+  fetchSpaceSchedule,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
@@ -542,6 +543,18 @@ export function useToggleSkillSchedule() {
       qc.invalidateQueries({ queryKey: ['skill-schedules'] })
       qc.invalidateQueries({ queryKey: ['schedule'] })
     },
+  })
+}
+
+// --- Space schedule ---
+
+export function useSpaceSchedule(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['space-schedule', slug],
+    queryFn: () => fetchSpaceSchedule(slug!),
+    enabled: !!slug,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   })
 }
 

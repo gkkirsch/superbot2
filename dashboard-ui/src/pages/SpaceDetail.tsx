@@ -6,6 +6,7 @@ import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
 import { BacklogSection } from '@/features/BacklogSection'
 import { SpaceSkillsSection } from '@/features/SpaceSkillsSection'
+import { SpaceScheduleSection } from '@/features/SpaceScheduleSection'
 import { useSpace, useSpaceEscalations, useSessions } from '@/hooks/useSpaces'
 import { useQueryClient } from '@tanstack/react-query'
 import { startServer, stopServer, deployServer } from '@/lib/api'
@@ -151,7 +152,7 @@ export function SpaceDetail() {
   const { slug } = useParams<{ slug: string }>()
   const { data, isLoading, error } = useSpace(slug ?? '')
   const { data: escalations } = useSpaceEscalations(slug ?? '')
-  const { data: sessions } = useSessions(8, slug)
+  const { data: sessions } = useSessions(3, slug)
 
   const space = data?.space
   const projects = data?.projects ?? []
@@ -335,6 +336,9 @@ export function SpaceDetail() {
           <div className="space-y-8">
             {/* Skills */}
             <SpaceSkillsSection slug={slug ?? ''} />
+
+            {/* Space Schedule */}
+            <SpaceScheduleSection slug={slug ?? ''} />
 
             {/* Projects */}
             <section>
