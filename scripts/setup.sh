@@ -39,10 +39,8 @@ fi
 
 CLAUDE_DIR="$DIR/.claude"
 mkdir -p "$CLAUDE_DIR"
-# Team and task dirs go in the GLOBAL ~/.claude/ directory — Claude Code looks there
-# when started with --team-name, regardless of any isolated config directory.
-TEAM_DIR="$HOME/.claude/teams/$SUPERBOT2_NAME"
-TASK_DIR="$HOME/.claude/tasks/$SUPERBOT2_NAME"
+TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
+TASK_DIR="$CLAUDE_DIR/tasks/$SUPERBOT2_NAME"
 backup_if_exists "$TEAM_DIR"
 mkdir -p "$TEAM_DIR/inboxes"
 mkdir -p "$TASK_DIR"

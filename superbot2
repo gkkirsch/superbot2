@@ -359,12 +359,9 @@ SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
 echo "$SESSION_ID" > "$SESSION_FILE"
 echo "Generated session ID: $SESSION_ID"
 
-# Update team config with current session ID
-if [[ -f "$TEAM_DIR/config.json" ]] && command -v jq &>/dev/null; then
-  jq --arg sid "$SESSION_ID" '.leadSessionId = $sid' \
-    "$TEAM_DIR/config.json" > "$TEAM_DIR/config.json.tmp" \
-    && mv "$TEAM_DIR/config.json.tmp" "$TEAM_DIR/config.json"
-fi
+# Remove stale team config so TeamCreate can create it fresh
+mkdir -p "$TEAM_DIR/inboxes"
+rm -f "$TEAM_DIR/config.json"
 
 # ─── Main loop with restart support ───
 
@@ -407,13 +404,10 @@ while true; do
   ) &
   WATCHDOG_PID=$!
 
-  # Build claude args with team registration
+  # Build claude args
   CLAUDE_ARGS=(
     --system-prompt "$PROMPT"
     --session-id "$SESSION_ID"
-    --team-name "$SUPERBOT2_NAME"
-    --agent-name team-lead
-    --agent-id "team-lead@$SUPERBOT2_NAME"
     --dangerously-skip-permissions
   )
 
