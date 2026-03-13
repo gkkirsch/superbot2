@@ -1003,6 +1003,31 @@ export async function fetchSpaceSchedule(slug: string): Promise<ScheduledJob[]> 
   return data.schedule
 }
 
+export async function addSpaceScheduleJob(slug: string, job: ScheduledJob): Promise<{ schedule: ScheduledJob[] }> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/schedule/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(job),
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function deleteSpaceScheduleJob(slug: string, name: string): Promise<{ schedule: ScheduledJob[] }> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/schedule/jobs/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
+  return response.json()
+}
+
+export async function updateSpaceScheduleJob(slug: string, originalName: string, job: ScheduledJob): Promise<{ schedule: ScheduledJob[] }> {
+  if (originalName !== job.name) {
+    await deleteSpaceScheduleJob(slug, originalName)
+  }
+  return addSpaceScheduleJob(slug, job)
+}
+
 export interface AttachSkillResponse {
   success: boolean
   skills: string[]
