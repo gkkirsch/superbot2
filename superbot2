@@ -20,7 +20,7 @@ LAUNCHER_PID_FILE="$DIR/.launcher.pid"
 
 # ─── Single-instance guard ───
 # If another launcher is already running, kill it before starting a new one.
-# This prevents duplicate iMessage sends, duplicate heartbeat triggers, etc.
+# This prevents duplicate heartbeat triggers, etc.
 if [[ -f "$LAUNCHER_PID_FILE" ]]; then
   OLD_PID=$(cat "$LAUNCHER_PID_FILE" 2>/dev/null || echo "")
   if [[ -n "$OLD_PID" ]] && [[ "$OLD_PID" != "$$" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -90,11 +90,6 @@ case "${1:-}" in
 
   setup)
     exec bash "$REPO_DIR/scripts/setup.sh"
-    ;;
-
-  imessage-setup)
-    shift
-    exec bash "$REPO_DIR/scripts/imessage-setup.sh" "${1:-setup}"
     ;;
 
   server)
@@ -192,7 +187,6 @@ case "${1:-}" in
     echo "  update            Pull latest code and redeploy (preserves user data)"
     echo "  setup             Re-run initial setup"
     echo "  sync-app          Sync dev repo to ~/.superbot2-app/ for end-user testing"
-    echo "  imessage-setup    Set up the iMessage bridge (also: status, test, reset)"
     echo "  help              Show this help"
     echo ""
     exit 0

@@ -211,9 +211,6 @@ start_dashboard
 # Open dashboard in browser (after a short delay to let server start)
 sleep 1 && open "http://localhost:3274" &
 
-# Start iMessage watcher (self-exits if not configured, has its own singleton guard)
-bash "$SCRIPT_DIR/imessage-watcher.sh" &
-
 echo "Starting superbot2 orchestrator..."
 
 while true; do
