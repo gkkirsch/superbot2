@@ -969,3 +969,57 @@ export async function toggleSkillSchedule(skillId: string): Promise<{ enabled: b
   if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
+
+// --- Space skills ---
+
+export interface SpaceSkillInfo {
+  skillId: string
+  name: string
+  description: string
+  icon: string | null
+  hasSettings: boolean
+  hasSchedule: boolean
+}
+
+export interface SuperbotSkillManifest {
+  skillId: string
+  name: string
+  description: string
+  scope: 'space' | 'global'
+  icon: string | null
+  hasCard: boolean
+  hasSettings: boolean
+  hasSchedule: boolean
+}
+
+export async function fetchSpaceSkills(slug: string): Promise<SpaceSkillInfo[]> {
+  const data = await fetchJson<{ skills: SpaceSkillInfo[] }>(`/spaces/${encodeURIComponent(slug)}/skills`)
+  return data.skills
+}
+
+export async function attachSkillToSpace(slug: string, skillId: string): Promise<{ success: boolean; skills: string[] }> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/skills/${encodeURIComponent(skillId)}`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Failed to attach skill' }))
+    throw new Error(err.error || `API error: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function detachSkillFromSpace(slug: string, skillId: string): Promise<{ success: boolean; skills: string[] }> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}/skills/${encodeURIComponent(skillId)}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: 'Failed to detach skill' }))
+    throw new Error(err.error || `API error: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function fetchSkillManifests(): Promise<SuperbotSkillManifest[]> {
+  const data = await fetchJson<{ skills: SuperbotSkillManifest[] }>('/skill-manifests')
+  return data.skills
+}

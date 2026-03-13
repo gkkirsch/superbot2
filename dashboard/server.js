@@ -1262,7 +1262,7 @@ app.delete('/api/spaces/:slug/skills/:skillId', async (req, res) => {
   }
 })
 
-app.get('/api/superbot-skills', async (_req, res) => {
+app.get('/api/skill-manifests', async (_req, res) => {
   try {
     await getCardDefinitions()
     const skills = []

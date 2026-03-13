@@ -52,6 +52,10 @@ import {
   deleteBacklogItem,
   promoteBacklogItem,
   fetchLatestFiles,
+  fetchSpaceSkills,
+  attachSkillToSpace,
+  detachSkillFromSpace,
+  fetchSkillManifests,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
@@ -537,6 +541,47 @@ export function useToggleSkillSchedule() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['skill-schedules'] })
       qc.invalidateQueries({ queryKey: ['schedule'] })
+    },
+  })
+}
+
+// --- Space skills ---
+
+export function useSpaceSkills(slug: string | undefined) {
+  return useQuery({
+    queryKey: ['space-skills', slug],
+    queryFn: () => fetchSpaceSkills(slug!),
+    enabled: !!slug,
+    staleTime: 30_000,
+  })
+}
+
+export function useSkillManifests() {
+  return useQuery({
+    queryKey: ['skill-manifests'],
+    queryFn: fetchSkillManifests,
+    staleTime: 60_000,
+  })
+}
+
+export function useAttachSkill() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ slug, skillId }: { slug: string; skillId: string }) => attachSkillToSpace(slug, skillId),
+    onSuccess: (_data, { slug }) => {
+      qc.invalidateQueries({ queryKey: ['space-skills', slug] })
+      qc.invalidateQueries({ queryKey: ['spaces'] })
+    },
+  })
+}
+
+export function useDetachSkill() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ slug, skillId }: { slug: string; skillId: string }) => detachSkillFromSpace(slug, skillId),
+    onSuccess: (_data, { slug }) => {
+      qc.invalidateQueries({ queryKey: ['space-skills', slug] })
+      qc.invalidateQueries({ queryKey: ['spaces'] })
     },
   })
 }

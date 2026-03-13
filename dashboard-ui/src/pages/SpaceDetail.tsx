@@ -5,6 +5,7 @@ import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
 import { BacklogSection } from '@/features/BacklogSection'
+import { SpaceSkillsSection } from '@/features/SpaceSkillsSection'
 import { useSpace, useSpaceEscalations, useSessions } from '@/hooks/useSpaces'
 import { useQueryClient } from '@tanstack/react-query'
 import { startServer, stopServer, deployServer } from '@/lib/api'
@@ -372,6 +373,9 @@ export function SpaceDetail() {
                 </div>
               )}
             </section>
+
+            {/* Skills */}
+            <SpaceSkillsSection slug={slug ?? ''} />
 
             {/* Backlog */}
             <BacklogSection slug={slug ?? ''} />
