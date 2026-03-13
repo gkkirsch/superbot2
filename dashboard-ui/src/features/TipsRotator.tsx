@@ -70,7 +70,7 @@ const TIPS = [
   "Plugins extend Claude Code with new capabilities — install from the marketplace or build your own.",
   "Skills are reusable prompt workflows inside a plugin — invoked with /skill-name or via the Skill tool.",
   "The difference: skills are prompt workflows, agents are specialized AI workers with tool restrictions, MCP servers are external tool integrations.",
-  "Browse the marketplace at superchargeclaudecode.com — 85+ plugins available.",
+  "Browse the marketplace for plugins — 85+ plugins available.",
   "Add a custom marketplace: claude plugin marketplace add <url> — supports any GitHub-hosted plugin registry.",
   "Install a plugin: claude plugin install <name>@<marketplace> — it loads automatically in every session.",
   "Plugin credentials (API keys) are stored in macOS Keychain — set them in the Plugins section of the dashboard.",
@@ -129,13 +129,13 @@ const TIPS = [
   "Workers go idle between turns — send them a message to wake them up, idle ≠ done.",
 
   // Things to Ask Superbot to Do
-  "Ask superbot to run a social media engagement session: 'run a Facebook GTM session for hostreply'",
-  "Ask superbot to build a feature: 'add a search bar to the kidsvids app'",
-  "Ask superbot to research: 'research the top 5 Airbnb host communities on Facebook'",
+  "Ask superbot to run a social media engagement session: 'run a Facebook GTM session for my-project'",
+  "Ask superbot to build a feature: 'add a search bar to the my-webapp app'",
+  "Ask superbot to research: 'research the top 5 communities on Facebook for my niche'",
   "Ask superbot to draft content: 'write 5 tweet drafts about the new Claude Code features'",
-  "Ask superbot to deploy: 'deploy the hostreply app to Heroku'",
+  "Ask superbot to deploy: 'deploy the my-webapp app to Heroku'",
   "Ask superbot to monitor: 'check if Anthropic posted anything new in the last 6 hours'",
-  "Tell superbot to create a new space: 'create a space for my consulting website'",
+  "Tell superbot to create a new space: 'create a space for my SaaS website'",
   "Ask superbot to explain what's blocked: 'what's blocked and why?'",
 ]
 

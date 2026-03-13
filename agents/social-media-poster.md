@@ -156,7 +156,7 @@ bash "$QUEUE_SCRIPT" <platform> <space> '<draft text>' \
 Example:
 ```bash
 QUEUE_SCRIPT=$(ls ~/.claude/plugins/cache/*/social-media-approvals/*/skills/social-media-approvals/queue-post.sh 2>/dev/null | head -1)
-bash "$QUEUE_SCRIPT" facebook hostreply \
+bash "$QUEUE_SCRIPT" facebook my-project \
   'tbh the useReducer pattern is underrated for form state... way cleaner than useState with 10 fields' \
   --target '@ReactDevs Group' \
   --post-url 'https://facebook.com/groups/reactdevs/posts/123' \
@@ -194,7 +194,7 @@ Skill tool: skill = "superbot-browser"
 
 - Only ONE browser automation worker may use port 9222 at a time
 - At session start, always verify which profile/account you're using before engaging
-- **Facebook**: Verify commenting profile is **Kirschbaum Paige Garrett** (NOT Tami Browning). After ~6-8 comments, Facebook shows a "Switch profiles" modal. This is a hard session limit. Plan short sessions.
+- **Facebook**: Verify commenting profile is **your-posting-profile** (NOT your-personal-profile). After ~6-8 comments, Facebook shows a "Switch profiles" modal. This is a hard session limit. Plan short sessions.
 - After navigating or after DOM changes, always re-snapshot before interacting
 - Close non-essential tabs before CDP operations to avoid tab switching conflicts
 

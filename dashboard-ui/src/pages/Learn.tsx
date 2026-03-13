@@ -55,7 +55,7 @@ Spaces are project containers — the top-level organizational unit in superbot2
 ## What They Contain
 
 Each space has:
-- **A name and slug** — e.g., "Kid Videos" with slug \`kidsvids\`
+- **A name and slug** — e.g., "My App" with slug \`my-app\`
 - **An optional codebase directory** — links the space to a local code repo (e.g., \`~/dev/my-project\`)
 - **An optional dev server** — configuration for running a local development server (command, port, working directory)
 - **Projects** — scoped units of work within the space
@@ -65,7 +65,7 @@ Each space has:
 
 Spaces are stored at \`~/.superbot2/spaces/<slug>/\`. Each space directory contains:
 \`\`\`
-~/.superbot2/spaces/kidsvids/
+~/.superbot2/spaces/my-app/
 ├── space.json          # Space metadata (name, codeDir, devServer)
 ├── OVERVIEW.md         # What this space is about
 ├── knowledge/          # Space-specific knowledge files
@@ -315,7 +315,7 @@ Todos live in \`~/.superbot2/todos.json\` as a simple list:
 ## Planning Nudges
 
 When the orchestrator sees a new or updated todo, it may add a note like:
-- "This could be a project in the kidsvids space — would need X, Y, Z"
+- "This could be a project in the my-app space — would need X, Y, Z"
 - "Similar to what we did in project A — consider reusing that approach"
 
 These nudges appear as blue annotation cards below each todo in the dashboard.

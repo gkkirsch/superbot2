@@ -24,7 +24,7 @@ Reference for the superchargeclaudecode.com platform API.
 ```bash
 curl -X POST https://superchargeclaudecode.com/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "superbot2@superchargeclaudecode.com", "password": "<password>"}'
+  -d '{"email": "$SUPERCHARGE_EMAIL", "password": "$SUPERCHARGE_PASSWORD"}'
 ```
 
 Response includes a JWT token. Use it for all authenticated requests:
@@ -43,7 +43,7 @@ curl -X POST https://superchargeclaudecode.com/auth/signup \
 
 ## Account
 
-- **superbot2**: superbot2@superchargeclaudecode.com (trusted publisher, `isTrustedPublisher: true`)
+- Use the `SUPERCHARGE_EMAIL` credential configured in your plugin settings (trusted publishers have `isTrustedPublisher: true`)
 
 ## Plugins
 

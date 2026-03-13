@@ -145,7 +145,7 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
                         type="text"
                         value={ruleText}
                         onChange={(e) => setRuleText(e.target.value)}
-                        placeholder="Always approve plans for hostreply space"
+                        placeholder="Always approve plans for my-project space"
                         className="w-full bg-transparent text-xs text-parchment placeholder:text-stone/40 border border-sand/20 rounded-md px-3 py-2 focus:outline-none focus:border-sand/40 transition-colors"
                       />
                       <div className="flex items-center gap-2">

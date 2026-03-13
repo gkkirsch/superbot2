@@ -237,7 +237,7 @@ const ONBOARDING_MESSAGES: InboxMessage[] = [
   },
   {
     from: 'team-lead',
-    text: 'Your projects live in spaces — each one is a domain like kidsvids, supercharge, or hostreply. Check /spaces to see what\'s active, what\'s pending, and start or stop dev servers.',
+    text: 'Your projects live in spaces — each one is a domain like my-webapp, my-api, or my-saas. Check /spaces to see what\'s active, what\'s pending, and start or stop dev servers.',
     timestamp: '2026-01-01T00:00:02Z',
     read: true,
     type: 'message',

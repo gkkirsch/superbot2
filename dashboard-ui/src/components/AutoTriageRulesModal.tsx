@@ -166,7 +166,7 @@ export function AutoTriageRulesModal({ onClose }: Props) {
                     value={newRule}
                     onChange={e => setNewRule(e.target.value)}
                     onKeyDown={handleAddKey}
-                    placeholder="Always approve plans for hostreply space..."
+                    placeholder="Always approve plans for my-project space..."
                     className="flex-1 bg-transparent text-sm text-parchment placeholder:text-stone/30 focus:outline-none"
                   />
                   <button
