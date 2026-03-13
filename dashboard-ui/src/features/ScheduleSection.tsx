@@ -593,9 +593,12 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
     return <div className="h-20 rounded-lg bg-stone/5 animate-pulse" />
   }
 
-  const schedule = space
+  const rawSchedule = space
     ? (spaceQuery.data || [])
     : (globalQuery.data?.schedule || [])
+
+  // Main dashboard: only show global schedules (space schedules appear on space pages)
+  const schedule = space ? rawSchedule : rawSchedule.filter(j => !j.source || j.source === 'global')
 
   // Merge enabled skill schedules (only for global, not space)
   const enabledSkillJobs = space ? [] : (skillSchedules || [])
