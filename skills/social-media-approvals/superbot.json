@@ -1,0 +1,124 @@
+{
+  "name": "Social Media Approvals",
+  "description": "Review and approve social media drafts before posting",
+  "version": "0.1.0",
+  "scope": "space",
+  "icon": "message-circle",
+
+  "card": {
+    "dataSource": "data.jsonl",
+    "renderer": "default",
+    "itemSchema": {
+      "platform": { "type": "string", "label": "Platform" },
+      "draft": { "type": "string", "label": "Draft text", "multiline": true },
+      "target": { "type": "string", "label": "Target" },
+      "postUrl": { "type": "string", "label": "Post URL" },
+      "excerpt": { "type": "string", "label": "Excerpt" },
+      "context": { "type": "string", "label": "Context" },
+      "space": { "type": "string", "label": "Space" }
+    },
+    "display": {
+      "title": "platform",
+      "body": "draft",
+      "subtitle": "target",
+      "meta": "excerpt"
+    },
+    "statusFlow": ["pending", "approved", "rejected"],
+    "defaultFilter": { "status": "pending" },
+    "notifications": {
+      "onStatusChange": {
+        "approved": "Social media draft approved: {{platform}} — {{excerpt}}. Skill: {{skillId}}, Item: {{id}}. Ready to post.",
+        "rejected": "Social media draft rejected: {{platform}} — {{excerpt}}."
+      }
+    },
+    "actions": [
+      {
+        "id": "approve",
+        "label": "Approve",
+        "icon": "check",
+        "style": "primary",
+        "handler": "set-status",
+        "params": { "status": "approved" }
+      },
+      {
+        "id": "reject",
+        "label": "Reject",
+        "icon": "x",
+        "style": "danger",
+        "handler": "set-status",
+        "params": { "status": "rejected" }
+      },
+      {
+        "id": "rewrite",
+        "label": "Rewrite",
+        "icon": "pen-line",
+        "style": "secondary",
+        "handler": "edit-field",
+        "params": { "field": "draft" }
+      }
+    ]
+  },
+
+  "settings": {
+    "schema": {
+      "platforms": {
+        "type": "array",
+        "items": { "type": "string" },
+        "label": "Active platforms",
+        "description": "Which platforms to post on (e.g. facebook, x, instagram, linkedin)"
+      },
+      "accounts": {
+        "type": "array",
+        "items": { "type": "string" },
+        "label": "Account profiles",
+        "description": "Social media handles or page names to post as"
+      },
+      "targetAudiences": {
+        "type": "array",
+        "items": { "type": "string" },
+        "label": "Target audiences",
+        "description": "Groups, hashtags, or accounts to engage with"
+      },
+      "voiceRules": {
+        "type": "string",
+        "label": "Brand voice guidelines",
+        "description": "Tone, personality, and style rules for drafted content",
+        "multiline": true
+      },
+      "contentRules": {
+        "type": "string",
+        "label": "Content rules",
+        "description": "Dos and don'ts — topics to avoid, required disclosures, formatting rules",
+        "multiline": true
+      },
+      "maxDraftsPerSession": {
+        "type": "number",
+        "label": "Max drafts per session",
+        "description": "Maximum number of drafts to queue in one session",
+        "default": 12,
+        "min": 1,
+        "max": 50
+      }
+    }
+  },
+
+  "onboarding": {
+    "available": true,
+    "settings": ["platforms", "accounts", "targetAudiences", "voiceRules", "contentRules"],
+    "schedule": true,
+    "message": "Set up your social media workflow — configure which platforms and accounts to use, who to target, and your brand voice guidelines."
+  },
+
+  "schedule": {
+    "default": {
+      "time": "10:00",
+      "days": ["mon", "tue", "wed", "thu", "fri"]
+    },
+    "configurable": true
+  },
+
+  "agent": {
+    "type": "social-media-poster",
+    "model": "sonnet"
+  }
+}
