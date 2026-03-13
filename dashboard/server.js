@@ -368,6 +368,22 @@ app.get('/api/spaces/:slug', async (req, res) => {
   }
 })
 
+// --- DELETE /api/spaces/:slug ---
+
+app.delete('/api/spaces/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) {
+      return res.status(404).json({ error: 'Space not found' })
+    }
+    await rm(spaceDir, { recursive: true, force: true })
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // --- GET /api/spaces/:slug/overview ---
 
 app.get('/api/spaces/:slug/overview', async (req, res) => {

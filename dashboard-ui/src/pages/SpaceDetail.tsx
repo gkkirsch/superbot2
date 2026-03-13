@@ -1,18 +1,16 @@
-import { useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Check, FileText, FolderOpen, Loader2 } from 'lucide-react'
+import { useMemo, useState, useRef, useEffect } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Check, FileText, FolderOpen, Loader2, MoreVertical, Trash2, Play, Square, Rocket, ExternalLink, MessageCircleQuestion } from 'lucide-react'
 import { StatusBadge } from '@/features/TaskBadge'
 import { StatsBar } from '@/features/StatsBar'
 import { EscalationCard } from '@/features/EscalationCard'
 import { BacklogSection } from '@/features/BacklogSection'
 import { SpaceSkillsSection } from '@/features/SpaceSkillsSection'
 import { SpaceScheduleSection } from '@/features/SpaceScheduleSection'
-import { useSpace, useSpaceEscalations, useSessions } from '@/hooks/useSpaces'
+import { useSpace, useSpaceEscalations, useSessions, useServerStatus } from '@/hooks/useSpaces'
 import { useQueryClient } from '@tanstack/react-query'
-import { startServer, stopServer, deployServer } from '@/lib/api'
-import { useServerStatus } from '@/hooks/useSpaces'
-import { useState } from 'react'
-import { Play, Square, Rocket, ExternalLink, MessageCircleQuestion } from 'lucide-react'
+import { startServer, stopServer, deployServer, deleteSpace } from '@/lib/api'
+import { useFileViewer } from '@/contexts/FileViewerContext'
 import type { SpaceOverview } from '@/lib/types'
 
 function DetailSkeleton() {
@@ -149,6 +147,109 @@ function SpaceActions({ slug }: { slug: string }) {
   )
 }
 
+function DeleteConfirmDialog({ spaceName, onConfirm, onCancel, isDeleting }: {
+  spaceName: string
+  onConfirm: () => void
+  onCancel: () => void
+  isDeleting: boolean
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative bg-surface border border-border-custom rounded-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="font-heading text-lg text-parchment mb-2">Delete Space</h2>
+        <p className="text-sm text-stone leading-relaxed mb-6">
+          Are you sure you want to delete <strong className="text-parchment">{spaceName}</strong>? This will remove all projects, tasks, and data for this space. This action cannot be undone.
+        </p>
+        <div className="flex items-center justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="text-sm text-stone hover:text-parchment transition-colors px-3 py-1.5"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-1.5 text-sm font-medium rounded-md px-3 py-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-colors disabled:opacity-50"
+          >
+            {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {isDeleting ? 'Deleting...' : 'Delete Space'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SpaceMenu({ slug, spaceName }: { slug: string; spaceName: string }) {
+  const [open, setOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  async function handleDelete() {
+    setIsDeleting(true)
+    try {
+      await deleteSpace(slug)
+      queryClient.invalidateQueries({ queryKey: ['spaces'] })
+      navigate('/')
+    } catch (err) {
+      console.error('Failed to delete space:', err)
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="relative" ref={menuRef}>
+        <button
+          onClick={() => setOpen(v => !v)}
+          className={`p-1.5 rounded-md transition-colors ${open ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-stone hover:bg-surface'}`}
+          title="Space options"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+        {open && (
+          <div className="absolute right-0 top-full mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-lg py-1 min-w-[160px]">
+            <button
+              onClick={() => { setOpen(false); setShowDeleteConfirm(true) }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Space
+            </button>
+          </div>
+        )}
+      </div>
+      {showDeleteConfirm && (
+        <DeleteConfirmDialog
+          spaceName={spaceName}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+          isDeleting={isDeleting}
+        />
+      )}
+    </>
+  )
+}
+
 const PROJECTS_LIMIT = 5
 
 function ProjectsSection({ sortedProjects, space, slug }: { sortedProjects: string[]; space: SpaceOverview; slug: string }) {
@@ -212,6 +313,7 @@ export function SpaceDetail() {
   const { data, isLoading, error } = useSpace(slug ?? '')
   const { data: escalations } = useSpaceEscalations(slug ?? '')
   const { data: sessions } = useSessions(3, slug)
+  const { openFile } = useFileViewer()
 
   const space = data?.space
   const projects = data?.projects ?? []
@@ -287,6 +389,7 @@ export function SpaceDetail() {
                 completed={space!.taskCounts.completed}
               />
             </div>
+            <SpaceMenu slug={slug ?? ''} spaceName={space!.name} />
           </div>
           <SpaceActions slug={slug ?? ''} />
           {overviewText && (
@@ -348,14 +451,14 @@ export function SpaceDetail() {
                 <h2 className="text-xs text-stone uppercase tracking-wider mb-3">Library</h2>
                 <div className="divide-y divide-border-custom">
                   {knowledgeFiles.map((file) => (
-                    <Link
+                    <button
                       key={file.path}
-                      to="/knowledge"
-                      className="flex items-center gap-2 py-2 text-sm text-parchment/80 hover:text-sand transition-colors"
+                      onClick={() => openFile({ source: slug ?? '', filename: file.name })}
+                      className="flex items-center gap-2 py-2 text-sm text-parchment/80 hover:text-sand transition-colors w-full text-left"
                     >
                       <FileText className="h-3.5 w-3.5 text-stone/40 shrink-0" />
                       {file.name}
-                    </Link>
+                    </button>
                   ))}
                 </div>
               </section>

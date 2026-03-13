@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
+import { FileViewerProvider } from './contexts/FileViewerContext'
 import { Dashboard } from './pages/Dashboard'
 import { SpacesOverview } from './pages/SpacesOverview'
 import { SpaceDetail } from './pages/SpaceDetail'
@@ -46,7 +47,9 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AppContent />
+      <FileViewerProvider>
+        <AppContent />
+      </FileViewerProvider>
     </BrowserRouter>
   )
 }

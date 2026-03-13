@@ -45,6 +45,11 @@ export async function fetchSpace(slug: string): Promise<SpaceDetail> {
   return fetchJson<SpaceDetail>(`/spaces/${slug}`)
 }
 
+export async function deleteSpace(slug: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/spaces/${encodeURIComponent(slug)}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(`Failed to delete space: ${response.status}`)
+}
+
 export async function fetchSpaceOverview(slug: string): Promise<{ content: string; exists: boolean }> {
   return fetchJson<{ content: string; exists: boolean }>(`/spaces/${slug}/overview`)
 }

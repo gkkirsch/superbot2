@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ChevronRight, BookOpen } from 'lucide-react'
 import { useKnowledge } from '@/hooks/useSpaces'
-import { FileIcon, FileViewer } from '@/features/KnowledgeFileViewer'
+import { FileIcon } from '@/features/KnowledgeFileViewer'
+import { useFileViewer } from '@/contexts/FileViewerContext'
 import type { KnowledgeGroup } from '@/lib/types'
 
 function GroupItem({ group, onOpenFile }: { group: KnowledgeGroup; onOpenFile: (source: string, path: string) => void }) {
@@ -43,13 +44,10 @@ function GroupItem({ group, onOpenFile }: { group: KnowledgeGroup; onOpenFile: (
 
 export function KnowledgeSection() {
   const { data: groups, isLoading } = useKnowledge()
+  const { openFile } = useFileViewer()
 
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerFile, setViewerFile] = useState<{ source: string; filename: string } | null>(null)
-
-  const openFile = (source: string, filename: string) => {
-    setViewerFile({ source, filename })
-    setViewerOpen(true)
+  const handleOpenFile = (source: string, filename: string) => {
+    openFile({ source, filename })
   }
 
   if (isLoading) {
@@ -72,21 +70,10 @@ export function KnowledgeSection() {
   }
 
   return (
-    <>
-      <div className="space-y-2">
-        {groups.map((group) => (
-          <GroupItem key={group.source} group={group} onOpenFile={openFile} />
-        ))}
-      </div>
-
-      {viewerFile && (
-        <FileViewer
-          open={viewerOpen}
-          onClose={() => { setViewerOpen(false); setViewerFile(null) }}
-          source={viewerFile.source}
-          filename={viewerFile.filename}
-        />
-      )}
-    </>
+    <div className="space-y-2">
+      {groups.map((group) => (
+        <GroupItem key={group.source} group={group} onOpenFile={handleOpenFile} />
+      ))}
+    </div>
   )
 }

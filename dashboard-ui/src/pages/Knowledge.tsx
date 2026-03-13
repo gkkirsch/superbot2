@@ -8,7 +8,8 @@ import {
   useCreateKnowledge, useUploadKnowledge
 } from '@/hooks/useSpaces'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
-import { FileIcon, FileViewer } from '@/features/KnowledgeFileViewer'
+import { FileIcon } from '@/features/KnowledgeFileViewer'
+import { useFileViewer } from '@/contexts/FileViewerContext'
 import type { KnowledgeGroup } from '@/lib/types'
 
 function formatDate(iso?: string): string {
@@ -310,9 +311,7 @@ export function Knowledge() {
   const [filter, setFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
 
-  // Sheet state
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerFile, setViewerFile] = useState<{ source: string; filename: string; isUser?: boolean } | null>(null)
+  const { openFile: openGlobalFile } = useFileViewer()
 
   // Dialogs
   const [uploadOpen, setUploadOpen] = useState(false)
@@ -322,8 +321,7 @@ export function Knowledge() {
   const deleteMutation = useDeleteKnowledge()
 
   const openFile = (source: string, filename: string, isUser?: boolean) => {
-    setViewerFile({ source, filename, isUser })
-    setViewerOpen(true)
+    openGlobalFile({ source, filename, isUser })
   }
 
   const handleDelete = (source: string, filename: string) => {
@@ -333,12 +331,7 @@ export function Knowledge() {
   const confirmDelete = () => {
     if (!deleteTarget) return
     deleteMutation.mutate(deleteTarget, {
-      onSuccess: () => {
-        setDeleteTarget(null)
-        if (viewerFile?.source === deleteTarget.source && viewerFile?.filename === deleteTarget.filename) {
-          setViewerOpen(false)
-        }
-      },
+      onSuccess: () => setDeleteTarget(null),
     })
   }
 
@@ -556,17 +549,6 @@ export function Knowledge() {
           </div>
         )}
       </div>
-
-      {/* File viewer Sheet */}
-      {viewerFile && (
-        <FileViewer
-          open={viewerOpen}
-          onClose={() => { setViewerOpen(false); setViewerFile(null) }}
-          source={viewerFile.source}
-          filename={viewerFile.filename}
-          isUser={viewerFile.isUser}
-        />
-      )}
 
       {/* Upload Dialog */}
       <UploadDialog

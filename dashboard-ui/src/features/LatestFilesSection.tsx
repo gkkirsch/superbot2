@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { FileText, RefreshCw, FolderOpen } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLatestFiles } from '@/hooks/useSpaces'
-import { FileViewer } from '@/features/KnowledgeFileViewer'
+import { useFileViewer } from '@/contexts/FileViewerContext'
 import type { LatestFile } from '@/lib/api'
 
 function timeAgo(dateStr: string): string {
@@ -44,12 +44,10 @@ export function LatestFilesSection() {
   const [showAll, setShowAll] = useState(false)
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerFile, setViewerFile] = useState<LatestFile | null>(null)
+  const { openFile } = useFileViewer()
 
-  const openFile = (file: LatestFile) => {
-    setViewerFile(file)
-    setViewerOpen(true)
+  const handleOpenFile = (file: LatestFile) => {
+    openFile({ source: file.space, filename: file.filename, filePath: file.path })
   }
 
   const handleRefresh = () => {
@@ -81,41 +79,29 @@ export function LatestFilesSection() {
   }
 
   return (
-    <>
-      <div>
-        <div className="space-y-0.5">
-          {visible.map((file, i) => (
-            <FileRow key={`${file.space}:${file.path}:${i}`} file={file} onClick={() => openFile(file)} />
-          ))}
-        </div>
-        <div className="flex items-center justify-between mt-2 px-1">
-          {files.length > 10 && (
-            <button
-              onClick={() => setShowAll(!showAll)}
-              className="text-[10px] text-stone/50 hover:text-sand transition-colors"
-            >
-              {showAll ? 'Show fewer' : `Show all ${files.length}`}
-            </button>
-          )}
-          <button
-            onClick={handleRefresh}
-            className="text-stone/40 hover:text-sand transition-colors p-1 rounded ml-auto"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+    <div>
+      <div className="space-y-0.5">
+        {visible.map((file, i) => (
+          <FileRow key={`${file.space}:${file.path}:${i}`} file={file} onClick={() => handleOpenFile(file)} />
+        ))}
       </div>
-
-      {viewerFile && (
-        <FileViewer
-          open={viewerOpen}
-          onClose={() => { setViewerOpen(false); setViewerFile(null) }}
-          source={viewerFile.space}
-          filename={viewerFile.filename}
-          filePath={viewerFile.path}
-        />
-      )}
-    </>
+      <div className="flex items-center justify-between mt-2 px-1">
+        {files.length > 10 && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-[10px] text-stone/50 hover:text-sand transition-colors"
+          >
+            {showAll ? 'Show fewer' : `Show all ${files.length}`}
+          </button>
+        )}
+        <button
+          onClick={handleRefresh}
+          className="text-stone/40 hover:text-sand transition-colors p-1 rounded ml-auto"
+          title="Refresh"
+        >
+          <RefreshCw className={`h-3 w-3 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+    </div>
   )
 }
