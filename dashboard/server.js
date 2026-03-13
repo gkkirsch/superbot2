@@ -1220,6 +1220,23 @@ app.post('/api/spaces/:slug/skills/:skillId', async (req, res) => {
     // Create space skill-data directory
     const skillDataDir = join(spaceDir, 'skill-data', skillId)
     await mkdir(skillDataDir, { recursive: true })
+    // Auto-add skill's schedule to space schedule.json if it has one
+    if (manifest.schedule) {
+      const schedPath = join(spaceDir, 'schedule.json')
+      let schedule = []
+      try { schedule = JSON.parse(await readFile(schedPath, 'utf-8')) } catch {}
+      const jobName = `skill:${skillId}`
+      if (!schedule.some(j => j.name === jobName)) {
+        const sched = manifest.schedule.default
+        const job = { name: jobName, task: `Run ${manifest.name} skill` }
+        if (sched.time) job.time = sched.time
+        if (sched.times) job.times = sched.times
+        if (sched.days) job.days = sched.days
+        if (manifest.agent?.type) job.agentType = manifest.agent.type
+        schedule.push(job)
+        await writeFile(schedPath, JSON.stringify(schedule, null, 2))
+      }
+    }
     res.json({ success: true, skills: spaceJson.skills, onboarding: !!(manifest.onboarding) })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -1245,7 +1262,7 @@ app.delete('/api/spaces/:slug/skills/:skillId', async (req, res) => {
   }
 })
 
-app.get('/api/skills', async (_req, res) => {
+app.get('/api/superbot-skills', async (_req, res) => {
   try {
     await getCardDefinitions()
     const skills = []
@@ -1262,6 +1279,57 @@ app.get('/api/skills', async (_req, res) => {
       })
     }
     res.json({ skills })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Space schedules ---
+
+app.get('/api/spaces/:slug/schedule', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const schedPath = join(spaceDir, 'schedule.json')
+    let schedule = []
+    try { schedule = JSON.parse(await readFile(schedPath, 'utf-8')) } catch {}
+    res.json({ schedule })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.post('/api/spaces/:slug/schedule/jobs', async (req, res) => {
+  try {
+    const { slug } = req.params
+    const job = req.body
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    if (!job.name || !job.task) return res.status(400).json({ error: 'name and task required' })
+    const schedPath = join(spaceDir, 'schedule.json')
+    let schedule = []
+    try { schedule = JSON.parse(await readFile(schedPath, 'utf-8')) } catch {}
+    if (schedule.some(j => j.name === job.name)) return res.status(409).json({ error: 'Job already exists' })
+    schedule.push(job)
+    await writeFile(schedPath, JSON.stringify(schedule, null, 2))
+    res.json({ schedule })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.delete('/api/spaces/:slug/schedule/jobs/:name', async (req, res) => {
+  try {
+    const { slug, name } = req.params
+    const spaceDir = join(SPACES_DIR, slug)
+    if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
+    const schedPath = join(spaceDir, 'schedule.json')
+    let schedule = []
+    try { schedule = JSON.parse(await readFile(schedPath, 'utf-8')) } catch {}
+    schedule = schedule.filter(j => j.name !== name)
+    await writeFile(schedPath, JSON.stringify(schedule, null, 2))
+    res.json({ schedule })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -2024,7 +2092,26 @@ app.get('/api/schedule', async (_req, res) => {
   try {
     const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
     const lastRun = await readJsonFile(join(SUPERBOT_DIR, 'schedule-last-run.json'))
-    const schedule = config?.schedule || []
+    const globalSchedule = (config?.schedule || []).map(j => ({ ...j, source: 'global' }))
+
+    // Aggregate space schedules
+    const spaceSchedules = []
+    try {
+      const slugs = readdirSync(SPACES_DIR).filter(s => !s.startsWith('.'))
+      for (const slug of slugs) {
+        try {
+          const spaceSchedPath = join(SPACES_DIR, slug, 'schedule.json')
+          const spaceSched = JSON.parse(readFileSync(spaceSchedPath, 'utf-8'))
+          if (Array.isArray(spaceSched)) {
+            for (const job of spaceSched) {
+              spaceSchedules.push({ ...job, source: `space:${slug}`, space: slug })
+            }
+          }
+        } catch { /* no schedule.json */ }
+      }
+    } catch { /* no spaces dir */ }
+
+    const schedule = [...globalSchedule, ...spaceSchedules]
 
     // Check if scheduler launchd agent is loaded
     let schedulerRunning = false
