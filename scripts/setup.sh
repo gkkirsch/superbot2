@@ -22,11 +22,27 @@ backup_if_exists() {
 # --- Directory structure ---
 echo "Creating directory structure..."
 backup_if_exists "$DIR"
-mkdir -p "$DIR"/{knowledge,escalations/{untriaged,needs_human,resolved},daily,spaces,templates,skills,scripts}
+mkdir -p "$DIR"/{knowledge,escalations/{untriaged,needs_human,resolved},daily,spaces,templates,skills,scripts,skill-data}
+# Migrate skill-settings → skill-data (settings.json files)
+if [[ -d "$DIR/skill-settings" ]]; then
+  for settings_dir in "$DIR/skill-settings"/*/; do
+    [[ ! -d "$settings_dir" ]] && continue
+    skill_name=$(basename "$settings_dir")
+    target_dir="$DIR/skill-data/$skill_name"
+    if [[ -f "$settings_dir/settings.json" && ! -f "$target_dir/settings.json" ]]; then
+      mkdir -p "$target_dir"
+      cp "$settings_dir/settings.json" "$target_dir/settings.json"
+      echo "  Migrated settings: $skill_name"
+    fi
+  done
+fi
+
 CLAUDE_DIR="$DIR/.claude"
 mkdir -p "$CLAUDE_DIR"
-TEAM_DIR="$CLAUDE_DIR/teams/$SUPERBOT2_NAME"
-TASK_DIR="$CLAUDE_DIR/tasks/$SUPERBOT2_NAME"
+# Team and task dirs go in the GLOBAL ~/.claude/ directory — Claude Code looks there
+# when started with --team-name, regardless of any isolated config directory.
+TEAM_DIR="$HOME/.claude/teams/$SUPERBOT2_NAME"
+TASK_DIR="$HOME/.claude/tasks/$SUPERBOT2_NAME"
 backup_if_exists "$TEAM_DIR"
 mkdir -p "$TEAM_DIR/inboxes"
 mkdir -p "$TASK_DIR"
