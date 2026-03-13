@@ -17,6 +17,8 @@ const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations')
 const SESSIONS_DIR = join(SUPERBOT_DIR, 'sessions')
 const SUPERBOT_SKILLS_DIR = join(import.meta.dirname, '..', 'skills')
 const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
+const SKILL_DATA_DIR = join(SUPERBOT_DIR, 'skill-data')
+const LEGACY_SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 
 app.use(express.json({ limit: '50mb' }))
@@ -3937,9 +3939,6 @@ app.post('/api/cards/:skillId/refresh', async (req, res) => {
 })
 
 // --- Skill manifest & settings ---
-
-const SKILL_DATA_DIR = join(SUPERBOT_DIR, 'skill-data')
-const LEGACY_SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
 
 app.get('/api/skills/:skillId/manifest', async (req, res) => {
   try {
