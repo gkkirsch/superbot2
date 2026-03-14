@@ -355,6 +355,8 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [streamText, setStreamText] = useState('')
+  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const [toolInputJson, setToolInputJson] = useState('')
   const [showRefresh, setShowRefresh] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -421,6 +423,15 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             if (data.type === 'chunk') {
               accumulated += data.text
               setStreamText(accumulated)
+              setActiveTool(null)
+              setToolInputJson('')
+            } else if (data.type === 'tool_start') {
+              setActiveTool(data.name)
+              setToolInputJson('')
+            } else if (data.type === 'tool_input_delta') {
+              setToolInputJson(prev => prev + (data.partial_json || ''))
+            } else if (data.type === 'files_changed') {
+              setShowRefresh(true)
             } else if (data.type === 'done') {
               // Finalize
             } else if (data.type === 'error') {
@@ -434,19 +445,18 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
       // Finalize the assistant message
       if (accumulated.trim()) {
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: accumulated }])
-        // Check if assistant likely created/modified files
-        const lower = accumulated.toLowerCase()
-        if (lower.includes('created') || lower.includes('wrote') || lower.includes('saved') || lower.includes('updated') || lower.includes('modified') || lower.includes('skill.md')) {
-          setShowRefresh(true)
-        }
       }
       setStreamText('')
+      setActiveTool(null)
+      setToolInputJson('')
       setStreaming(false)
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: 'Connection error.' }])
       }
       setStreamText('')
+      setActiveTool(null)
+      setToolInputJson('')
       setStreaming(false)
     }
   }, [input, streaming, messages, selectedSkill])
@@ -457,6 +467,8 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: streamText + '\n\n*(stopped)*' }])
     }
     setStreamText('')
+    setActiveTool(null)
+    setToolInputJson('')
     setStreaming(false)
   }
 
@@ -501,10 +513,24 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
                       <MarkdownContent content={streamText} className="text-parchment/80" />
                       <span className="inline-block w-1.5 h-4 bg-sand/50 animate-pulse ml-0.5 align-text-bottom" />
                     </>
-                  ) : (
+                  ) : activeTool ? null : (
                     <div className="flex gap-1.5 items-center py-1">
                       <span className="text-xs text-stone/50">Thinking...</span>
                       <Loader2 className="h-3 w-3 text-stone/40 animate-spin" />
+                    </div>
+                  )}
+                  {activeTool && (
+                    <div className="flex gap-1.5 items-center py-1 mt-1">
+                      <Loader2 className="h-3 w-3 text-blue-400/70 animate-spin shrink-0" />
+                      <span className="text-xs text-blue-300/70">
+                        {activeTool === 'Write' && (() => { try { const p = JSON.parse(toolInputJson); return `Writing ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Writing file...' } })()}
+                        {activeTool === 'Edit' && (() => { try { const p = JSON.parse(toolInputJson); return `Editing ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Editing file...' } })()}
+                        {activeTool === 'Read' && (() => { try { const p = JSON.parse(toolInputJson); return `Reading ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Reading file...' } })()}
+                        {activeTool === 'Bash' && 'Running command...'}
+                        {activeTool === 'Glob' && 'Searching files...'}
+                        {activeTool === 'Grep' && 'Searching content...'}
+                        {!['Write', 'Edit', 'Read', 'Bash', 'Glob', 'Grep'].includes(activeTool) && `Using ${activeTool}...`}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1157,7 +1183,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
           </div>
         ) : (
           <>
-            <TestMessageList messages={testMessages} skillName={testSkillName} />
+            <TestMessageList messages={testMessages} skillName={testSkillName ?? undefined} />
             {testStreamText && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] overflow-hidden">

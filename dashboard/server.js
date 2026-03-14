@@ -6686,13 +6686,17 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
 
   const child = spawn(CLAUDE_BIN, [
     '-p',
-    '--dangerously-skip-permissions',
     '--output-format', 'stream-json',
     '--verbose',
-    '--append-system-prompt', systemSuffix
+    '--system-prompt', SKILL_CREATOR_PROMPT_PATH,
+    '--append-system-prompt', `${systemSuffix}\n\nReference file path (read when you need detailed spec info): ${SKILL_CREATOR_REFERENCE_PATH}`,
+    '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+    '--permission-mode', 'bypassPermissions',
+    '--model', 'sonnet'
   ], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    env
+    env,
+    cwd: draftPath
   })
 
   child.stdin.write(inputText)
@@ -6708,12 +6712,25 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
         const inner = event.event
         if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
           res.write(`data: ${JSON.stringify({ type: 'chunk', text: inner.delta.text })}\n\n`)
+        } else if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use') {
+          res.write(`data: ${JSON.stringify({ type: 'tool_start', name: inner.content_block.name })}\n\n`)
+        } else if (inner?.type === 'content_block_delta' && inner.delta?.type === 'input_json_delta') {
+          // Accumulate tool input JSON — forward partial input for display
+          res.write(`data: ${JSON.stringify({ type: 'tool_input_delta', partial_json: inner.delta.partial_json })}\n\n`)
+        } else if (inner?.type === 'content_block_stop') {
+          // Could be end of text or tool block — frontend handles accordingly
         }
       } else if (event.type === 'assistant') {
         const content = event.message?.content || []
         const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
         if (text) {
           res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`)
+        }
+      } else if (event.type === 'result') {
+        // Tool result from claude — forward file-changed signals
+        const toolName = event.tool_name || event.tool || ''
+        if (toolName === 'Write' || toolName === 'Edit') {
+          res.write(`data: ${JSON.stringify({ type: 'files_changed' })}\n\n`)
         }
       }
     } catch {
