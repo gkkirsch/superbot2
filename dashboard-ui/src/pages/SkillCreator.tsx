@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Tool Activity ---
@@ -1150,6 +1150,223 @@ function FileTree({ files, onFileClick }: {
   )
 }
 
+// --- Creation Modal ---
+
+function CreationModal({ open, onClose, onCreated }: {
+  open: boolean
+  onClose: () => void
+  onCreated: (name: string) => void
+}) {
+  const [view, setView] = useState<'choose' | 'fork'>('choose')
+  const [skills, setSkills] = useState<TesterSkill[]>([])
+  const [loading, setLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [forking, setForking] = useState(false)
+  const [creating, setCreating] = useState(false)
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setView('choose')
+      setSearchQuery('')
+      setForking(false)
+      setCreating(false)
+    }
+  }, [open])
+
+  // Fetch active skills when fork view is shown
+  useEffect(() => {
+    if (view !== 'fork') return
+    let cancelled = false
+    async function fetchSkills() {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/skill-tester/skills?source=active')
+        const data = await res.json()
+        if (!cancelled && data.ok) setSkills(data.skills)
+      } catch {}
+      if (!cancelled) setLoading(false)
+    }
+    fetchSkills()
+    return () => { cancelled = true }
+  }, [view])
+
+  const filteredSkills = skills.filter(s => {
+    const q = searchQuery.toLowerCase()
+    return s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
+  })
+
+  const handleStartFromScratch = async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      const res = await fetch('/api/skill-creator/new-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draftType: 'skill' }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        onCreated(data.name)
+      }
+    } catch {}
+    setCreating(false)
+  }
+
+  const handleForkSkill = async (skill: TesterSkill) => {
+    if (forking) return
+    setForking(true)
+    try {
+      const res = await fetch('/api/skill-creator/fork', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillId: skill.id, source: skill.source }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        onCreated(data.name)
+      }
+    } catch {}
+    setForking(false)
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="relative bg-ink border border-border-custom rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-custom">
+          <div className="flex items-center gap-2">
+            {view === 'fork' && (
+              <button
+                onClick={() => setView('choose')}
+                className="p-1 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors mr-1"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <h2 className="text-sm font-medium text-parchment">
+              {view === 'choose' ? 'Create New Skill' : 'Fork Existing Skill'}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        {view === 'choose' ? (
+          <div className="p-6 grid grid-cols-2 gap-4">
+            {/* Start from scratch */}
+            <button
+              onClick={handleStartFromScratch}
+              disabled={creating}
+              className="group flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed border-border-custom hover:border-sand/40 hover:bg-sand/5 transition-all text-center cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creating ? (
+                <Loader2 className="h-8 w-8 text-sand/50 animate-spin" />
+              ) : (
+                <div className="p-3 rounded-xl bg-sand/10 group-hover:bg-sand/15 transition-colors">
+                  <Plus className="h-6 w-6 text-sand" />
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-parchment mb-1">Start from scratch</p>
+                <p className="text-xs text-stone/50">Create a blank skill with a template SKILL.md</p>
+              </div>
+            </button>
+
+            {/* Fork existing */}
+            <button
+              onClick={() => setView('fork')}
+              className="group flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed border-border-custom hover:border-blue-400/40 hover:bg-blue-500/5 transition-all text-center cursor-pointer"
+            >
+              <div className="p-3 rounded-xl bg-blue-500/10 group-hover:bg-blue-500/15 transition-colors">
+                <Copy className="h-6 w-6 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-parchment mb-1">Fork existing</p>
+                <p className="text-xs text-stone/50">Copy an active skill and modify it</p>
+              </div>
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col" style={{ maxHeight: '60vh' }}>
+            {/* Search */}
+            <div className="px-4 pt-4 pb-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-stone/40" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search active skills..."
+                  autoFocus
+                  className="w-full pl-9 pr-3 py-2 rounded-lg bg-surface/30 border border-border-custom text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-stone/30 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Skill list */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 text-stone/40 animate-spin" />
+                </div>
+              ) : filteredSkills.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-xs text-stone/40">
+                    {searchQuery ? 'No skills match your search' : 'No active skills found'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1 mt-1">
+                  {filteredSkills.map(skill => (
+                    <button
+                      key={skill.id}
+                      onClick={() => handleForkSkill(skill)}
+                      disabled={forking}
+                      className="w-full text-left px-4 py-3 rounded-lg hover:bg-surface/40 transition-colors flex items-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="p-1.5 rounded-md bg-blue-500/10 shrink-0">
+                        <FileText className="h-3.5 w-3.5 text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-parchment truncate">{skill.name}</p>
+                        {skill.description && (
+                          <p className="text-xs text-stone/50 truncate mt-0.5">{skill.description}</p>
+                        )}
+                      </div>
+                      <Copy className="h-3.5 w-3.5 text-stone/30 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {forking && (
+                <div className="flex items-center justify-center gap-2 py-3 mt-2">
+                  <Loader2 className="h-4 w-4 text-sand animate-spin" />
+                  <span className="text-xs text-stone/50">Forking skill...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // --- Main Component ---
 
 export function SkillCreator() {
@@ -1162,6 +1379,9 @@ export function SkillCreator() {
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
   const [isPromoting, setIsPromoting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
+
+  // Creation modal state
+  const [showCreationModal, setShowCreationModal] = useState(false)
 
   // Two-panel tab state
   const [leftTab, setLeftTab] = useState<'chat' | 'files'>('chat')
@@ -1333,8 +1553,17 @@ export function SkillCreator() {
           )}
         </div>
 
-        {/* Right: Version, Save, Publish */}
+        {/* Right: New, Version, Save, Publish */}
         <div className="flex items-center gap-2">
+          {/* New button */}
+          <button
+            onClick={() => setShowCreationModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New
+          </button>
+
           {/* Version dropdown placeholder */}
           <select
             disabled
@@ -1475,6 +1704,18 @@ export function SkillCreator() {
           </div>
         </div>
       </div>
+
+      {/* Creation Modal */}
+      <CreationModal
+        open={showCreationModal}
+        onClose={() => setShowCreationModal(false)}
+        onCreated={(name) => {
+          setSelectedDraft(name)
+          setSelectedSkill({ id: name, name, description: '', source: 'drafts' })
+          setSkillsRefreshKey(k => k + 1)
+          setShowCreationModal(false)
+        }}
+      />
     </div>
   )
 }

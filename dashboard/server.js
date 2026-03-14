@@ -4963,6 +4963,42 @@ What this skill does and how to use it.
   }
 })
 
+// Fork an active skill into a new draft
+app.post('/api/skill-creator/fork', async (req, res) => {
+  try {
+    const { skillId, source } = req.body
+    if (!skillId) return res.status(400).json({ error: 'skillId required' })
+
+    // Find source skill path
+    const sourceDir = source === 'drafts'
+      ? join(SKILL_CREATOR_DRAFTS_DIR, skillId)
+      : join(SUPERBOT_DIR, 'skills', skillId)
+
+    // Check it exists
+    try { await stat(sourceDir) } catch { return res.status(404).json({ error: 'Skill not found' }) }
+
+    // Create new draft
+    const draftName = `fork-${skillId}-${Date.now()}`
+    const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
+
+    // Copy entire skill directory to new draft
+    await cp(sourceDir, draftPath, { recursive: true })
+
+    // Write draft metadata with forkedFrom
+    const metadataPath = join(draftPath, 'draft-metadata.json')
+    const metadata = {
+      forkedFrom: { skillId, source: source || 'active' },
+      createdAt: new Date().toISOString(),
+    }
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2))
+
+    res.json({ ok: true, name: draftName })
+  } catch (err) {
+    console.error('[skill-creator] fork error:', err)
+    res.status(500).json({ error: 'Failed to fork skill' })
+  }
+})
+
 // Chat endpoint
 app.post('/api/skill-creator/chat', async (req, res) => {
   try {
