@@ -3160,6 +3160,34 @@ async function fetchPluginMeta(name) {
   }
 }
 
+// Marketplace catalog cache (fetched directly from URL)
+let marketplaceCatalogCache = null
+let marketplaceCatalogFetchedAt = 0
+
+async function fetchMarketplaceCatalog() {
+  const now = Date.now()
+  if (marketplaceCatalogCache && (now - marketplaceCatalogFetchedAt) < 300_000) return marketplaceCatalogCache
+  try {
+    const url = `${MARKETPLACE_API_BASE}/api/marketplaces/superbot-marketplace/marketplace.json`
+    const response = await fetch(url)
+    if (!response.ok) return marketplaceCatalogCache || []
+    const data = await response.json()
+    const plugins = (data.plugins || []).map(p => ({
+      pluginId: p.source?.url || p.name,
+      name: p.name,
+      description: p.description || '',
+      version: p.version || '',
+      marketplaceName: data.name || 'superbot-marketplace',
+      keywords: p.keywords || [],
+    }))
+    marketplaceCatalogCache = plugins
+    marketplaceCatalogFetchedAt = now
+    return plugins
+  } catch {
+    return marketplaceCatalogCache || []
+  }
+}
+
 // Pre-fetch metadata for all plugins in background
 let metaPreFetched = false
 
@@ -3331,6 +3359,10 @@ app.get('/api/plugins', async (_req, res) => {
     // If CLI didn't return installed plugins, read directly from installed_plugins.json
     const rawInstalled = cliInstalled ?? await readInstalledPluginsDirect()
 
+    // Fetch marketplace catalog to cross-reference installed plugins + fill available
+    const catalog = await fetchMarketplaceCatalog()
+    const catalogByName = new Map(catalog.map(c => [c.name, c]))
+
     // For installed plugins, scan cache dirs for component counts + get keywords + credential status
     const installed = []
     for (const p of rawInstalled) {
@@ -3367,37 +3399,50 @@ app.get('/api/plugins', async (_req, res) => {
           if (missingBins.length > 0) hasMissingBins = true
         } catch { /* ignore */ }
       }
+      const catalogEntry = catalogByName.get(name)
       installed.push({
         ...p,
         pluginId: pid,
         name,
-        description: p.description || localDescription || '',
+        description: p.description || localDescription || catalogEntry?.description || '',
         installed: true,
         componentCounts,
-        keywords,
+        keywords: keywords.length > 0 ? keywords : (catalogEntry?.keywords || []),
+        marketplaceName: p.marketplaceName || catalogEntry?.marketplaceName || undefined,
         ...(hasUnconfiguredCredentials ? { hasUnconfiguredCredentials: true } : {}),
         ...(hasMissingBins ? { hasMissingBins: true } : {}),
       })
     }
 
-    // For available plugins, enrich with cached meta if available
-    const available = (cliAvailable || []).map(p => {
-      const cached = pluginMetaCache.get(p.name)
-      return {
-        ...p,
-        installed: false,
-        componentCounts: cached?.data?.componentCounts || null,
-        keywords: cached?.data?.keywords || [],
-      }
-    })
+    // Get available plugins: try CLI first, fall back to marketplace catalog (already fetched above)
+    let rawAvailable = cliAvailable || []
+    if (rawAvailable.length === 0) {
+      rawAvailable = catalog
+    }
+
+    // Build set of installed plugin names for dedup
+    const installedNames = new Set(installed.map(p => p.name))
+
+    // For available plugins, exclude already-installed ones and enrich with cached meta
+    const available = rawAvailable
+      .filter(p => !installedNames.has(p.name))
+      .map(p => {
+        const cached = pluginMetaCache.get(p.name)
+        return {
+          ...p,
+          installed: false,
+          componentCounts: cached?.data?.componentCounts || null,
+          keywords: cached?.data?.keywords || p.keywords || [],
+        }
+      })
 
     const allPlugins = [...installed, ...available]
     res.json({ plugins: allPlugins })
 
     // Trigger background pre-fetch of metadata for available plugins (once)
-    if (!metaPreFetched && cliAvailable) {
+    if (!metaPreFetched && rawAvailable.length > 0) {
       metaPreFetched = true
-      const names = cliAvailable.map(p => p.name)
+      const names = rawAvailable.filter(p => !installedNames.has(p.name)).map(p => p.name)
       // Fetch in batches of 5 to avoid overwhelming the API
       ;(async () => {
         for (let i = 0; i < names.length; i += 5) {
@@ -3528,6 +3573,8 @@ app.delete('/api/marketplaces/:name', async (req, res) => {
     // Clear plugin caches so the UI reflects the changes
     pluginMetaCache.clear()
     pluginDetailCache.clear()
+    marketplaceCatalogCache = null
+    marketplaceCatalogFetchedAt = 0
     metaPreFetched = false
 
     const count = uninstalledPlugins.length
@@ -3550,6 +3597,8 @@ app.post('/api/marketplaces/refresh', async (_req, res) => {
     // Clear caches so next /api/plugins call picks up new data
     pluginMetaCache.clear()
     pluginDetailCache.clear()
+    marketplaceCatalogCache = null
+    marketplaceCatalogFetchedAt = 0
     metaPreFetched = false
     res.json({ ok: true })
   } catch (err) {
