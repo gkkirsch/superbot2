@@ -3105,7 +3105,10 @@ app.delete('/api/hooks/:event', async (req, res) => {
 
 function runClaude(args) {
   return new Promise((resolve, reject) => {
-    execFile('claude', args, { timeout: 30_000, env: { ...process.env, CLAUDE_CONFIG_DIR: CLAUDE_DIR } }, (err, stdout, stderr) => {
+    // Remove CLAUDECODE to prevent "nested session" errors when the dashboard
+    // server itself runs inside a Claude Code session
+    const { CLAUDECODE, ...cleanEnv } = process.env
+    execFile('claude', args, { timeout: 30_000, maxBuffer: 10 * 1024 * 1024, env: { ...cleanEnv, CLAUDE_CONFIG_DIR: CLAUDE_DIR } }, (err, stdout, stderr) => {
       if (err) return reject(new Error(stderr || err.message))
       resolve(stdout.trim())
     })
@@ -3281,14 +3284,56 @@ app.get('/api/plugins/:name/files/{*filePath}', async (req, res) => {
   }
 })
 
+// Read installed plugins directly from installed_plugins.json (no CLI needed)
+async function readInstalledPluginsDirect() {
+  const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
+  try {
+    const raw = await readFile(installedPluginsPath, 'utf-8')
+    const data = JSON.parse(raw)
+    const plugins = data.plugins || {}
+    const result = []
+    for (const [key, entries] of Object.entries(plugins)) {
+      if (!Array.isArray(entries)) continue
+      for (const entry of entries) {
+        const name = key.split('@')[0]
+        result.push({
+          id: key,
+          pluginId: key,
+          name,
+          installPath: entry.installPath,
+          version: entry.version,
+          scope: entry.scope || 'user',
+          installedAt: entry.installedAt,
+          lastUpdated: entry.lastUpdated,
+        })
+      }
+    }
+    return result
+  } catch {
+    return []
+  }
+}
+
 app.get('/api/plugins', async (_req, res) => {
   try {
-    const output = await runClaude(['plugin', 'list', '--json', '--available'])
-    const data = JSON.parse(output)
+    // Try CLI first — returns both installed + available marketplace plugins
+    let cliInstalled = null
+    let cliAvailable = null
+    try {
+      const output = await runClaude(['plugin', 'list', '--json', '--available'])
+      const data = JSON.parse(output)
+      cliInstalled = data.installed || []
+      cliAvailable = data.available || []
+    } catch {
+      // CLI failed (e.g. truncated output, nested session) — fall back to direct file read
+    }
+
+    // If CLI didn't return installed plugins, read directly from installed_plugins.json
+    const rawInstalled = cliInstalled ?? await readInstalledPluginsDirect()
 
     // For installed plugins, scan cache dirs for component counts + get keywords + credential status
     const installed = []
-    for (const p of (data.installed || [])) {
+    for (const p of rawInstalled) {
       const pid = p.pluginId || p.id
       const name = p.name || (pid ? pid.split('@')[0] : '')
       const installPath = p.installPath
@@ -3336,7 +3381,7 @@ app.get('/api/plugins', async (_req, res) => {
     }
 
     // For available plugins, enrich with cached meta if available
-    const available = (data.available || []).map(p => {
+    const available = (cliAvailable || []).map(p => {
       const cached = pluginMetaCache.get(p.name)
       return {
         ...p,
@@ -3350,9 +3395,9 @@ app.get('/api/plugins', async (_req, res) => {
     res.json({ plugins: allPlugins })
 
     // Trigger background pre-fetch of metadata for available plugins (once)
-    if (!metaPreFetched) {
+    if (!metaPreFetched && cliAvailable) {
       metaPreFetched = true
-      const names = (data.available || []).map(p => p.name)
+      const names = cliAvailable.map(p => p.name)
       // Fetch in batches of 5 to avoid overwhelming the API
       ;(async () => {
         for (let i = 0; i < names.length; i += 5) {
@@ -3439,7 +3484,6 @@ app.delete('/api/marketplaces/:name', async (req, res) => {
     const uninstalledPlugins = []
     const installedJsonPaths = [
       join(CLAUDE_DIR, 'plugins', 'installed_plugins.json'),
-      join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json'),
     ]
     for (const jsonPath of installedJsonPaths) {
       try {
@@ -5541,7 +5585,7 @@ app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
 // My Skills — list installed plugins with author.name === 'superbot2'
 app.get('/api/skill-creator/my-skills', async (req, res) => {
   try {
-    const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+    const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
     let installedData
     try {
       const raw = await readFile(installedPluginsPath, 'utf-8')
@@ -5637,7 +5681,7 @@ app.post('/api/skill-creator/promote', async (req, res) => {
 
     // Copy draft to cache location
     const version = pluginJson.version || '1.0.0'
-    const cachePath = join(process.env.HOME, '.claude', 'plugins', 'cache', 'local', pluginName, version)
+    const cachePath = join(CLAUDE_DIR, 'plugins', 'cache', 'local', pluginName, version)
     await mkdir(cachePath, { recursive: true })
 
     // Recursive copy (safe, no shell involved)
@@ -5646,7 +5690,7 @@ app.post('/api/skill-creator/promote', async (req, res) => {
     try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
 
     // Register in installed_plugins.json
-    const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+    const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
     let installedData
     try {
       const raw = await readFile(installedPluginsPath, 'utf-8')
@@ -6949,12 +6993,12 @@ app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) =>
       await writeFile(join(draftPath, '.claude-plugin', 'plugin.json'), JSON.stringify(pluginJson, null, 2))
 
       const version = pluginJson.version || '1.0.0'
-      const cachePath = join(process.env.HOME, '.claude', 'plugins', 'cache', 'local', pluginName, version)
+      const cachePath = join(CLAUDE_DIR, 'plugins', 'cache', 'local', pluginName, version)
       await mkdir(cachePath, { recursive: true })
       await cp(draftPath, cachePath, { recursive: true })
       try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
 
-      const installedPluginsPath = join(process.env.HOME, '.claude', 'plugins', 'installed_plugins.json')
+      const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
       let installedData
       try {
         const raw = await readFile(installedPluginsPath, 'utf-8')
