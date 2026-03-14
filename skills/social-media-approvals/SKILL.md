@@ -43,6 +43,8 @@ Options:
 - `--excerpt` — excerpt from the original post
 - `--context` — context for why this engagement
 
+**Duplicate prevention:** When `--post-url` is provided, `queue-post.sh` checks `data.jsonl` for any existing entry with the same URL (case-insensitive, ignoring trailing slashes). If a match is found (regardless of status — pending, approved, posted, or rejected), the script prints `SKIPPED: already queued for <url>` and exits without creating a new entry. This prevents workers from commenting on the same post twice across sessions.
+
 ## Reading Approved Items
 
 Workers check for approved items at session start:

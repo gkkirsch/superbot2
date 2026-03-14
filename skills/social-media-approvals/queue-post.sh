@@ -55,6 +55,19 @@ SKILL_DATA_DIR="${SKILL_DATA_DIR:-${HOME}/.superbot2/spaces/${SPACE}/skill-data/
 mkdir -p "$SKILL_DATA_DIR"
 JSONL_FILE="$SKILL_DATA_DIR/data.jsonl"
 
+# Dedup check: skip if this post URL was already queued (any status)
+if [[ -n "$POST_URL" && -f "$JSONL_FILE" ]]; then
+  # Normalize: lowercase and strip trailing slashes
+  NORMALIZED_URL=$(echo "$POST_URL" | tr '[:upper:]' '[:lower:]' | sed 's:/*$::')
+  # Check each postUrl in the JSONL file (normalized the same way)
+  if jq -r '.postUrl // empty' "$JSONL_FILE" 2>/dev/null \
+    | tr '[:upper:]' '[:lower:]' | sed 's:/*$::' \
+    | grep -qFx "$NORMALIZED_URL"; then
+    echo "SKIPPED: already queued for $POST_URL"
+    exit 0
+  fi
+fi
+
 # Generate unique ID
 ID="post-$(date -u +%Y%m%d%H%M%S)-$$"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
