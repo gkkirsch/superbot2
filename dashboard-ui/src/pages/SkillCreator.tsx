@@ -82,6 +82,56 @@ function TestMessageList({ messages, skillName }: { messages: Array<{ id: string
   )
 }
 
+// --- Shared UI Components ---
+
+function EmptyState({ icon: Icon, message, subtitle }: { icon: React.ComponentType<{ className?: string }>; message: string; subtitle?: string }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center">
+        <Icon className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+        <p className="text-xs text-stone/40">{message}</p>
+        {subtitle && <p className="text-[10px] text-stone/30 mt-1">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const isDraft = source === 'drafts'
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+      isDraft ? 'bg-amber-500/15 text-amber-400/80' : 'bg-emerald-500/15 text-emerald-400/80'
+    }`}>
+      {isDraft ? 'Draft' : 'Active'}
+    </span>
+  )
+}
+
+function TabBar<T extends string>({ tabs, activeTab, onTabChange }: {
+  tabs: { key: T; label: string; icon: React.ComponentType<{ className?: string }> }[]
+  activeTab: T
+  onTabChange: (key: T) => void
+}) {
+  return (
+    <div className="flex shrink-0 border-b border-border-custom bg-ink/30">
+      {tabs.map(tab => (
+        <button
+          key={tab.key}
+          onClick={() => onTabChange(tab.key)}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+            activeTab === tab.key
+              ? 'border-sand text-parchment'
+              : 'border-transparent text-stone/50 hover:text-stone hover:border-stone/30'
+          }`}
+        >
+          <tab.icon className="h-3.5 w-3.5" />
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // --- Tool Activity ---
 
 function toolDisplayName(name: string): string {
@@ -213,13 +263,7 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill 
                 >
                   <div className="flex items-center gap-1.5">
                     <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{skill.name}</p>
-                    <span className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                      skill.source === 'drafts'
-                        ? 'bg-amber-500/15 text-amber-400/80'
-                        : 'bg-emerald-500/15 text-emerald-400/80'
-                    }`}>
-                      {skill.source === 'drafts' ? 'Draft' : 'Active'}
-                    </span>
+                    <SourceBadge source={skill.source} />
                   </div>
                   {skill.description && (
                     <p className="text-xs text-stone/60 mt-0.5 line-clamp-2">{skill.description}</p>
@@ -921,21 +965,9 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {!testSessionId ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <FolderOpen className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                <p className="text-xs text-stone/40">No active test session</p>
-                <p className="text-[10px] text-stone/30 mt-1">Start a test session from the Test tab to see files</p>
-              </div>
-            </div>
+            <EmptyState icon={FolderOpen} message="No active test session" subtitle="Start a test session from the Test tab to see files" />
           ) : testFiles.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <FolderOpen className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                <p className="text-xs text-stone/40">No files in test directory</p>
-                <p className="text-[10px] text-stone/30 mt-1">Files created during the test session will appear here</p>
-              </div>
-            </div>
+            <EmptyState icon={FolderOpen} message="No files in test directory" subtitle="Files created during the test session will appear here" />
           ) : (
             <div className="space-y-0.5">
               {testFiles.map(f => (
@@ -974,13 +1006,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
         </div>
         <div className="flex-1 min-h-0">
           {!testSessionId ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                <p className="text-xs text-stone/40">No active test session</p>
-                <p className="text-[10px] text-stone/30 mt-1">Start a test session from the Test tab</p>
-              </div>
-            </div>
+            <EmptyState icon={Globe} message="No active test session" subtitle="Start a test session from the Test tab" />
           ) : webContent ? (
             <iframe
               srcDoc={webContent}
@@ -989,13 +1015,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
               title="Web Preview"
             />
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                <p className="text-xs text-stone/40">No web content</p>
-                <p className="text-[10px] text-stone/30 mt-1">HTML files created in the test session will be previewed here</p>
-              </div>
-            </div>
+            <EmptyState icon={Globe} message="No web content" subtitle="HTML files created in the test session will be previewed here" />
           )}
         </div>
       </div>
@@ -1004,14 +1024,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
 
   // No skill selected -- empty state
   if (!selectedSkill) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-          <p className="text-xs text-stone/40">Select a skill to test</p>
-        </div>
-      </div>
-    )
+    return <EmptyState icon={FlaskConical} message='Select a skill from "My Skills" or click "New" to get started' />
   }
 
   // Idle -- show start button (and persisted messages if any)
@@ -1058,13 +1071,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
               <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-3" />
               <div className="flex items-center justify-center gap-2 mb-1">
                 <p className="text-sm text-parchment/80">{selectedSkill.name}</p>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                  selectedSkill.source === 'drafts'
-                    ? 'bg-amber-500/15 text-amber-400/80'
-                    : 'bg-emerald-500/15 text-emerald-400/80'
-                }`}>
-                  {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
-                </span>
+                <SourceBadge source={selectedSkill.source} />
               </div>
               <p className="text-xs text-stone/40 mb-4">Spin up an isolated Claude session with only this skill loaded</p>
               <button
@@ -1671,15 +1678,7 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
 
   // Empty state -- no tabs open
   if (tabPaths.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="text-center">
-          <FolderOpen className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-          <p className="text-sm text-stone/50">Open a file from the tree below</p>
-          <p className="text-xs text-stone/30 mt-1">Click any file to view and edit it here</p>
-        </div>
-      </div>
-    )
+    return <EmptyState icon={FolderOpen} message="Open a file from the tree below" subtitle="Click any file to view and edit it here" />
   }
 
   return (
@@ -2047,13 +2046,7 @@ export function SkillCreator() {
             <div className="flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-sand" />
               <span className="text-sm font-medium text-parchment">{selectedSkill.name}</span>
-              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                selectedSkill.source === 'drafts'
-                  ? 'bg-amber-500/15 text-amber-400/80'
-                  : 'bg-emerald-500/15 text-emerald-400/80'
-              }`}>
-                {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
-              </span>
+              <SourceBadge source={selectedSkill.source} />
             </div>
           )}
           {!selectedSkill && (
@@ -2070,12 +2063,13 @@ export function SkillCreator() {
           <button
             onClick={() => setShowCreationModal(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors"
+            title="Create a new skill or fork an existing one"
           >
             <Plus className="h-3.5 w-3.5" />
             New
           </button>
 
-          {/* Version dropdown */}
+          {/* Version dropdown — latest first */}
           {selectedDraft && versions.length > 0 ? (
             <select
               value={currentVersion ? `v${currentVersion}` : ''}
@@ -2083,19 +2077,20 @@ export function SkillCreator() {
                 if (e.target.value) handleRestoreVersion(e.target.value)
               }}
               className="px-2 py-1 rounded-md text-xs bg-surface/30 border border-border-custom text-parchment/70"
+              title="Restore a saved snapshot"
             >
-              {versions.map(v => (
+              <option value="" disabled>Current (working copy)</option>
+              {[...versions].reverse().map(v => (
                 <option key={v.number} value={`v${v.number}`}>
                   v{v.number} — {new Date(v.timestamp).toLocaleString()}
                 </option>
               ))}
-              <option value="" disabled>Current (unsaved)</option>
             </select>
-          ) : (
-            <span className="px-2 py-1 text-[10px] text-stone/40">No versions</span>
-          )}
+          ) : selectedDraft ? (
+            <span className="px-2 py-1 text-[10px] text-stone/40">No snapshots yet</span>
+          ) : null}
 
-          {/* Save button */}
+          {/* Snapshot button — saves a version snapshot of all files */}
           <button
             onClick={handleSaveVersion}
             disabled={!selectedDraft || isSaving}
@@ -2104,10 +2099,10 @@ export function SkillCreator() {
                 ? 'bg-surface/30 border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50'
                 : 'bg-surface/30 border-border-custom text-stone/40 cursor-not-allowed opacity-60'
             }`}
-            title={selectedDraft ? 'Save version' : 'Select a draft to save'}
+            title={selectedDraft ? 'Save a snapshot of all current files' : 'Select a draft first'}
           >
             <Save className="h-3.5 w-3.5" />
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving...' : 'Snapshot'}
           </button>
 
           {/* Export button */}
@@ -2133,7 +2128,7 @@ export function SkillCreator() {
               onClick={handlePromote}
               disabled={isPromoting}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Promote to Active"
+              title="Install this draft as an active skill"
             >
               <Upload className="h-3.5 w-3.5" />
               {isPromoting ? 'Publishing...' : 'Publish'}
@@ -2146,26 +2141,14 @@ export function SkillCreator() {
       <div className="flex-1 flex min-h-0">
         {/* LEFT PANEL */}
         <div className="flex-1 flex flex-col min-h-0 border-r border-border-custom">
-          {/* Tab bar: Chat | Files */}
-          <div className="flex shrink-0 border-b border-border-custom bg-ink/30">
-            {([
+          <TabBar
+            tabs={[
               { key: 'chat' as const, label: 'Chat', icon: MessageSquare },
               { key: 'files' as const, label: 'Files', icon: FileText },
-            ]).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setLeftTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                  leftTab === tab.key
-                    ? 'border-sand text-parchment'
-                    : 'border-transparent text-stone/50 hover:text-stone hover:border-stone/30'
-                }`}
-              >
-                <tab.icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
+            ]}
+            activeTab={leftTab}
+            onTabChange={setLeftTab}
+          />
 
           {/* Left panel content — both tabs stay mounted to preserve state */}
           <div className={`flex-1 flex flex-col min-h-0 ${leftTab === 'chat' ? '' : 'hidden'}`}>
@@ -2175,12 +2158,7 @@ export function SkillCreator() {
             {selectedSkill ? (
               <InlineFileEditor skill={selectedSkill} fileToOpen={selectedFilePath} refreshKey={fileEditorRefreshKey} />
             ) : (
-              <div className="flex-1 flex items-center justify-center px-4">
-                <div className="text-center">
-                  <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                  <p className="text-xs text-stone/40">Select a skill to view its files</p>
-                </div>
-              </div>
+              <EmptyState icon={FileText} message='Select a skill from "My Skills" to browse its files' />
             )}
           </div>
 
@@ -2192,28 +2170,16 @@ export function SkillCreator() {
 
         {/* RIGHT PANEL */}
         <div className="flex-1 flex flex-col min-h-0">
-          {/* Tab bar: Test | Console | Files | Web */}
-          <div className="flex shrink-0 border-b border-border-custom bg-ink/30">
-            {([
+          <TabBar
+            tabs={[
               { key: 'test' as const, label: 'Test', icon: Play },
               { key: 'console' as const, label: 'Console', icon: Terminal },
-              { key: 'files' as const, label: 'Files', icon: FileText },
+              { key: 'files' as const, label: 'Output', icon: FolderOpen },
               { key: 'web' as const, label: 'Web', icon: Globe },
-            ]).map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setRightTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                  rightTab === tab.key
-                    ? 'border-sand text-parchment'
-                    : 'border-transparent text-stone/50 hover:text-stone hover:border-stone/30'
-                }`}
-              >
-                <tab.icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            ))}
-          </div>
+            ]}
+            activeTab={rightTab}
+            onTabChange={setRightTab}
+          />
 
           {/* Right panel content -- always render SkillTester, it handles all tabs */}
           <div className="flex-1 flex flex-col min-h-0">

@@ -4826,6 +4826,28 @@ const SKILL_CREATOR_PROMPT_PATH = join(import.meta.dirname, 'skill-creator-promp
 const SKILL_CREATOR_REFERENCE_PATH = join(import.meta.dirname, 'skill-creator-reference.md')
 const CLAUDE_BIN = `${process.env.HOME}/.local/bin/claude`
 
+// --- Skill Creator Helpers ---
+
+function resolveDraftPath(draftName) {
+  const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, draftName)
+  if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+    return null
+  }
+  return draftPath
+}
+
+async function readDraftMetadata(draftPath) {
+  try {
+    return JSON.parse(await readFile(join(draftPath, 'draft-metadata.json'), 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+
+async function writeDraftMetadata(draftPath, meta) {
+  await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(meta, null, 2))
+}
+
 // Chat history persistence — append-only JSONL per draft
 async function appendDraftChatMessage(draftPath, message) {
   if (!draftPath) return
@@ -5398,10 +5420,8 @@ app.get('/api/skill-creator/drafts', async (req, res) => {
 // Get chat history for a draft
 app.get('/api/skill-creator/drafts/:name/chat-history', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     const messages = await readDraftChatHistory(draftPath)
     res.json({ ok: true, messages })
   } catch (err) {
@@ -5412,10 +5432,8 @@ app.get('/api/skill-creator/drafts/:name/chat-history', async (req, res) => {
 // List files in a draft (recursive)
 app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
 
     async function listFiles(dir, prefix = '') {
       const results = []
@@ -5449,10 +5467,8 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
 // Read a specific file from a draft
 app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     const relPath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
     const filePath = resolve(draftPath, relPath)
     if (!filePath.startsWith(draftPath + '/')) {
@@ -5475,10 +5491,8 @@ app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => 
 // Update a file in a draft (text content)
 app.put('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     const relPath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath
     const filePath = resolve(draftPath, relPath)
     if (!filePath.startsWith(draftPath + '/')) {
@@ -5498,10 +5512,8 @@ app.put('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => 
 // Upload a file to a draft
 app.post('/api/skill-creator/drafts/:name/files', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     const { files } = req.body
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: 'files array required' })
@@ -5529,10 +5541,8 @@ app.post('/api/skill-creator/drafts/:name/files', async (req, res) => {
 // Delete a draft
 app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     await rm(draftPath, { recursive: true, force: true })
     res.json({ ok: true })
   } catch (err) {
@@ -5543,18 +5553,14 @@ app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
 // Save current draft state as a new version snapshot
 app.post('/api/skill-creator/drafts/:name/versions', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     try { await stat(draftPath) } catch { return res.status(404).json({ error: 'Draft not found' }) }
 
     const label = req.body?.label || ''
 
     // Read or create metadata
-    const metaPath = join(draftPath, 'draft-metadata.json')
-    let meta = {}
-    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+    let meta = await readDraftMetadata(draftPath)
 
     if (!meta.versions) meta.versions = []
 
@@ -5585,7 +5591,7 @@ app.post('/api/skill-creator/drafts/:name/versions', async (req, res) => {
     }
     meta.versions.push(versionEntry)
     meta.currentVersion = nextVersion
-    await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    await writeDraftMetadata(draftPath, meta)
 
     res.json({ ok: true, version: versionEntry })
   } catch (err) {
@@ -5597,14 +5603,10 @@ app.post('/api/skill-creator/drafts/:name/versions', async (req, res) => {
 // List all saved versions for a draft
 app.get('/api/skill-creator/drafts/:name/versions', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
 
-    const metaPath = join(draftPath, 'draft-metadata.json')
-    let meta = {}
-    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+    let meta = await readDraftMetadata(draftPath)
 
     res.json({
       ok: true,
@@ -5619,10 +5621,8 @@ app.get('/api/skill-creator/drafts/:name/versions', async (req, res) => {
 // Restore a specific version to the working directory
 app.post('/api/skill-creator/drafts/:name/versions/:v/restore', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
 
     const versionDir = join(draftPath, 'versions', req.params.v)
     try { await stat(versionDir) } catch { return res.status(404).json({ error: 'Version not found' }) }
@@ -5643,14 +5643,12 @@ app.post('/api/skill-creator/drafts/:name/versions/:v/restore', async (req, res)
     }
 
     // Update metadata currentVersion
-    const metaPath = join(draftPath, 'draft-metadata.json')
-    let meta = {}
-    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+    let meta = await readDraftMetadata(draftPath)
 
     // Extract version number from "v1", "v2", etc.
     const vNum = parseInt(req.params.v.replace('v', ''))
     if (!isNaN(vNum)) meta.currentVersion = vNum
-    await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    await writeDraftMetadata(draftPath, meta)
 
     res.json({ ok: true, restoredVersion: req.params.v })
   } catch (err) {
@@ -5662,10 +5660,8 @@ app.post('/api/skill-creator/drafts/:name/versions/:v/restore', async (req, res)
 // Validate a draft plugin structure
 app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
 
     try {
       await stat(draftPath)
@@ -5902,10 +5898,8 @@ app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
 // Export a draft as a zip file download
 app.get('/api/skill-creator/drafts/:name/export', async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     try { await stat(draftPath) } catch { return res.status(404).json({ error: 'Draft not found' }) }
 
     const draftName = req.params.name
@@ -7186,10 +7180,8 @@ app.get('/api/agent/skills/drafts', agentAuth, async (req, res) => {
 // Read all files in a draft (returns map of path → content)
 app.get('/api/agent/skills/draft/:name', agentAuth, async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     try { await stat(draftPath) } catch {
       return res.status(404).json({ error: 'Draft not found' })
     }
@@ -7228,10 +7220,8 @@ app.put('/api/agent/skills/draft/:name/file', agentAuth, async (req, res) => {
     if (!filePath || typeof filePath !== 'string') return res.status(400).json({ error: 'path (string) required' })
     if (typeof content !== 'string') return res.status(400).json({ error: 'content (string) required' })
 
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     try { await stat(draftPath) } catch {
       return res.status(404).json({ error: 'Draft not found' })
     }
@@ -7263,10 +7253,8 @@ app.put('/api/agent/skills/draft/:name/file', agentAuth, async (req, res) => {
 // Delete a draft
 app.delete('/api/agent/skills/draft/:name', agentAuth, async (req, res) => {
   try {
-    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
-    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
-      return res.status(400).json({ error: 'Invalid draft name' })
-    }
+    const draftPath = resolveDraftPath(req.params.name)
+    if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     try { await stat(draftPath) } catch {
       return res.status(404).json({ error: 'Draft not found' })
     }
