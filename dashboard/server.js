@@ -6368,51 +6368,6 @@ app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   res.json({ ok: true })
 })
 
-// --- Static files ---
-// Always serve the built dashboard UI if it exists.
-// In dev mode the Vite HMR server on a separate port is the primary frontend,
-// but serving static here too means the API port works standalone (e.g. Electron).
-
-const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
-const INDEX_HTML = resolve(DIST_DIR, 'index.html')
-
-if (existsSync(DIST_DIR)) {
-  app.use(express.static(DIST_DIR))
-}
-
-// SPA fallback — serve index.html for any non-API route
-app.get('/{*path}', (_req, res) => {
-  if (existsSync(INDEX_HTML)) {
-    res.sendFile(INDEX_HTML, (err) => {
-      if (err) {
-        console.error('Failed to serve index.html:', err.message)
-        res.status(503).send(`
-          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
-            <h1>Dashboard Error</h1>
-            <p>Failed to serve the dashboard UI: ${err.message}</p>
-            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
-          </body></html>
-        `)
-      }
-    })
-  } else {
-    res.status(503).send(`
-      <html>
-        <head><title>Dashboard Not Built</title></head>
-        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
-          <h1>Dashboard UI Not Built</h1>
-          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
-          <p>Run this command to build it:</p>
-          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
-          <p>Then refresh this page.</p>
-          <hr>
-          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
-        </body>
-      </html>
-    `)
-  }
-})
-
 // --- Skill Tester ---
 
 // List installed skills from ~/.superbot2/skills/
@@ -7395,6 +7350,52 @@ app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) =>
     }
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// --- Static files ---
+// Always serve the built dashboard UI if it exists.
+// In dev mode the Vite HMR server on a separate port is the primary frontend,
+// but serving static here too means the API port works standalone (e.g. Electron).
+// IMPORTANT: This must come AFTER all API routes to avoid catching /api/* requests.
+
+const DIST_DIR = resolve(import.meta.dirname, '..', 'dashboard-ui', 'dist')
+const INDEX_HTML = resolve(DIST_DIR, 'index.html')
+
+if (existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR))
+}
+
+// SPA fallback — serve index.html for any non-API route
+app.get('/{*path}', (_req, res) => {
+  if (existsSync(INDEX_HTML)) {
+    res.sendFile(INDEX_HTML, (err) => {
+      if (err) {
+        console.error('Failed to serve index.html:', err.message)
+        res.status(503).send(`
+          <html><body style="font-family: system-ui; max-width: 600px; margin: 80px auto; padding: 20px;">
+            <h1>Dashboard Error</h1>
+            <p>Failed to serve the dashboard UI: ${err.message}</p>
+            <p>Try rebuilding: <code>cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm run build</code></p>
+          </body></html>
+        `)
+      }
+    })
+  } else {
+    res.status(503).send(`
+      <html>
+        <head><title>Dashboard Not Built</title></head>
+        <body style="font-family: system-ui, sans-serif; max-width: 600px; margin: 80px auto; padding: 20px;">
+          <h1>Dashboard UI Not Built</h1>
+          <p>The dashboard server is running, but the UI hasn't been built yet.</p>
+          <p>Run this command to build it:</p>
+          <pre style="background: #f0f0f0; padding: 12px; border-radius: 6px;">cd ${import.meta.dirname.replace(/'/g, "\\'")}/../dashboard-ui && npm install && npm run build</pre>
+          <p>Then refresh this page.</p>
+          <hr>
+          <p style="color: #666; font-size: 14px;">The API is still available at <code>/api/*</code> endpoints.</p>
+        </body>
+      </html>
+    `)
   }
 })
 

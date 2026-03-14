@@ -595,10 +595,8 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
         return
       }
 
-      setTestSessionId(data.testSessionId)
-      setTestSkillName(data.skillName)
-
-      // Capture file snapshot for change detection (drafts only)
+      // Capture file snapshot for change detection BEFORE setting session ID
+      // (setTestSessionId triggers polling effect which checks the snapshot ref)
       if (selectedSkill.source === 'drafts') {
         try {
           const filesRes = await fetch(`/api/skill-creator/drafts/${selectedSkill.id}/files`)
@@ -611,6 +609,9 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
         } catch {}
       }
       setFilesChanged(false)
+
+      setTestSessionId(data.testSessionId)
+      setTestSkillName(data.skillName)
 
       // Connect SSE
       const es = new EventSource(`/api/skill-creator/test/stream?testSessionId=${data.testSessionId}`)
@@ -1526,15 +1527,16 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
   // When fileToOpen changes, open that file as a new tab
   useEffect(() => {
     if (!fileToOpen) return
+    const file = fileToOpen // capture for closures (TS narrowing)
     let cancelled = false
 
-    setActiveTab(fileToOpen)
+    setActiveTab(file)
 
     // Check if tab already exists
     setOpenTabs(prev => {
-      if (prev.has(fileToOpen)) return prev
+      if (prev.has(file)) return prev
       const next = new Map(prev)
-      next.set(fileToOpen, { content: '', draft: '', loading: true, error: null })
+      next.set(file, { content: '', draft: '', loading: true, error: null })
       return next
     })
 
@@ -1543,7 +1545,7 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
       try {
         let content = ''
         if (isDraft) {
-          const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(fileToOpen)}`)
+          const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(file)}`)
           const data = await res.json()
           if (cancelled) return
           if (data.ok) {
@@ -1551,7 +1553,7 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
           } else {
             setOpenTabs(prev => {
               const next = new Map(prev)
-              next.set(fileToOpen, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
+              next.set(file, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
               return next
             })
             return
@@ -1561,13 +1563,13 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
           const res = await fetch(`/api/skill-tester/skill-files?name=${encodeURIComponent(skill.id)}&source=active`)
           const data = await res.json()
           if (cancelled) return
-          const file = (data.files || []).find((f: SkillFileEntry) => f.path === fileToOpen)
-          content = file?.content || ''
+          const matched = (data.files || []).find((f: SkillFileEntry) => f.path === file)
+          content = matched?.content || ''
         }
         if (!cancelled) {
           setOpenTabs(prev => {
             const next = new Map(prev)
-            next.set(fileToOpen, { content, draft: content, loading: false, error: null })
+            next.set(file, { content, draft: content, loading: false, error: null })
             return next
           })
         }
@@ -1575,7 +1577,7 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
         if (!cancelled) {
           setOpenTabs(prev => {
             const next = new Map(prev)
-            next.set(fileToOpen, { content: '', draft: '', loading: false, error: 'Failed to load file' })
+            next.set(file, { content: '', draft: '', loading: false, error: 'Failed to load file' })
             return next
           })
         }
@@ -1583,7 +1585,7 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
     }
 
     // Only fetch if this is a newly opened tab
-    if (!openTabs.has(fileToOpen)) {
+    if (!openTabs.has(file)) {
       fetchContent()
     }
 
