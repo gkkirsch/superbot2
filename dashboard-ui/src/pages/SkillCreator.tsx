@@ -2,6 +2,86 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft, Download } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
+// --- Shared Hooks ---
+
+function useClickOutside(ref: React.RefObject<HTMLElement | null>, isOpen: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [isOpen, ref, onClose])
+}
+
+// --- Shared Message Components ---
+
+function SkillInvokedBanner({ skillName }: { skillName?: string }) {
+  return (
+    <div className="flex justify-center my-2">
+      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
+        <FlaskConical className="h-4 w-4 text-emerald-400" />
+        <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
+        {skillName && <span className="text-xs text-emerald-400/60">{skillName}</span>}
+      </div>
+    </div>
+  )
+}
+
+function SystemBanner({ content }: { content: string }) {
+  return (
+    <div className="flex justify-center">
+      <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{content}</span>
+    </div>
+  )
+}
+
+function UserBubble({ content }: { content: string }) {
+  return (
+    <div className="flex justify-end">
+      <div className="max-w-[75%]">
+        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
+          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{content}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssistantBubble({ content, label, tools }: { content: string; label?: string; tools?: { name: string; input: Record<string, unknown> }[] }) {
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[85%] overflow-hidden">
+        {label && <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">{label}</span>}
+        <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
+          <MarkdownContent content={content} className="text-parchment/80" />
+        </div>
+        {tools && tools.length > 0 && <ToolIndicator tools={tools} />}
+      </div>
+    </div>
+  )
+}
+
+function TestMessageList({ messages, skillName }: { messages: Array<{ id: string; role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[] }>; skillName?: string }) {
+  return (
+    <>
+      {messages.map(msg => {
+        if (msg.role === 'system') {
+          if (msg.content === '__skill_invoked__') {
+            return <SkillInvokedBanner key={msg.id} skillName={skillName} />
+          }
+          return <SystemBanner key={msg.id} content={msg.content} />
+        }
+        if (msg.role === 'user') {
+          return <UserBubble key={msg.id} content={msg.content} />
+        }
+        return <AssistantBubble key={msg.id} content={msg.content} label="test session" tools={msg.tools} />
+      })}
+    </>
+  )
+}
+
 // --- Tool Activity ---
 
 function toolDisplayName(name: string): string {
@@ -161,15 +241,8 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill 
 function NewDraftDropdown({ onNewDraft }: { onNewDraft: (type: 'plugin' | 'skill') => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
+  const closeDropdown = useCallback(() => setOpen(false), [])
+  useClickOutside(ref, open, closeDropdown)
 
   return (
     <div ref={ref} className="relative">
@@ -967,47 +1040,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
             </div>
             {/* Persisted messages */}
             <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-              {testMessages.map(msg => {
-                if (msg.role === 'system') {
-                  if (msg.content === '__skill_invoked__') {
-                    return (
-                      <div key={msg.id} className="flex justify-center my-2">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-                          <FlaskConical className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
-                        </div>
-                      </div>
-                    )
-                  }
-                  return (
-                    <div key={msg.id} className="flex justify-center">
-                      <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{msg.content}</span>
-                    </div>
-                  )
-                }
-                if (msg.role === 'user') {
-                  return (
-                    <div key={msg.id} className="flex justify-end">
-                      <div className="max-w-[75%]">
-                        <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
-                          <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                }
-                return (
-                  <div key={msg.id} className="flex justify-start">
-                    <div className="max-w-[85%] overflow-hidden">
-                      <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
-                      <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
-                        <MarkdownContent content={msg.content} className="text-parchment/80" />
-                      </div>
-                      {msg.tools && msg.tools.length > 0 && <ToolIndicator tools={msg.tools} />}
-                    </div>
-                  </div>
-                )
-              })}
+              <TestMessageList messages={testMessages} />
             </div>
             {/* Start new session button */}
             <div className="shrink-0 px-4 pb-4 pt-2 border-t border-border-custom flex justify-center">
@@ -1117,49 +1150,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
           </div>
         ) : (
           <>
-            {testMessages.map(msg => {
-              if (msg.role === 'system') {
-                if (msg.content === '__skill_invoked__') {
-                  return (
-                    <div key={msg.id} className="flex justify-center my-2">
-                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-                        <FlaskConical className="h-4 w-4 text-emerald-400" />
-                        <span className="text-sm font-semibold text-emerald-300">Skill Invoked</span>
-                        {testSkillName && <span className="text-xs text-emerald-400/60">{testSkillName}</span>}
-                      </div>
-                    </div>
-                  )
-                }
-                return (
-                  <div key={msg.id} className="flex justify-center">
-                    <span className="text-[10px] text-stone/40 bg-surface/30 px-2 py-0.5 rounded-full">{msg.content}</span>
-                  </div>
-                )
-              }
-              if (msg.role === 'user') {
-                return (
-                  <div key={msg.id} className="flex justify-end">
-                    <div className="max-w-[75%]">
-                      <div className="rounded-2xl rounded-br-md px-4 py-2.5 bg-[rgba(180,160,120,0.15)]">
-                        <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-              // assistant
-              return (
-                <div key={msg.id} className="flex justify-start">
-                  <div className="max-w-[85%] overflow-hidden">
-                    <span className="text-[10px] text-stone/55 ml-1 mb-0.5 block">test session</span>
-                    <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-[rgba(120,140,160,0.12)] overflow-hidden min-w-0 w-full">
-                      <MarkdownContent content={msg.content} className="text-parchment/80" />
-                    </div>
-                    {msg.tools && msg.tools.length > 0 && <ToolIndicator tools={msg.tools} />}
-                  </div>
-                </div>
-              )
-            })}
+            <TestMessageList messages={testMessages} skillName={testSkillName} />
             {testStreamText && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] overflow-hidden">
@@ -1823,16 +1814,8 @@ export function SkillCreator() {
   const skillsDropdownRef = useRef<HTMLDivElement>(null)
 
   // Close skills dropdown when clicking outside
-  useEffect(() => {
-    if (!skillsDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (skillsDropdownRef.current && !skillsDropdownRef.current.contains(e.target as Node)) {
-        setSkillsDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [skillsDropdownOpen])
+  const closeSkillsDropdown = useCallback(() => setSkillsDropdownOpen(false), [])
+  useClickOutside(skillsDropdownRef, skillsDropdownOpen, closeSkillsDropdown)
 
   // Persist selectedDraft to localStorage
   useEffect(() => {
@@ -1844,6 +1827,39 @@ export function SkillCreator() {
       }
     } catch { /* ignore */ }
   }, [selectedDraft])
+
+  // Reconstruct selectedSkill from persisted selectedDraft on mount
+  useEffect(() => {
+    if (selectedDraft && !selectedSkill) {
+      // Fetch draft metadata to get the proper skill name/description
+      fetch(`/api/skill-creator/drafts`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.ok) return
+          const draft = data.drafts.find((d: { name: string }) => d.name === selectedDraft)
+          if (draft) {
+            // Read SKILL.md frontmatter for display name
+            fetch(`/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/file/${encodeURIComponent('SKILL.md')}`)
+              .then(r => r.json())
+              .then(fileData => {
+                if (fileData.ok && fileData.content) {
+                  const nameMatch = fileData.content.match(/^name:\s*(.+)$/m)
+                  const descMatch = fileData.content.match(/^description:\s*>?\s*\n?\s*(.+)$/m)
+                  const displayName = nameMatch?.[1]?.trim() || selectedDraft
+                  const description = descMatch?.[1]?.trim() || ''
+                  setSelectedSkill({ id: selectedDraft, name: displayName, description, source: 'drafts' })
+                } else {
+                  setSelectedSkill({ id: selectedDraft, name: selectedDraft, description: '', source: 'drafts' })
+                }
+              })
+              .catch(() => {
+                setSelectedSkill({ id: selectedDraft, name: selectedDraft, description: '', source: 'drafts' })
+              })
+          }
+        })
+        .catch(() => {})
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- mount-only reconstruction
 
   // Fetch versions when draft changes
   useEffect(() => {
