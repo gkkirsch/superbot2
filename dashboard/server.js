@@ -6602,8 +6602,8 @@ app.get('/api/skill-tester/skills', async (req, res) => {
 // Lightweight chat endpoint for the Chat panel — SSE streaming from claude -p
 // Unlike the full skill-creator/chat which uses persistent sessions + stream-json,
 // this is a simpler per-request SSE endpoint (same pattern as skill-tester/run)
-app.post('/api/skill-creator/chat-simple', (req, res) => {
-  const { message, skillName, source, history } = req.body
+app.post('/api/skill-creator/chat-simple', async (req, res) => {
+  const { message, skillName, source } = req.body
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'message required' })
   }
@@ -6667,24 +6667,25 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
     } catch {}
   }
 
-  // Build input: history + current message
-  let inputText = ''
-  if (Array.isArray(history) && history.length > 0) {
-    // Format as conversation turns for context
-    for (const msg of history) {
-      const role = msg.role === 'user' ? 'Human' : 'Assistant'
-      inputText += `${role}: ${msg.content}\n\n`
-    }
-    inputText += `Human: ${message.trim()}`
-  } else {
-    inputText = message.trim()
-  }
-
   if (skillContext) {
     systemSuffix += skillContext
   }
 
-  const child = spawn(CLAUDE_BIN, [
+  // Read claude session ID from draft metadata for conversation continuity
+  let claudeSessionId = null
+  if (draftDir) {
+    try {
+      const meta = await readDraftMetadata(draftDir)
+      claudeSessionId = meta.chatSessionId || null
+    } catch {}
+  }
+
+  // Save user message to chat history
+  if (draftDir) {
+    appendDraftChatMessage(draftDir, { role: 'user', content: message.trim(), timestamp: Date.now() })
+  }
+
+  const spawnArgs = [
     '-p',
     '--output-format', 'stream-json',
     '--verbose',
@@ -6693,14 +6694,23 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
     '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
     '--permission-mode', 'bypassPermissions',
     '--model', 'sonnet'
-  ], {
+  ]
+
+  // Resume existing claude session for conversation continuity
+  if (claudeSessionId) {
+    spawnArgs.push('--resume', claudeSessionId)
+  }
+
+  const child = spawn(CLAUDE_BIN, spawnArgs, {
     stdio: ['pipe', 'pipe', 'pipe'],
     env,
     cwd: draftPath
   })
 
-  child.stdin.write(inputText)
+  child.stdin.write(message.trim())
   child.stdin.end()
+
+  let accumulatedText = '' // Track full response for chat history persistence
 
   const rl = createInterface({ input: child.stdout })
 
@@ -6708,9 +6718,19 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
     if (!line.trim()) return
     try {
       const event = JSON.parse(line)
+
+      // Capture claude session ID from init event for future resumption
+      if (event.type === 'system' && event.session_id && draftDir) {
+        readDraftMetadata(draftDir).then(meta => {
+          meta.chatSessionId = event.session_id
+          return writeDraftMetadata(draftDir, meta)
+        }).catch(() => {})
+      }
+
       if (event.type === 'stream_event') {
         const inner = event.event
         if (inner?.type === 'content_block_delta' && inner.delta?.type === 'text_delta') {
+          accumulatedText += inner.delta.text
           res.write(`data: ${JSON.stringify({ type: 'chunk', text: inner.delta.text })}\n\n`)
         } else if (inner?.type === 'content_block_start' && inner.content_block?.type === 'tool_use') {
           res.write(`data: ${JSON.stringify({ type: 'tool_start', name: inner.content_block.name })}\n\n`)
@@ -6724,6 +6744,7 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
         const content = event.message?.content || []
         const text = content.filter(b => b.type === 'text').map(b => b.text).join('')
         if (text) {
+          accumulatedText += text
           res.write(`data: ${JSON.stringify({ type: 'chunk', text })}\n\n`)
         }
       } else if (event.type === 'result') {
@@ -6749,6 +6770,11 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
   } catch {}
 
   child.on('exit', (code) => {
+    // Save assistant response to chat history
+    if (draftDir && accumulatedText.trim()) {
+      appendDraftChatMessage(draftDir, { role: 'assistant', content: accumulatedText, timestamp: Date.now() })
+    }
+
     if (code !== 0) {
       const stderr = stderrChunks.join('')
       res.write(`data: ${JSON.stringify({ type: 'error', message: `Process exited with code ${code}`, stderr })}\n\n`)

@@ -362,6 +362,28 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const abortRef = useRef<AbortController | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Load persisted chat history when draft changes
+  useEffect(() => {
+    if (!selectedSkill?.id || selectedSkill.source !== 'drafts') {
+      setMessages([])
+      return
+    }
+    let cancelled = false
+    fetch(`/api/skill-creator/drafts/${encodeURIComponent(selectedSkill.id)}/chat-history`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled || !data.ok) return
+        const loaded = (data.messages || []).map((m: { role: string; content: string }) => ({
+          id: crypto.randomUUID(),
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }))
+        setMessages(loaded)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [selectedSkill?.id, selectedSkill?.source])
+
   // Auto-scroll on new messages / streaming
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -381,9 +403,6 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     const controller = new AbortController()
     abortRef.current = controller
 
-    // Build history (last 20 messages for context window)
-    const historyMsgs = [...messages, userMsg].slice(-20).map(m => ({ role: m.role, content: m.content }))
-
     try {
       const response = await fetch('/api/skill-creator/chat-simple', {
         method: 'POST',
@@ -392,7 +411,6 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
           message: text,
           skillName: selectedSkill?.id,
           source: selectedSkill?.source,
-          history: historyMsgs.slice(0, -1), // exclude current message (it's the `message` param)
         }),
         signal: controller.signal,
       })
