@@ -1,62 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
-import yaml from 'js-yaml'
-
-// --- Types ---
-
-interface Message {
-  id: string
-  role: 'user' | 'assistant' | 'tool'
-  content: string
-  tools?: { name: string; input: Record<string, unknown> }[]
-  timestamp: number
-}
-
-interface AttachedFile {
-  file: File
-  preview: string
-}
-
-const ACCEPTED_FILE_TYPES = [
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-  'application/pdf',
-  'text/plain', 'text/markdown',
-  'application/json',
-  'text/yaml', 'application/x-yaml',
-  'text/javascript', 'application/javascript',
-  'text/x-python',
-  'application/x-sh',
-]
-
-function isAcceptedFile(file: File): boolean {
-  if (ACCEPTED_FILE_TYPES.includes(file.type)) return true
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
-  return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.txt', '.md', '.json', '.yaml', '.yml', '.js', '.ts', '.py', '.sh'].includes(ext)
-}
-
-function isImageFile(file: File): boolean {
-  return file.type.startsWith('image/')
-}
-
-function formatCost(cost: number): string {
-  if (cost < 0.01) return '<$0.01'
-  return `$${cost.toFixed(2)}`
-}
-
-function parseFrontmatter(content: string): Record<string, unknown> | null {
-  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-  if (!match) return null
-  try {
-    const parsed = yaml.load(match[1])
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-    return null
-  } catch {
-    return null
-  }
-}
 
 // --- Tool Activity ---
 
@@ -111,38 +55,7 @@ function ToolIndicator({ tools }: { tools: { name: string; input: Record<string,
   )
 }
 
-// --- Image Lightbox ---
-
-function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <button onClick={onClose} className="absolute top-4 right-4 text-parchment/70 hover:text-parchment transition-colors">
-        <X className="h-6 w-6" />
-      </button>
-      <img src={src} alt={alt} className="max-h-[90vh] max-w-[90vw] rounded-lg" onClick={(e) => e.stopPropagation()} />
-    </div>
-  )
-}
-
 // --- My Skills Sidebar (now used as dropdown content) ---
-
-interface ValidationIssue {
-  file: string
-  field: string | null
-  message: string
-}
-
-interface ValidationResult {
-  valid: boolean
-  errors: ValidationIssue[]
-  warnings: ValidationIssue[]
-}
 
 function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill }: {
   onNewDraft: (type: 'plugin' | 'skill') => void
@@ -310,7 +223,7 @@ interface SkillFileEntry {
   content: string
 }
 
-function SkillFileViewer({ skill, onPromote, isPromoting }: { skill: TesterSkill; onPromote?: () => void; isPromoting?: boolean }) {
+function SkillFileViewer({ skill, onPromote, isPromoting, initialFilePath }: { skill: TesterSkill; onPromote?: () => void; isPromoting?: boolean; initialFilePath?: string | null }) {
   const [files, setFiles] = useState<SkillFileEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [activeFile, setActiveFile] = useState<string | null>(null)
@@ -329,7 +242,9 @@ function SkillFileViewer({ skill, onPromote, isPromoting }: { skill: TesterSkill
             setError(data.error)
           } else {
             setFiles(data.files || [])
-            setActiveFile(data.files?.[0]?.path || null)
+            // If an initialFilePath was passed and matches a file, select it
+            const matchedInitial = initialFilePath && (data.files || []).some((f: SkillFileEntry) => f.path === initialFilePath)
+            setActiveFile(matchedInitial ? initialFilePath : (data.files?.[0]?.path || null))
           }
         }
       } catch {
@@ -339,7 +254,7 @@ function SkillFileViewer({ skill, onPromote, isPromoting }: { skill: TesterSkill
     }
     fetchFiles()
     return () => { cancelled = true }
-  }, [skill.id, skill.source])
+  }, [skill.id, skill.source, initialFilePath])
 
   const activeContent = files.find(f => f.path === activeFile)?.content || ''
 
@@ -1238,31 +1153,15 @@ function FileTree({ files, onFileClick }: {
 // --- Main Component ---
 
 export function SkillCreator() {
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID())
-  const [messages, setMessages] = useState<Message[]>([])
-  const [streamingText, setStreamingText] = useState('')
-  const [isConnected, setIsConnected] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [totalCost, setTotalCost] = useState(0)
-  const [, setAttachedFiles] = useState<AttachedFile[]>([])
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [, setError] = useState<string | null>(null)
-  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
-  const [draftName, setDraftName] = useState<string | null>(null)
-  const [, setDraftFiles] = useState<{ path: string; type: string }[]>([])
-  const [isPromoting, setIsPromoting] = useState(false)
-  const [, setPromoteStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  // --- Kept state: used by v2 layout ---
+  const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
   const [selectedDraft, setSelectedDraft] = useState<string | null>(() => {
     try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
   })
-  const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
-  const [, setFrontmatter] = useState<Record<string, unknown> | null>(null)
-  const [, setValidation] = useState<ValidationResult | null>(null)
-  const [, setValidating] = useState(false)
-  const [, setValidationExpanded] = useState(false)
-  const [, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
-  const [, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
+  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
+  const [isPromoting, setIsPromoting] = useState(false)
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
 
   // Two-panel tab state
   const [leftTab, setLeftTab] = useState<'chat' | 'files'>('chat')
@@ -1271,32 +1170,6 @@ export function SkillCreator() {
   // Skills dropdown popover
   const [skillsDropdownOpen, setSkillsDropdownOpen] = useState(false)
   const skillsDropdownRef = useRef<HTMLDivElement>(null)
-
-  const chatContainerRef = useRef<HTMLDivElement>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
-
-  const initialScrollDoneRef = useRef(false)
-  const pendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
-  const draftMessagesRef = useRef<Map<string, Message[]>>(new Map())
-  const sessionIdRef = useRef(sessionId)
-  const selectedDraftRef = useRef(selectedDraft)
-  const selectedSkillRef = useRef(selectedSkill)
-  const messagesRef = useRef(messages)
-
-  // Auto-scroll to bottom
-  const scrollToBottom = useCallback(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight
-    })
-  }, [])
-
-  // Keep refs in sync with state (avoids stale closures in callbacks)
-  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
-  useEffect(() => { selectedDraftRef.current = selectedDraft }, [selectedDraft])
-  useEffect(() => { selectedSkillRef.current = selectedSkill }, [selectedSkill])
-  useEffect(() => { messagesRef.current = messages }, [messages])
 
   // Close skills dropdown when clicking outside
   useEffect(() => {
@@ -1321,220 +1194,47 @@ export function SkillCreator() {
     } catch { /* ignore */ }
   }, [selectedDraft])
 
-  // Restore chat history on mount when a persisted draft exists
+  // Fetch files for the selected draft (for FileTree)
   useEffect(() => {
-    if (!selectedDraft) return
-    let cancelled = false
-    async function restore() {
-      try {
-        const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/chat-history`)
-        const data = await res.json()
-        if (!cancelled && data.ok && data.messages.length > 0) {
-          setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
-            id: crypto.randomUUID(),
-            ...m,
-          })))
-        }
-      } catch { /* draft may have been deleted */ }
-    }
-    restore()
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Run only on mount
-
-  // Auto-scroll on new messages and streaming
-  useEffect(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-    if (!initialScrollDoneRef.current && messages.length > 0) {
-      initialScrollDoneRef.current = true
-      scrollToBottom()
+    const activeDraft = selectedDraft
+    if (!activeDraft) {
+      setSelectedDraftFiles([])
       return
     }
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150
-    if (nearBottom) scrollToBottom()
-  }, [messages, streamingText, scrollToBottom])
-
-  // SSE connection
-  useEffect(() => {
-    const es = new EventSource(`/api/skill-creator/stream?sessionId=${sessionId}`)
-    eventSourceRef.current = es
-
-    es.onopen = () => setIsConnected(true)
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'text') {
-          setStreamingText(prev => prev + data.text)
-          setIsProcessing(true)
-        } else if (data.type === 'tool_start') {
-          // Collect tool activity during streaming
-          pendingToolsRef.current = [...pendingToolsRef.current, { name: data.name, input: {} }]
-          setIsProcessing(true)
-        } else if (data.type === 'assistant') {
-          // Complete assistant message -- finalize any streaming text and add tools
-          setStreamingText(prev => {
-            const finalText = data.text || prev
-            const tools = data.tools || pendingToolsRef.current
-            pendingToolsRef.current = []
-            if (finalText.trim()) {
-              setMessages(msgs => [...msgs, {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                content: finalText,
-                tools: tools.length > 0 ? tools : undefined,
-                timestamp: Date.now(),
-              }])
-            }
-            return ''
-          })
-        } else if (data.type === 'result') {
-          // Turn complete -- finalize any remaining streaming text
-          setStreamingText(prev => {
-            if (prev.trim()) {
-              const tools = pendingToolsRef.current
-              pendingToolsRef.current = []
-              setMessages(msgs => [...msgs, {
-                id: crypto.randomUUID(),
-                role: 'assistant',
-                content: prev,
-                tools: tools.length > 0 ? tools : undefined,
-                timestamp: Date.now(),
-              }])
-            }
-            return ''
-          })
-          if (data.cost) setTotalCost(prev => prev + data.cost)
-          setIsProcessing(false)
-        } else if (data.type === 'error') {
-          setError(data.message || 'An error occurred')
-          setIsProcessing(false)
-        } else if (data.type === 'draft_created') {
-          setDraftName(data.name)
-          setDraftFiles([])
-          setPromoteStatus('idle')
-        } else if (data.type === 'process_exit') {
-          if (data.code !== 0) {
-            setError(`Agent process exited with code ${data.code}`)
-          }
-          setIsProcessing(false)
-        }
-      } catch {
-        // Skip unparseable events
-      }
-    }
-
-    es.onerror = () => {
-      setIsConnected(false)
-    }
-
-    return () => {
-      es.close()
-      eventSourceRef.current = null
-    }
-  }, [sessionId])
-
-  // File handling
-  const addFiles = useCallback((files: File[]) => {
-    const valid = files.filter(isAcceptedFile)
-    if (valid.length === 0) return
-    const newFiles = valid.map(file => ({
-      file,
-      preview: isImageFile(file) ? URL.createObjectURL(file) : '',
-    }))
-    setAttachedFiles(prev => [...prev, ...newFiles])
-  }, [])
-
-  // Paste handler
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items
-      if (!items) return
-      const files: File[] = []
-      for (const item of items) {
-        if (item.kind === 'file') {
-          const file = item.getAsFile()
-          if (file && isAcceptedFile(file)) files.push(file)
-        }
-      }
-      if (files.length > 0) addFiles(files)
-    }
-    document.addEventListener('paste', handlePaste)
-    return () => document.removeEventListener('paste', handlePaste)
-  }, [addFiles])
-
-  // Poll draft files when a draft is active
-  useEffect(() => {
-    if (!draftName) return
     let cancelled = false
     async function fetchFiles() {
       try {
-        const res = await fetch(`/api/skill-creator/drafts/${draftName}/files`)
+        const res = await fetch(`/api/skill-creator/drafts/${activeDraft}/files`)
         const data = await res.json()
-        if (!cancelled && data.ok) setDraftFiles(data.files)
+        if (!cancelled && data.ok) {
+          setSelectedDraftFiles(data.files)
+        }
       } catch {}
     }
     fetchFiles()
-    const interval = setInterval(fetchFiles, 3000)
+    const interval = setInterval(fetchFiles, 5000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [draftName, isProcessing])
+  }, [selectedDraft])
 
-  // Promote draft
+  // Promote draft to active
   const handlePromote = useCallback(async () => {
-    const promoteName = selectedDraft || draftName
-    if (!promoteName || isPromoting) return
+    if (!selectedDraft || isPromoting) return
     setIsPromoting(true)
-    setPromoteStatus('idle')
     try {
       const res = await fetch('/api/skill-creator/promote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftName: promoteName }),
+        body: JSON.stringify({ draftName: selectedDraft }),
       })
       const data = await res.json()
       if (data.ok) {
-        setPromoteStatus('success')
         setSkillsRefreshKey(k => k + 1)
-      } else {
-        setPromoteStatus('error')
-        setError(data.error || 'Promote failed')
       }
     } catch {
-      setPromoteStatus('error')
-      setError('Failed to promote draft')
+      // silently fail
     }
     setIsPromoting(false)
-  }, [selectedDraft, draftName, isPromoting])
-
-  // New session
-  const handleNewSession = useCallback(async () => {
-    // Kill existing session
-    try {
-      await fetch(`/api/skill-creator/session/${sessionId}`, { method: 'DELETE' })
-    } catch { /* ignore */ }
-
-    // Clean up
-    eventSourceRef.current?.close()
-    setMessages([])
-    setStreamingText('')
-    setTotalCost(0)
-    setIsProcessing(false)
-    setError(null)
-    pendingToolsRef.current = []
-    initialScrollDoneRef.current = false
-    setAttachedFiles(prev => {
-      prev.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview) })
-      return []
-    })
-    setDraftName(null)
-    setDraftFiles([])
-    setPromoteStatus('idle')
-
-    // New session
-    setSessionId(crypto.randomUUID())
-  }, [sessionId])
+  }, [selectedDraft, isPromoting])
 
   // Create a new blank draft (skill or plugin) without starting a chat
   const handleNewDraft = useCallback(async (draftType: 'plugin' | 'skill') => {
@@ -1548,45 +1248,17 @@ export function SkillCreator() {
       if (data.ok) {
         setSkillsRefreshKey(k => k + 1)
         setSelectedDraft(data.name)
-        setSelectedDraftType(draftType)
         setSelectedSkill({ id: data.name, name: data.name, description: '', source: 'drafts' })
         setSkillsDropdownOpen(false)
-      } else {
-        setError(data.error || 'Failed to create draft')
       }
     } catch {
-      setError('Failed to create draft')
+      // silently fail
     }
   }, [])
 
-  // When chat creates a draft, auto-select it
-  useEffect(() => {
-    if (draftName && !selectedDraft) {
-      setSelectedDraft(draftName)
-      if (!selectedSkill) {
-        setSelectedSkill({ id: draftName, name: draftName, description: '', source: 'drafts' })
-      }
-    }
-  }, [draftName, selectedDraft, selectedSkill])
-
   // Select a skill from the sidebar -- handles both drafts and active skills
-  const handleSelectSkill = useCallback(async (skill: TesterSkill) => {
-    const currentSkill = selectedSkillRef.current
-    const isDeselecting = currentSkill?.id === skill.id && currentSkill?.source === skill.source
-
-    // Save current draft messages
-    const currentDraft = selectedDraftRef.current
-    if (currentDraft && messagesRef.current.length > 0) {
-      draftMessagesRef.current.set(currentDraft, [...messagesRef.current])
-    }
-
-    // Reset state
-    setFrontmatter(null)
-    setPromoteStatus('idle')
-    setValidation(null)
-    setValidationExpanded(false)
-    setSelectedDraftType(null)
-    setPluginMeta(null)
+  const handleSelectSkill = useCallback((skill: TesterSkill) => {
+    const isDeselecting = selectedSkill?.id === skill.id && selectedSkill?.source === skill.source
 
     if (isDeselecting) {
       setSelectedSkill(null)
@@ -1600,153 +1272,15 @@ export function SkillCreator() {
 
     if (skill.source === 'drafts') {
       setSelectedDraft(skill.id)
-
-      // Reset chat state
-      setStreamingText('')
-      setIsProcessing(false)
-      setError(null)
-      pendingToolsRef.current = []
-      initialScrollDoneRef.current = false
-
-      // Kill existing session process
-      try {
-        await fetch(`/api/skill-creator/session/${sessionIdRef.current}`, { method: 'DELETE' })
-      } catch { /* ignore */ }
-      eventSourceRef.current?.close()
-
-      // Load messages from in-memory cache or fetch from backend
-      const cached = draftMessagesRef.current.get(skill.id)
-      if (cached && cached.length > 0) {
-        setMessages(cached)
-      } else {
-        try {
-          const res = await fetch(`/api/skill-creator/drafts/${skill.id}/chat-history`)
-          const data = await res.json()
-          if (data.ok && data.messages.length > 0) {
-            setMessages(data.messages.map((m: { role: string; content: string; tools?: { name: string; input: Record<string, unknown> }[]; timestamp: number }) => ({
-              id: crypto.randomUUID(),
-              ...m,
-            })))
-          } else {
-            setMessages([])
-          }
-        } catch {
-          setMessages([])
-        }
-      }
-
-      // New SSE session for this draft
-      setSessionId(crypto.randomUUID())
     } else {
       // Active skill -- clear draft state
       setSelectedDraft(null)
     }
-  }, [])
+  }, [selectedSkill])
 
-  // Fetch files for the selected draft
-  useEffect(() => {
-    const activeDraft = selectedDraft
-    if (!activeDraft) {
-      setSelectedDraftFiles([])
-      setFrontmatter(null)
-      setSelectedDraftType(null)
-      setPluginMeta(null)
-      return
-    }
-    let cancelled = false
-    async function fetchFiles() {
-      try {
-        const res = await fetch(`/api/skill-creator/drafts/${activeDraft}/files`)
-        const data = await res.json()
-        if (!cancelled && data.ok) {
-          setSelectedDraftFiles(data.files)
-
-          // Detect type from file structure
-          const hasPluginJson = data.files.some((f: { path: string }) => f.path === '.claude-plugin/plugin.json')
-          const hasRootSkillMd = data.files.some((f: { path: string }) => f.path === 'SKILL.md')
-          const detectedType = hasPluginJson ? 'plugin' : 'skill'
-          if (!cancelled) setSelectedDraftType(detectedType)
-
-          // For skill type: fetch root SKILL.md frontmatter
-          // For plugin type: fetch SKILL.md from skills/ subdirectory
-          if (hasRootSkillMd) {
-            try {
-              const skillRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/SKILL.md`)
-              const skillData = await skillRes.json()
-              if (!cancelled && skillData.ok) {
-                setFrontmatter(parseFrontmatter(skillData.content))
-              }
-            } catch {}
-          } else {
-            // Look for first SKILL.md in skills/ subdirectories
-            const skillFile = data.files.find((f: { path: string }) => f.path.startsWith('skills/') && f.path.endsWith('/SKILL.md'))
-            if (skillFile) {
-              try {
-                const skillRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/${skillFile.path}`)
-                const skillData = await skillRes.json()
-                if (!cancelled && skillData.ok) {
-                  setFrontmatter(parseFrontmatter(skillData.content))
-                }
-              } catch {}
-            } else {
-              if (!cancelled) setFrontmatter(null)
-            }
-          }
-
-          // For plugin type: fetch plugin.json metadata
-          if (hasPluginJson) {
-            try {
-              const pjRes = await fetch(`/api/skill-creator/drafts/${activeDraft}/file/.claude-plugin/plugin.json`)
-              const pjData = await pjRes.json()
-              if (!cancelled && pjData.ok) {
-                const pj = JSON.parse(pjData.content)
-                setPluginMeta({
-                  name: pj.name || '',
-                  version: pj.version || '',
-                  description: pj.description || '',
-                  author: typeof pj.author === 'string' ? pj.author : pj.author?.name || '',
-                })
-              }
-            } catch {}
-          } else {
-            if (!cancelled) setPluginMeta(null)
-          }
-        }
-      } catch {}
-    }
-    fetchFiles()
-    const interval = setInterval(fetchFiles, 5000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [selectedDraft])
-
-  // Validate a draft
-  const runValidation = useCallback(async (draft: string) => {
-    setValidating(true)
-    try {
-      const res = await fetch(`/api/skill-creator/drafts/${draft}/validate`, { method: 'POST' })
-      const data = await res.json()
-      if (data.ok) {
-        setValidation({ valid: data.valid, errors: data.errors, warnings: data.warnings })
-        if (!data.valid) setValidationExpanded(true)
-      }
-    } catch {
-      // silently fail
-    }
-    setValidating(false)
-  }, [])
-
-  // Auto-validate when draft is selected
-  useEffect(() => {
-    if (selectedDraft) {
-      runValidation(selectedDraft)
-    } else {
-      setValidation(null)
-      setValidationExpanded(false)
-    }
-  }, [selectedDraft, runValidation])
-
-  // Handle file click from file tree -- switch to Files tab in left panel
-  const handleFileTreeClick = useCallback((_path: string) => {
+  // Handle file click from file tree -- switch to Files tab and select file
+  const handleFileTreeClick = useCallback((path: string) => {
+    setSelectedFilePath(path)
     setLeftTab('files')
   }, [])
 
@@ -1799,15 +1333,8 @@ export function SkillCreator() {
           )}
         </div>
 
-        {/* Right: Version, Save, Publish, New, Status */}
+        {/* Right: Version, Save, Publish */}
         <div className="flex items-center gap-2">
-          {totalCost > 0 && (
-            <span className="text-[11px] text-stone/60 font-mono">{formatCost(totalCost)}</span>
-          )}
-          <span className={`flex items-center gap-1 text-[10px] ${isConnected ? 'text-moss/70' : 'text-ember/60'}`}>
-            {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-          </span>
-
           {/* Version dropdown placeholder */}
           <select
             disabled
@@ -1816,10 +1343,11 @@ export function SkillCreator() {
             <option>v1.0.0</option>
           </select>
 
-          {/* Save button */}
+          {/* Save button (disabled placeholder for version control) */}
           <button
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
-            title="Save"
+            disabled
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/40 cursor-not-allowed opacity-60"
+            title="Save version (coming soon)"
           >
             <Save className="h-3.5 w-3.5" />
             Save
@@ -1837,15 +1365,6 @@ export function SkillCreator() {
               {isPromoting ? 'Publishing...' : 'Publish'}
             </button>
           )}
-
-          {/* New session button */}
-          <button
-            onClick={handleNewSession}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-stone hover:text-parchment hover:bg-surface/40 border border-border-custom transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </button>
         </div>
       </div>
 
@@ -1877,13 +1396,11 @@ export function SkillCreator() {
           {/* Left panel content */}
           <div className="flex-1 flex flex-col min-h-0">
             {leftTab === 'chat' ? (
-              <>
-                <SkillChat selectedSkill={selectedSkill} />
-              </>
+              <SkillChat selectedSkill={selectedSkill} />
             ) : (
               /* Files tab content */
               selectedSkill ? (
-                <SkillFileViewer skill={selectedSkill} onPromote={handlePromote} isPromoting={isPromoting} />
+                <SkillFileViewer skill={selectedSkill} onPromote={handlePromote} isPromoting={isPromoting} initialFilePath={selectedFilePath} />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
                   <div className="text-center">
@@ -1958,11 +1475,6 @@ export function SkillCreator() {
           </div>
         </div>
       </div>
-
-      {/* Lightbox */}
-      {lightboxSrc && (
-        <ImageLightbox src={lightboxSrc} alt="Preview" onClose={() => setLightboxSrc(null)} />
-      )}
     </div>
   )
 }
