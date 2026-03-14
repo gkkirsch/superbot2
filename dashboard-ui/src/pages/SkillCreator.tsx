@@ -602,6 +602,8 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
   const [consoleLines, setConsoleLines] = useState<string[]>([])
   const [testFiles, setTestFiles] = useState<{ path: string; size: number; modified: number }[]>([])
   const [webContent, setWebContent] = useState<string | null>(null)
+  const [filesChanged, setFilesChanged] = useState(false)
+  const sessionFileSnapshotRef = useRef<string>('')
   const testChatRef = useRef<HTMLDivElement>(null)
   const consolePanelRef = useRef<HTMLDivElement>(null)
   const testInputRef = useRef<HTMLTextAreaElement>(null)
@@ -698,6 +700,20 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
 
       setTestSessionId(data.testSessionId)
       setTestSkillName(data.skillName)
+
+      // Capture file snapshot for change detection (drafts only)
+      if (selectedSkill.source === 'drafts') {
+        try {
+          const filesRes = await fetch(`/api/skill-creator/drafts/${selectedSkill.id}/files`)
+          const filesData = await filesRes.json()
+          if (filesData.ok) {
+            sessionFileSnapshotRef.current = JSON.stringify(
+              filesData.files.map((f: { path: string }) => f.path).sort()
+            )
+          }
+        } catch {}
+      }
+      setFilesChanged(false)
 
       // Connect SSE
       const es = new EventSource(`/api/skill-creator/test/stream?testSessionId=${data.testSessionId}`)
@@ -858,6 +874,35 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
     const interval = setInterval(fetchFiles, 3000)
     return () => { cancelled = true; clearInterval(interval) }
   }, [testSessionId, activeTab])
+
+  // Poll for draft file changes to show reload banner
+  useEffect(() => {
+    if (!testSessionId || !selectedSkill || selectedSkill.source !== 'drafts') return
+    if (!sessionFileSnapshotRef.current) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${selectedSkill.id}/files`)
+        const data = await res.json()
+        if (data.ok) {
+          const current = JSON.stringify(
+            data.files.map((f: { path: string }) => f.path).sort()
+          )
+          if (sessionFileSnapshotRef.current && current !== sessionFileSnapshotRef.current) {
+            setFilesChanged(true)
+          }
+        }
+      } catch {}
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [testSessionId, selectedSkill])
+
+  // Reload test session after draft file changes
+  const handleReloadSession = useCallback(() => {
+    setFilesChanged(false)
+    closeTestSession()
+    // Small delay to ensure cleanup, then restart
+    setTimeout(() => startTestSession(), 200)
+  }, [closeTestSession, startTestSession])
 
   // --- Console tab ---
   if (activeTab === 'console') {
@@ -1143,6 +1188,22 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
           </button>
         </div>
       </div>
+
+      {/* Reload banner when draft files change */}
+      {filesChanged && (
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between shrink-0">
+          <p className="text-xs text-amber-300">
+            <span className="font-medium">Files changed</span> — skill files have been updated
+          </p>
+          <button
+            onClick={handleReloadSession}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Reload
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={testChatRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
