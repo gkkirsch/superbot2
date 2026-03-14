@@ -590,7 +590,7 @@ function clearTestMessages(skill: TesterSkill) {
   } catch { /* ignore */ }
 }
 
-function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
+function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: TesterSkill | null; activeTab?: 'test' | 'console' | 'files' | 'web' }) {
   const [testSessionId, setTestSessionId] = useState<string | null>(null)
   const [testMessages, setTestMessages] = useState<TestMessage[]>(() =>
     selectedSkill ? loadPersistedTestMessages(selectedSkill) : []
@@ -599,7 +599,11 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   const [testInput, setTestInput] = useState('')
   const [testStatus, setTestStatus] = useState<'idle' | 'starting' | 'ready' | 'processing' | 'error'>('idle')
   const [testSkillName, setTestSkillName] = useState<string | null>(null)
+  const [consoleLines, setConsoleLines] = useState<string[]>([])
+  const [testFiles, setTestFiles] = useState<{ path: string; size: number; modified: number }[]>([])
+  const [webContent, setWebContent] = useState<string | null>(null)
   const testChatRef = useRef<HTMLDivElement>(null)
+  const consolePanelRef = useRef<HTMLDivElement>(null)
   const testInputRef = useRef<HTMLTextAreaElement>(null)
   const testEventSourceRef = useRef<EventSource | null>(null)
   const testPendingToolsRef = useRef<{ name: string; input: Record<string, unknown> }[]>([])
@@ -636,6 +640,14 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     if (nearBottom) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
   }, [testMessages, testStreamText])
 
+  // Auto-scroll console panel
+  useEffect(() => {
+    const el = consolePanelRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
+    if (nearBottom) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
+  }, [consoleLines])
+
   // Clean up test session on unmount or when skill changes
   useEffect(() => {
     return () => {
@@ -667,6 +679,9 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     testStreamTextRef.current = ''
     setTestStreamText('')
     testPendingToolsRef.current = []
+    setConsoleLines([])
+    setTestFiles([])
+    setWebContent(null)
 
     try {
       const res = await fetch('/api/skill-creator/test/start', {
@@ -693,11 +708,15 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
       es.onmessage = (event) => {
         try {
           const d = JSON.parse(event.data)
+          const timestamp = new Date().toLocaleTimeString()
+
           if (d.type === 'text') {
             testStreamTextRef.current += d.text
             setTestStreamText(testStreamTextRef.current)
+            setConsoleLines(prev => [...prev, `[${timestamp}] text: ${d.text.substring(0, 200)}`])
           } else if (d.type === 'tool_start') {
             testPendingToolsRef.current = [...testPendingToolsRef.current, { name: d.name, input: {} }]
+            setConsoleLines(prev => [...prev, `[${timestamp}] tool_start: ${d.name}`])
             // Prominent skill invocation banner
             if (d.name === 'Skill') {
               setTestMessages(msgs => [...msgs, {
@@ -714,6 +733,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
             if (d.tools) {
               testPendingToolsRef.current = d.tools
             }
+            setConsoleLines(prev => [...prev, `[${timestamp}] assistant snapshot (${d.text?.length || 0} chars)`])
           } else if (d.type === 'result') {
             const text = testStreamTextRef.current
             testPendingToolsRef.current = []
@@ -731,14 +751,17 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               })
             }
             setTestStatus('ready')
+            setConsoleLines(prev => [...prev, `[${timestamp}] result (turn complete)`])
           } else if (d.type === 'error') {
             setTestMessages(msgs => [...msgs, { id: crypto.randomUUID(), role: 'system', content: `Error: ${d.message}` }])
             setTestStatus('ready')
+            setConsoleLines(prev => [...prev, `[${timestamp}] ERROR: ${d.message}`])
           } else if (d.type === 'process_exit') {
             if (d.code !== 0) {
               setTestMessages(msgs => [...msgs, { id: crypto.randomUUID(), role: 'system', content: `Process exited with code ${d.code}` }])
             }
             setTestStatus('ready')
+            setConsoleLines(prev => [...prev, `[${timestamp}] process exit: code ${d.code}`])
           }
         } catch {}
       }
@@ -802,6 +825,164 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     }
     setTestMessages([])
   }, [selectedSkill])
+
+  // Poll for test session files when Files or Web tab is active and session exists
+  useEffect(() => {
+    if (!testSessionId) return
+    if (activeTab !== 'files' && activeTab !== 'web') return
+
+    let cancelled = false
+    async function fetchFiles() {
+      try {
+        const res = await fetch(`/api/skill-creator/test/${testSessionId}/files`)
+        const data = await res.json()
+        if (!cancelled && data.ok) {
+          setTestFiles(data.files || [])
+          // Check for HTML files for web preview
+          const htmlFile = (data.files || []).find((f: { path: string }) => f.path.endsWith('.html'))
+          if (htmlFile && activeTab === 'web') {
+            try {
+              const contentRes = await fetch(`/api/skill-creator/test/${testSessionId}/file-content?path=${encodeURIComponent(htmlFile.path)}`)
+              const contentData = await contentRes.json()
+              if (!cancelled && contentData.ok) {
+                setWebContent(contentData.content)
+              }
+            } catch {}
+          } else if (!htmlFile) {
+            setWebContent(null)
+          }
+        }
+      } catch {}
+    }
+    fetchFiles()
+    const interval = setInterval(fetchFiles, 3000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [testSessionId, activeTab])
+
+  // --- Console tab ---
+  if (activeTab === 'console') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="px-4 py-2.5 border-b border-border-custom shrink-0 flex items-center justify-between">
+          <p className="text-xs text-stone/50">Raw subprocess events</p>
+          <button onClick={() => setConsoleLines([])} className="text-xs text-stone/40 hover:text-stone transition-colors">Clear</button>
+        </div>
+        <div ref={consolePanelRef} className="flex-1 min-h-0 overflow-y-auto p-4">
+          <pre className="text-xs text-parchment/60 font-mono whitespace-pre-wrap">
+            {consoleLines.length > 0 ? consoleLines.join('\n') : (
+              testSessionId
+                ? 'Listening for events...'
+                : 'No output yet. Start a test session from the Test tab.'
+            )}
+          </pre>
+        </div>
+      </div>
+    )
+  }
+
+  // --- Files tab (test session temp dir) ---
+  if (activeTab === 'files') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="px-4 py-2.5 border-b border-border-custom shrink-0 flex items-center justify-between">
+          <p className="text-xs text-stone/50">Test session working directory</p>
+          {testSessionId && (
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/skill-creator/test/${testSessionId}/files`)
+                  const data = await res.json()
+                  if (data.ok) setTestFiles(data.files || [])
+                } catch {}
+              }}
+              className="text-xs text-stone/40 hover:text-stone transition-colors flex items-center gap-1"
+            >
+              <RefreshCw className="h-3 w-3" /> Refresh
+            </button>
+          )}
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
+          {!testSessionId ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <FolderOpen className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                <p className="text-xs text-stone/40">No active test session</p>
+                <p className="text-[10px] text-stone/30 mt-1">Start a test session from the Test tab to see files</p>
+              </div>
+            </div>
+          ) : testFiles.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <FolderOpen className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                <p className="text-xs text-stone/40">No files in test directory</p>
+                <p className="text-[10px] text-stone/30 mt-1">Files created during the test session will appear here</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {testFiles.map(f => (
+                <div
+                  key={f.path}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface/30 transition-colors"
+                >
+                  <FileText className="h-3.5 w-3.5 text-stone/40 shrink-0" />
+                  <span className="text-sm text-parchment/80 truncate flex-1">{f.path}</span>
+                  <span className="text-[10px] text-stone/40 shrink-0">
+                    {f.size < 1024 ? `${f.size} B` : f.size < 1048576 ? `${(f.size / 1024).toFixed(1)} KB` : `${(f.size / 1048576).toFixed(1)} MB`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // --- Web tab ---
+  if (activeTab === 'web') {
+    return (
+      <div className="flex-1 flex flex-col min-h-0">
+        <div className="px-4 py-2.5 border-b border-border-custom shrink-0 flex items-center justify-between">
+          <p className="text-xs text-stone/50">Web preview</p>
+          {webContent && (
+            <button
+              onClick={() => setWebContent(null)}
+              className="text-xs text-stone/40 hover:text-stone transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+        <div className="flex-1 min-h-0">
+          {!testSessionId ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                <p className="text-xs text-stone/40">No active test session</p>
+                <p className="text-[10px] text-stone/30 mt-1">Start a test session from the Test tab</p>
+              </div>
+            </div>
+          ) : webContent ? (
+            <iframe
+              srcDoc={webContent}
+              sandbox="allow-scripts"
+              className="w-full h-full border-0 bg-white"
+              title="Web Preview"
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                <p className="text-xs text-stone/40">No web content</p>
+                <p className="text-[10px] text-stone/30 mt-1">HTML files created in the test session will be previewed here</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // No skill selected -- empty state
   if (!selectedSkill) {
@@ -2035,35 +2216,9 @@ export function SkillCreator() {
             ))}
           </div>
 
-          {/* Right panel content */}
+          {/* Right panel content -- always render SkillTester, it handles all tabs */}
           <div className="flex-1 flex flex-col min-h-0">
-            {rightTab === 'test' ? (
-              <SkillTester selectedSkill={selectedSkill} />
-            ) : rightTab === 'console' ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                  <Terminal className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                  <p className="text-sm text-stone/50">Console</p>
-                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
-                </div>
-              </div>
-            ) : rightTab === 'files' ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                  <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                  <p className="text-sm text-stone/50">Files</p>
-                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                  <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                  <p className="text-sm text-stone/50">Web Preview</p>
-                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
-                </div>
-              </div>
-            )}
+            <SkillTester selectedSkill={selectedSkill} activeTab={rightTab} />
           </div>
         </div>
       </div>

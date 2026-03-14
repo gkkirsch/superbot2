@@ -6233,6 +6233,58 @@ app.delete('/api/skill-creator/test/:testSessionId', async (req, res) => {
   res.json({ ok: true })
 })
 
+// List files in test session temp directory
+app.get('/api/skill-creator/test/:testSessionId/files', async (req, res) => {
+  const session = SKILL_CREATOR_TEST_SESSIONS.get(req.params.testSessionId)
+  if (!session) return res.status(404).json({ error: 'Test session not found' })
+  if (!session.tempDir) return res.json({ ok: true, files: [] })
+
+  async function listFiles(dir, prefix = '') {
+    const results = []
+    try {
+      const entries = await readdir(dir, { withFileTypes: true })
+      for (const entry of entries) {
+        // Skip .claude directory internals and hidden files
+        if (entry.name.startsWith('.')) continue
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (entry.isDirectory()) {
+          results.push(...await listFiles(join(dir, entry.name), relPath))
+        } else {
+          const { size, mtimeMs } = await stat(join(dir, entry.name))
+          results.push({ path: relPath, size, modified: mtimeMs })
+        }
+      }
+    } catch {}
+    return results
+  }
+
+  const files = await listFiles(session.tempDir)
+  res.json({ ok: true, files })
+})
+
+// Serve a file from a test session temp directory
+app.get('/api/skill-creator/test/:testSessionId/file-content', async (req, res) => {
+  const session = SKILL_CREATOR_TEST_SESSIONS.get(req.params.testSessionId)
+  if (!session) return res.status(404).json({ error: 'Test session not found' })
+  if (!session.tempDir) return res.status(404).json({ error: 'No temp directory' })
+
+  const filePath = req.query.path
+  if (!filePath) return res.status(400).json({ error: 'path query parameter required' })
+
+  // Prevent path traversal
+  const resolved = resolve(session.tempDir, filePath)
+  if (!resolved.startsWith(session.tempDir)) {
+    return res.status(403).json({ error: 'Invalid path' })
+  }
+
+  try {
+    const content = await readFile(resolved, 'utf-8')
+    res.json({ ok: true, content })
+  } catch {
+    res.status(404).json({ error: 'File not found' })
+  }
+})
+
 // Delete session endpoint
 app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
   const { sessionId } = req.params
