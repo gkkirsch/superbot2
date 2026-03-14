@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import yaml from 'js-yaml'
@@ -546,14 +546,8 @@ function MarketplaceManager() {
     m.url === SUPERCHARGE_MARKETPLACE_URL || m.name === 'superbot-marketplace'
   ) ?? false
 
-  // Auto-add the Supercharge marketplace on first load if not already present
-  const autoAddedRef = useRef(false)
-  useEffect(() => {
-    if (!isLoading && !hasSupercharge && !autoAddedRef.current) {
-      autoAddedRef.current = true
-      doAdd(SUPERCHARGE_MARKETPLACE_URL)
-    }
-  }, [isLoading, hasSupercharge])
+  // Quick-add button shown in the modal when superbot-marketplace is missing
+  // (removed auto-add — user should control which marketplaces are registered)
 
   async function doAdd(url: string) {
     setAdding(true)
