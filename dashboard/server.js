@@ -5327,7 +5327,7 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
       }
       for (const entry of entries) {
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
-        if (entry.name === 'draft-metadata.json' || entry.name === 'chat-history.jsonl') continue
+        if (['draft-metadata.json', 'chat-history.jsonl', 'versions'].includes(entry.name)) continue
         if (entry.isDirectory()) {
           results.push({ path: relPath, type: 'directory' })
           const children = await listFiles(join(dir, entry.name), relPath)
@@ -5437,6 +5437,125 @@ app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// Save current draft state as a new version snapshot
+app.post('/api/skill-creator/drafts/:name/versions', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch { return res.status(404).json({ error: 'Draft not found' }) }
+
+    const label = req.body?.label || ''
+
+    // Read or create metadata
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    let meta = {}
+    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+
+    if (!meta.versions) meta.versions = []
+
+    // Determine next version number
+    const nextVersion = (meta.versions.length > 0
+      ? Math.max(...meta.versions.map(v => v.number)) + 1
+      : 1)
+
+    // Create version directory
+    const versionsDir = join(draftPath, 'versions')
+    const versionDir = join(versionsDir, `v${nextVersion}`)
+    await mkdir(versionDir, { recursive: true })
+
+    // Copy all working files (skip metadata, chat-history, versions/)
+    const entries = await readdir(draftPath, { withFileTypes: true })
+    for (const entry of entries) {
+      if (['draft-metadata.json', 'chat-history.jsonl', 'versions'].includes(entry.name)) continue
+      const src = join(draftPath, entry.name)
+      const dst = join(versionDir, entry.name)
+      await cp(src, dst, { recursive: true })
+    }
+
+    // Update metadata
+    const versionEntry = {
+      number: nextVersion,
+      label,
+      timestamp: new Date().toISOString(),
+    }
+    meta.versions.push(versionEntry)
+    meta.currentVersion = nextVersion
+    await writeFile(metaPath, JSON.stringify(meta, null, 2))
+
+    res.json({ ok: true, version: versionEntry })
+  } catch (err) {
+    console.error('[skill-creator] save version error:', err)
+    res.status(500).json({ error: 'Failed to save version' })
+  }
+})
+
+// List all saved versions for a draft
+app.get('/api/skill-creator/drafts/:name/versions', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    let meta = {}
+    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+
+    res.json({
+      ok: true,
+      versions: meta.versions || [],
+      currentVersion: meta.currentVersion || null,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Restore a specific version to the working directory
+app.post('/api/skill-creator/drafts/:name/versions/:v/restore', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+
+    const versionDir = join(draftPath, 'versions', req.params.v)
+    try { await stat(versionDir) } catch { return res.status(404).json({ error: 'Version not found' }) }
+
+    // Delete current working files (not metadata, chat-history, versions/)
+    const currentEntries = await readdir(draftPath, { withFileTypes: true })
+    for (const entry of currentEntries) {
+      if (['draft-metadata.json', 'chat-history.jsonl', 'versions'].includes(entry.name)) continue
+      await rm(join(draftPath, entry.name), { recursive: true, force: true })
+    }
+
+    // Copy version files back to working directory
+    const versionEntries = await readdir(versionDir, { withFileTypes: true })
+    for (const entry of versionEntries) {
+      const src = join(versionDir, entry.name)
+      const dst = join(draftPath, entry.name)
+      await cp(src, dst, { recursive: true })
+    }
+
+    // Update metadata currentVersion
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    let meta = {}
+    try { meta = JSON.parse(await readFile(metaPath, 'utf-8')) } catch {}
+
+    // Extract version number from "v1", "v2", etc.
+    const vNum = parseInt(req.params.v.replace('v', ''))
+    if (!isNaN(vNum)) meta.currentVersion = vNum
+    await writeFile(metaPath, JSON.stringify(meta, null, 2))
+
+    res.json({ ok: true, restoredVersion: req.params.v })
+  } catch (err) {
+    console.error('[skill-creator] restore version error:', err)
+    res.status(500).json({ error: 'Failed to restore version' })
   }
 })
 

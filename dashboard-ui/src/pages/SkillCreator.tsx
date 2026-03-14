@@ -1380,6 +1380,11 @@ export function SkillCreator() {
   const [isPromoting, setIsPromoting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
 
+  // Version control state
+  const [versions, setVersions] = useState<{ number: number; label: string; timestamp: string }[]>([])
+  const [currentVersion, setCurrentVersion] = useState<number | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
   // Creation modal state
   const [showCreationModal, setShowCreationModal] = useState(false)
 
@@ -1413,6 +1418,28 @@ export function SkillCreator() {
       }
     } catch { /* ignore */ }
   }, [selectedDraft])
+
+  // Fetch versions when draft changes
+  useEffect(() => {
+    if (!selectedDraft) {
+      setVersions([])
+      setCurrentVersion(null)
+      return
+    }
+    let cancelled = false
+    async function fetchVersions() {
+      try {
+        const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions`)
+        const data = await res.json()
+        if (!cancelled && data.ok) {
+          setVersions(data.versions || [])
+          setCurrentVersion(data.currentVersion || null)
+        }
+      } catch {}
+    }
+    fetchVersions()
+    return () => { cancelled = true }
+  }, [selectedDraft, skillsRefreshKey])
 
   // Fetch files for the selected draft (for FileTree)
   useEffect(() => {
@@ -1455,6 +1482,43 @@ export function SkillCreator() {
     }
     setIsPromoting(false)
   }, [selectedDraft, isPromoting])
+
+  // Save current state as a new version snapshot
+  const handleSaveVersion = useCallback(async () => {
+    if (!selectedDraft || isSaving) return
+    setIsSaving(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setVersions(prev => [...prev, data.version])
+        setCurrentVersion(data.version.number)
+      }
+    } catch {}
+    setIsSaving(false)
+  }, [selectedDraft, isSaving])
+
+  // Restore a saved version to the working directory
+  const handleRestoreVersion = useCallback(async (versionName: string) => {
+    if (!selectedDraft) return
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions/${versionName}/restore`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (data.ok) {
+        // Extract version number
+        const num = parseInt(versionName.replace('v', ''))
+        if (!isNaN(num)) setCurrentVersion(num)
+        // Force refresh files
+        setSkillsRefreshKey(k => k + 1)
+      }
+    } catch {}
+  }, [selectedDraft])
 
   // Create a new blank draft (skill or plugin) without starting a chat
   const handleNewDraft = useCallback(async (draftType: 'plugin' | 'skill') => {
@@ -1564,22 +1628,39 @@ export function SkillCreator() {
             New
           </button>
 
-          {/* Version dropdown placeholder */}
-          <select
-            disabled
-            className="px-2 py-1 rounded-md text-xs bg-surface/30 border border-border-custom text-stone/50 cursor-not-allowed"
-          >
-            <option>v1.0.0</option>
-          </select>
+          {/* Version dropdown */}
+          {selectedDraft && versions.length > 0 ? (
+            <select
+              value={currentVersion ? `v${currentVersion}` : ''}
+              onChange={(e) => {
+                if (e.target.value) handleRestoreVersion(e.target.value)
+              }}
+              className="px-2 py-1 rounded-md text-xs bg-surface/30 border border-border-custom text-parchment/70"
+            >
+              {versions.map(v => (
+                <option key={v.number} value={`v${v.number}`}>
+                  v{v.number} — {new Date(v.timestamp).toLocaleString()}
+                </option>
+              ))}
+              <option value="" disabled>Current (unsaved)</option>
+            </select>
+          ) : (
+            <span className="px-2 py-1 text-[10px] text-stone/40">No versions</span>
+          )}
 
-          {/* Save button (disabled placeholder for version control) */}
+          {/* Save button */}
           <button
-            disabled
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/40 cursor-not-allowed opacity-60"
-            title="Save version (coming soon)"
+            onClick={handleSaveVersion}
+            disabled={!selectedDraft || isSaving}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+              selectedDraft
+                ? 'bg-surface/30 border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50'
+                : 'bg-surface/30 border-border-custom text-stone/40 cursor-not-allowed opacity-60'
+            }`}
+            title={selectedDraft ? 'Save version' : 'Select a draft to save'}
           >
             <Save className="h-3.5 w-3.5" />
-            Save
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
 
           {/* Publish / Promote button */}
