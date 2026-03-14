@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft, Download } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft, Download, MoreVertical, PanelRightClose } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Shared Hooks ---
@@ -181,147 +181,6 @@ function ToolIndicator({ tools }: { tools: { name: string; input: Record<string,
           </span>
         )
       })}
-    </div>
-  )
-}
-
-// --- My Skills Sidebar (now used as dropdown content) ---
-
-function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill }: {
-  onNewDraft: (type: 'plugin' | 'skill') => void
-  refreshKey: number
-  selectedSkill: TesterSkill | null
-  onSelectSkill: (skill: TesterSkill) => void
-}) {
-  const [activeTab, setActiveTab] = useState<'drafts' | 'active'>('drafts')
-  const [skills, setSkills] = useState<TesterSkill[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    async function fetchSkills() {
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/skill-tester/skills?source=${activeTab}`)
-        const data = await res.json()
-        if (!cancelled && data.ok) setSkills(data.skills)
-      } catch {}
-      if (!cancelled) setLoading(false)
-    }
-    fetchSkills()
-    const interval = setInterval(fetchSkills, 30000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [activeTab, refreshKey])
-
-  return (
-    <div className="w-72 flex flex-col overflow-hidden">
-      <div className="px-4 pt-3 pb-2">
-        <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Skills</h2>
-      </div>
-
-      {/* Drafts / Active tabs */}
-      <div className="flex gap-1 px-3 pb-2">
-        {(['drafts', 'active'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              activeTab === tab
-                ? 'bg-sand/15 text-sand border border-sand/30'
-                : 'text-stone/60 hover:text-stone hover:bg-ink/80 border border-transparent'
-            }`}
-          >
-            {tab === 'drafts' ? 'Drafts' : 'Active'}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2">
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-4 w-4 text-stone/40 animate-spin" />
-          </div>
-        ) : skills.length === 0 ? (
-          <div className="flex items-center justify-center py-8 text-center px-2">
-            <p className="text-xs text-stone/40">
-              {activeTab === 'drafts' ? 'No drafts yet -- create your first one!' : 'No active skills installed'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {skills.map(skill => {
-              const isSelected = selectedSkill?.id === skill.id && selectedSkill?.source === skill.source
-              return (
-                <button
-                  key={skill.id}
-                  onClick={() => onSelectSkill(skill)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors cursor-pointer ${
-                    isSelected
-                      ? 'bg-blue-500/15 border border-blue-500/30'
-                      : 'hover:bg-surface/40 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <p className={`text-sm truncate ${isSelected ? 'text-blue-300' : 'text-parchment'}`}>{skill.name}</p>
-                    <SourceBadge source={skill.source} />
-                  </div>
-                  {skill.description && (
-                    <p className="text-xs text-stone/60 mt-0.5 line-clamp-2">{skill.description}</p>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="px-3 pb-3 pt-2">
-        <NewDraftDropdown onNewDraft={onNewDraft} />
-      </div>
-    </div>
-  )
-}
-
-function NewDraftDropdown({ onNewDraft }: { onNewDraft: (type: 'plugin' | 'skill') => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const closeDropdown = useCallback(() => setOpen(false), [])
-  useClickOutside(ref, open, closeDropdown)
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(prev => !prev)}
-        className="w-full px-3 py-2 rounded-lg border-2 border-dashed border-border-custom text-stone/50 hover:text-parchment hover:border-stone/30 transition-colors flex items-center justify-center gap-1.5 text-xs"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New
-        <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 right-0 mb-1 bg-ink border border-border-custom rounded-lg shadow-xl overflow-hidden z-10">
-          <button
-            onClick={() => { setOpen(false); onNewDraft('plugin') }}
-            className="w-full text-left px-3 py-2 text-xs text-parchment/80 hover:bg-surface/40 transition-colors flex items-center gap-2"
-          >
-            <Package className="h-3.5 w-3.5 text-blue-400" />
-            <div>
-              <span className="font-medium">New Plugin</span>
-              <p className="text-[10px] text-stone/50 mt-0.5">Full package with plugin.json + skills/</p>
-            </div>
-          </button>
-          <button
-            onClick={() => { setOpen(false); onNewDraft('skill') }}
-            className="w-full text-left px-3 py-2 text-xs text-parchment/80 hover:bg-surface/40 transition-colors flex items-center gap-2 border-t border-border-custom"
-          >
-            <FileText className="h-3.5 w-3.5 text-purple-400" />
-            <div>
-              <span className="font-medium">New Skill</span>
-              <p className="text-[10px] text-stone/50 mt-0.5">Standalone SKILL.md file</p>
-            </div>
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -1281,59 +1140,6 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
 
 // --- Collapsible File Tree ---
 
-function FileTree({ files, onFileClick }: {
-  files: { path: string; type: string }[]
-  onFileClick: (path: string) => void
-}) {
-  const [expanded, setExpanded] = useState(true)
-
-  if (files.length === 0) {
-    return (
-      <div className="px-3 py-2 border-t border-border-custom">
-        <button
-          onClick={() => setExpanded(prev => !prev)}
-          className="flex items-center gap-1.5 text-xs text-stone/50 hover:text-stone transition-colors w-full"
-        >
-          <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-          <FolderOpen className="h-3 w-3" />
-          <span>Files</span>
-        </button>
-        {expanded && (
-          <p className="text-[10px] text-stone/30 ml-5 mt-1">No files yet</p>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="border-t border-border-custom">
-      <button
-        onClick={() => setExpanded(prev => !prev)}
-        className="flex items-center gap-1.5 text-xs text-stone/60 hover:text-stone transition-colors w-full px-3 py-2"
-      >
-        <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
-        <FolderOpen className="h-3 w-3" />
-        <span>Files</span>
-        <span className="text-[10px] text-stone/30 ml-auto">{files.length}</span>
-      </button>
-      {expanded && (
-        <div className="px-2 pb-2 space-y-0.5 max-h-40 overflow-y-auto">
-          {files.map(f => (
-            <button
-              key={f.path}
-              onClick={() => onFileClick(f.path)}
-              className="w-full text-left px-3 py-1 rounded-md text-xs text-parchment/70 hover:text-parchment hover:bg-surface/30 transition-colors truncate flex items-center gap-1.5"
-            >
-              <FileText className="h-3 w-3 text-stone/40 shrink-0" />
-              {f.path}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // --- Creation Modal ---
 
 function CreationModal({ open, onClose, onCreated }: {
@@ -1826,91 +1632,197 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
   )
 }
 
-// --- Main Component ---
+// --- Skills List Page ---
 
-export function SkillCreator() {
-  // --- Kept state: used by v2 layout ---
-  const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
-  const [selectedDraft, setSelectedDraft] = useState<string | null>(() => {
-    try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
-  })
+function SkillsListPage({ onSelectSkill, onNewSkill }: {
+  onSelectSkill: (skill: TesterSkill) => void
+  onNewSkill: () => void
+}) {
+  const [skills, setSkills] = useState<TesterSkill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [duplicating, setDuplicating] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const closeMenu = useCallback(() => setMenuOpen(null), [])
+  useClickOutside(menuRef, !!menuOpen, closeMenu)
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchAll() {
+      setLoading(true)
+      try {
+        const [draftsRes, activeRes] = await Promise.all([
+          fetch('/api/skill-tester/skills?source=drafts'),
+          fetch('/api/skill-tester/skills?source=active'),
+        ])
+        const [draftsData, activeData] = await Promise.all([draftsRes.json(), activeRes.json()])
+        if (cancelled) return
+        const all: TesterSkill[] = [
+          ...(draftsData.ok ? draftsData.skills : []),
+          ...(activeData.ok ? activeData.skills : []),
+        ]
+        setSkills(all)
+      } catch {}
+      if (!cancelled) setLoading(false)
+    }
+    fetchAll()
+    return () => { cancelled = true }
+  }, [])
+
+  const handleDelete = async (skill: TesterSkill) => {
+    if (skill.source !== 'drafts' || deleting) return
+    setDeleting(skill.id)
+    setMenuOpen(null)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.ok) {
+        setSkills(prev => prev.filter(s => !(s.id === skill.id && s.source === skill.source)))
+      }
+    } catch {}
+    setDeleting(null)
+  }
+
+  const handleDuplicate = async (skill: TesterSkill) => {
+    if (duplicating) return
+    setDuplicating(skill.id)
+    setMenuOpen(null)
+    try {
+      const res = await fetch('/api/skill-creator/fork', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skillId: skill.id, source: skill.source, installPath: skill.installPath }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        // Open the duplicated draft in the editor
+        onSelectSkill({ id: data.name, name: `${skill.name} (copy)`, description: skill.description, source: 'drafts' })
+      }
+    } catch {}
+    setDuplicating(null)
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border-custom bg-ink/60">
+        <div className="flex items-center gap-3">
+          <Wand2 className="h-5 w-5 text-sand" />
+          <h1 className="text-base font-semibold text-parchment">Plugin Creator</h1>
+        </div>
+        <button
+          onClick={onNewSkill}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors font-medium"
+        >
+          <Plus className="h-4 w-4" />
+          New Skill
+        </button>
+      </div>
+
+      {/* Skills grid */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-6 w-6 text-stone/40 animate-spin" />
+          </div>
+        ) : skills.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Package className="h-12 w-12 text-stone/15 mb-3" />
+            <p className="text-sm text-stone/50 mb-1">No skills yet</p>
+            <p className="text-xs text-stone/30 mb-4">Create your first skill to get started</p>
+            <button
+              onClick={onNewSkill}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Create Skill
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {skills.map(skill => {
+              const isDeleting = deleting === skill.id
+              return (
+                <div
+                  key={`${skill.source}-${skill.id}`}
+                  className={`group relative rounded-xl border border-border-custom bg-surface/20 hover:bg-surface/40 transition-all cursor-pointer ${isDeleting ? 'opacity-40' : ''}`}
+                  onClick={() => !isDeleting && onSelectSkill(skill)}
+                >
+                  <div className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-medium text-parchment truncate">{skill.name}</p>
+                          <SourceBadge source={skill.source} />
+                        </div>
+                        {skill.description && (
+                          <p className="text-xs text-stone/50 line-clamp-2">{skill.description}</p>
+                        )}
+                      </div>
+                      <div className="relative" ref={menuOpen === skill.id ? menuRef : undefined}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === skill.id ? null : skill.id) }}
+                          className="p-1.5 rounded-md text-stone/30 hover:text-stone hover:bg-surface/60 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </button>
+                        {menuOpen === skill.id && (
+                          <div className="absolute right-0 top-full mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-xl overflow-hidden w-36">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDuplicate(skill) }}
+                              className="w-full text-left px-3 py-2 text-xs text-parchment/80 hover:bg-surface/40 transition-colors flex items-center gap-2"
+                            >
+                              <Copy className="h-3 w-3" /> Duplicate
+                            </button>
+                            {skill.source === 'drafts' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
+                                className="w-full text-left px-3 py-2 text-xs text-ember hover:bg-ember/10 transition-colors flex items-center gap-2 border-t border-border-custom"
+                              >
+                                <Trash2 className="h-3 w-3" /> Delete
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// --- Skill Editor (Three-Column Layout) ---
+
+function SkillEditor({ skill, onBack }: {
+  skill: TesterSkill
+  onBack: () => void
+}) {
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
-  const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
   const [fileEditorRefreshKey, setFileEditorRefreshKey] = useState(0)
   const [isPromoting, setIsPromoting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
+  const [fileSlideOpen, setFileSlideOpen] = useState(false)
 
   // Version control state
   const [versions, setVersions] = useState<{ number: number; label: string; timestamp: string }[]>([])
   const [currentVersion, setCurrentVersion] = useState<number | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Creation modal state
-  const [showCreationModal, setShowCreationModal] = useState(false)
-
-  // Two-panel tab state
-  const [leftTab, setLeftTab] = useState<'chat' | 'files'>('chat')
+  // Right panel tab state
   const [rightTab, setRightTab] = useState<'test' | 'console' | 'files' | 'web'>('test')
 
-  // Skills dropdown popover
-  const [skillsDropdownOpen, setSkillsDropdownOpen] = useState(false)
-  const skillsDropdownRef = useRef<HTMLDivElement>(null)
-
-  // Close skills dropdown when clicking outside
-  const closeSkillsDropdown = useCallback(() => setSkillsDropdownOpen(false), [])
-  useClickOutside(skillsDropdownRef, skillsDropdownOpen, closeSkillsDropdown)
-
-  // Persist selectedDraft to localStorage
-  useEffect(() => {
-    try {
-      if (selectedDraft) {
-        localStorage.setItem('skill-creator-selected-draft', selectedDraft)
-      } else {
-        localStorage.removeItem('skill-creator-selected-draft')
-      }
-    } catch { /* ignore */ }
-  }, [selectedDraft])
-
-  // Reconstruct selectedSkill from persisted selectedDraft on mount
-  useEffect(() => {
-    if (selectedDraft && !selectedSkill) {
-      // Fetch draft metadata to get the proper skill name/description
-      fetch(`/api/skill-creator/drafts`)
-        .then(r => r.json())
-        .then(data => {
-          if (!data.ok) return
-          const draft = data.drafts.find((d: { name: string }) => d.name === selectedDraft)
-          if (draft) {
-            // Read SKILL.md frontmatter for display name
-            fetch(`/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/file/${encodeURIComponent('SKILL.md')}`)
-              .then(r => r.json())
-              .then(fileData => {
-                if (fileData.ok && fileData.content) {
-                  const nameMatch = fileData.content.match(/^name:\s*(.+)$/m)
-                  const descMatch = fileData.content.match(/^description:\s*>?\s*\n?\s*(.+)$/m)
-                  const displayName = nameMatch?.[1]?.trim() || selectedDraft
-                  const description = descMatch?.[1]?.trim() || ''
-                  setSelectedSkill({ id: selectedDraft, name: displayName, description, source: 'drafts' })
-                } else {
-                  setSelectedSkill({ id: selectedDraft, name: selectedDraft, description: '', source: 'drafts' })
-                }
-              })
-              .catch(() => {
-                setSelectedSkill({ id: selectedDraft, name: selectedDraft, description: '', source: 'drafts' })
-              })
-          }
-        })
-        .catch(() => {})
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- mount-only reconstruction
+  const selectedDraft = skill.source === 'drafts' ? skill.id : null
 
   // Fetch versions when draft changes
   useEffect(() => {
-    if (!selectedDraft) {
-      setVersions([])
-      setCurrentVersion(null)
-      return
-    }
+    if (!selectedDraft) { setVersions([]); setCurrentVersion(null); return }
     let cancelled = false
     async function fetchVersions() {
       try {
@@ -1924,31 +1836,27 @@ export function SkillCreator() {
     }
     fetchVersions()
     return () => { cancelled = true }
-  }, [selectedDraft, skillsRefreshKey])
+  }, [selectedDraft])
 
-  // Fetch files for the selected draft (for FileTree)
+  // Fetch files for the file nav
   useEffect(() => {
-    const activeDraft = selectedDraft
-    if (!activeDraft) {
-      setSelectedDraftFiles([])
-      return
-    }
+    if (!selectedDraft) { setSelectedDraftFiles([]); return }
     let cancelled = false
     async function fetchFiles() {
       try {
-        const res = await fetch(`/api/skill-creator/drafts/${activeDraft}/files`)
+        const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`)
         const data = await res.json()
-        if (!cancelled && data.ok) {
-          setSelectedDraftFiles(data.files)
-        }
+        if (!cancelled && data.ok) setSelectedDraftFiles(data.files)
       } catch {}
     }
     fetchFiles()
     const interval = setInterval(fetchFiles, 5000)
-    return () => { cancelled = true; clearInterval(interval) }
+    // Refresh on skill-files-refresh event
+    const handler = () => fetchFiles()
+    window.addEventListener('skill-files-refresh', handler)
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('skill-files-refresh', handler) }
   }, [selectedDraft])
 
-  // Promote draft to active
   const handlePromote = useCallback(async () => {
     if (!selectedDraft || isPromoting) return
     setIsPromoting(true)
@@ -1958,17 +1866,11 @@ export function SkillCreator() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ draftName: selectedDraft }),
       })
-      const data = await res.json()
-      if (data.ok) {
-        setSkillsRefreshKey(k => k + 1)
-      }
-    } catch {
-      // silently fail
-    }
+      await res.json()
+    } catch {}
     setIsPromoting(false)
   }, [selectedDraft, isPromoting])
 
-  // Save current state as a new version snapshot
   const handleSaveVersion = useCallback(async () => {
     if (!selectedDraft || isSaving) return
     setIsSaving(true)
@@ -1987,139 +1889,52 @@ export function SkillCreator() {
     setIsSaving(false)
   }, [selectedDraft, isSaving])
 
-  // Restore a saved version to the working directory
   const handleRestoreVersion = useCallback(async (versionName: string) => {
     if (!selectedDraft) return
     try {
-      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions/${versionName}/restore`, {
-        method: 'POST',
-      })
+      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions/${versionName}/restore`, { method: 'POST' })
       const data = await res.json()
       if (data.ok) {
-        // Extract version number
         const num = parseInt(versionName.replace('v', ''))
         if (!isNaN(num)) setCurrentVersion(num)
-        // Force refresh files and editor content
-        setSkillsRefreshKey(k => k + 1)
         setFileEditorRefreshKey(k => k + 1)
       }
     } catch {}
   }, [selectedDraft])
 
-  // Create a new blank draft (skill or plugin) without starting a chat
-  const handleNewDraft = useCallback(async (draftType: 'plugin' | 'skill') => {
-    try {
-      const res = await fetch('/api/skill-creator/new-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draftType }),
-      })
-      const data = await res.json()
-      if (data.ok) {
-        setSkillsRefreshKey(k => k + 1)
-        setSelectedDraft(data.name)
-        setSelectedSkill({ id: data.name, name: data.name, description: '', source: 'drafts' })
-        setSkillsDropdownOpen(false)
-      }
-    } catch {
-      // silently fail
-    }
-  }, [])
-
-  // Select a skill from the sidebar -- handles both drafts and active skills
-  const handleSelectSkill = useCallback((skill: TesterSkill) => {
-    const isDeselecting = selectedSkill?.id === skill.id && selectedSkill?.source === skill.source
-
-    if (isDeselecting) {
-      setSelectedSkill(null)
-      setSelectedDraft(null)
-      setSkillsDropdownOpen(false)
-      return
-    }
-
-    setSelectedSkill(skill)
-    setSkillsDropdownOpen(false)
-
-    if (skill.source === 'drafts') {
-      setSelectedDraft(skill.id)
-    } else {
-      // Active skill -- clear draft state
-      setSelectedDraft(null)
-    }
-  }, [selectedSkill])
-
-  // Handle file click from file tree -- switch to Files tab and select file
-  const handleFileTreeClick = useCallback((path: string) => {
-    // Clear first to ensure re-trigger if clicking the same file after version restore
+  const handleFileClick = useCallback((path: string) => {
     setSelectedFilePath(null)
     setTimeout(() => {
       setSelectedFilePath(path)
-      setLeftTab('files')
+      setFileSlideOpen(true)
     }, 0)
   }, [])
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Header toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 shrink-0 border-b border-border-custom bg-ink/60">
-        {/* Left: Skill selector dropdown */}
+      <div className="flex items-center justify-between px-4 py-2 shrink-0 border-b border-border-custom bg-ink/60">
+        {/* Left: Back + skill name */}
         <div className="flex items-center gap-3">
-          <div ref={skillsDropdownRef} className="relative">
-            <button
-              onClick={() => setSkillsDropdownOpen(prev => !prev)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom hover:bg-surface/50 transition-colors"
-            >
-              <Package className="h-3.5 w-3.5 text-sand" />
-              <span className="text-parchment/80">My Skills</span>
-              <ChevronDown className={`h-3 w-3 text-stone/50 transition-transform ${skillsDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {skillsDropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-2xl overflow-hidden">
-                <MySkillsSidebar
-                  onNewDraft={handleNewDraft}
-                  refreshKey={skillsRefreshKey}
-                  selectedSkill={selectedSkill}
-                  onSelectSkill={handleSelectSkill}
-                />
-              </div>
-            )}
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+            title="Back to skills list"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-parchment">{skill.name}</span>
+            <SourceBadge source={skill.source} />
           </div>
-
-          {/* Selected skill name + source badge */}
-          {selectedSkill && (
-            <div className="flex items-center gap-2">
-              <Wand2 className="h-4 w-4 text-sand" />
-              <span className="text-sm font-medium text-parchment">{selectedSkill.name}</span>
-              <SourceBadge source={selectedSkill.source} />
-            </div>
-          )}
-          {!selectedSkill && (
-            <div className="flex items-center gap-2">
-              <Wand2 className="h-4 w-4 text-sand" />
-              <span className="text-sm font-medium text-parchment">Plugin Creator</span>
-            </div>
-          )}
         </div>
 
-        {/* Right: New, Version, Save, Publish */}
+        {/* Right: Version, Snapshot, Export, Publish */}
         <div className="flex items-center gap-2">
-          {/* New button */}
-          <button
-            onClick={() => setShowCreationModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors"
-            title="Create a new skill or fork an existing one"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </button>
-
-          {/* Version dropdown — latest first */}
           {selectedDraft && versions.length > 0 ? (
             <select
               value={currentVersion ? `v${currentVersion}` : ''}
-              onChange={(e) => {
-                if (e.target.value) handleRestoreVersion(e.target.value)
-              }}
+              onChange={(e) => { if (e.target.value) handleRestoreVersion(e.target.value) }}
               className="px-2 py-1 rounded-md text-xs bg-surface/30 border border-border-custom text-parchment/70"
               title="Restore a saved snapshot"
             >
@@ -2134,22 +1949,18 @@ export function SkillCreator() {
             <span className="px-2 py-1 text-[10px] text-stone/40">No snapshots yet</span>
           ) : null}
 
-          {/* Snapshot button — saves a version snapshot of all files */}
-          <button
-            onClick={handleSaveVersion}
-            disabled={!selectedDraft || isSaving}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-              selectedDraft
-                ? 'bg-surface/30 border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50'
-                : 'bg-surface/30 border-border-custom text-stone/40 cursor-not-allowed opacity-60'
-            }`}
-            title={selectedDraft ? 'Save a snapshot of all current files' : 'Select a draft first'}
-          >
-            <Save className="h-3.5 w-3.5" />
-            {isSaving ? 'Saving...' : 'Snapshot'}
-          </button>
+          {selectedDraft && (
+            <button
+              onClick={handleSaveVersion}
+              disabled={isSaving}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
+              title="Save a snapshot of all current files"
+            >
+              <Save className="h-3.5 w-3.5" />
+              {isSaving ? 'Saving...' : 'Snapshot'}
+            </button>
+          )}
 
-          {/* Export button */}
           {selectedDraft && (
             <button
               onClick={() => {
@@ -2166,12 +1977,11 @@ export function SkillCreator() {
             </button>
           )}
 
-          {/* Publish / Promote button */}
-          {selectedSkill?.source === 'drafts' && (
+          {skill.source === 'drafts' && (
             <button
               onClick={handlePromote}
               disabled={isPromoting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50"
               title="Install this draft as an active skill"
             >
               <Upload className="h-3.5 w-3.5" />
@@ -2181,38 +1991,47 @@ export function SkillCreator() {
         </div>
       </div>
 
-      {/* Two-panel split layout */}
+      {/* Three-column layout: Files Nav | Chat | Testing */}
       <div className="flex-1 flex min-h-0">
-        {/* LEFT PANEL */}
-        <div className="flex-1 flex flex-col min-h-0 border-r border-border-custom">
-          <TabBar
-            tabs={[
-              { key: 'chat' as const, label: 'Chat', icon: MessageSquare },
-              { key: 'files' as const, label: 'Files', icon: FileText },
-            ]}
-            activeTab={leftTab}
-            onTabChange={setLeftTab}
-          />
-
-          {/* Left panel content — both tabs stay mounted to preserve state */}
-          <div className={`flex-1 flex flex-col min-h-0 ${leftTab === 'chat' ? '' : 'hidden'}`}>
-            <SkillChat selectedSkill={selectedSkill} />
+        {/* LEFT: File Nav */}
+        <div className="w-52 shrink-0 border-r border-border-custom flex flex-col min-h-0 bg-ink/40">
+          <div className="px-3 py-2.5 border-b border-border-custom">
+            <h3 className="text-[10px] font-medium text-stone/50 uppercase tracking-wider">Files</h3>
           </div>
-          <div className={`flex-1 flex flex-col min-h-0 ${leftTab === 'files' ? '' : 'hidden'}`}>
-            {selectedSkill ? (
-              <InlineFileEditor skill={selectedSkill} fileToOpen={selectedFilePath} refreshKey={fileEditorRefreshKey} />
+          <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
+            {selectedDraftFiles.length === 0 ? (
+              <p className="text-[10px] text-stone/30 px-2 py-4 text-center">No files yet</p>
             ) : (
-              <EmptyState icon={FileText} message='Select a skill from "My Skills" to browse its files' />
+              <div className="space-y-0.5">
+                {selectedDraftFiles.filter(f => f.type === 'file').map(f => (
+                  <button
+                    key={f.path}
+                    onClick={() => handleFileClick(f.path)}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors truncate flex items-center gap-1.5 ${
+                      selectedFilePath === f.path && fileSlideOpen
+                        ? 'bg-blue-500/15 text-blue-300'
+                        : 'text-parchment/70 hover:text-parchment hover:bg-surface/30'
+                    }`}
+                  >
+                    <FileText className="h-3 w-3 text-stone/40 shrink-0" />
+                    {f.path}
+                  </button>
+                ))}
+              </div>
             )}
-          </div>
-
-          {/* Collapsible file tree at bottom of left panel */}
-          <div className="shrink-0">
-            <FileTree files={selectedDraftFiles} onFileClick={handleFileTreeClick} />
           </div>
         </div>
 
-        {/* RIGHT PANEL */}
+        {/* CENTER: AI Chat */}
+        <div className="flex-1 flex flex-col min-h-0 border-r border-border-custom relative">
+          <div className="px-4 py-2.5 border-b border-border-custom bg-ink/30 flex items-center gap-2">
+            <MessageSquare className="h-3.5 w-3.5 text-stone/50" />
+            <span className="text-xs font-medium text-stone/60">Chat</span>
+          </div>
+          <SkillChat selectedSkill={skill} />
+        </div>
+
+        {/* RIGHT: Testing */}
         <div className="flex-1 flex flex-col min-h-0">
           <TabBar
             tabs={[
@@ -2224,25 +2043,127 @@ export function SkillCreator() {
             activeTab={rightTab}
             onTabChange={setRightTab}
           />
-
-          {/* Right panel content -- always render SkillTester, it handles all tabs */}
           <div className="flex-1 flex flex-col min-h-0">
-            <SkillTester selectedSkill={selectedSkill} activeTab={rightTab} />
+            <SkillTester selectedSkill={skill} activeTab={rightTab} />
           </div>
         </div>
       </div>
 
-      {/* Creation Modal */}
+      {/* File viewer slide-out panel */}
+      {fileSlideOpen && selectedFilePath && (
+        <div className="fixed inset-0 z-40 flex">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/30" onClick={() => setFileSlideOpen(false)} />
+          {/* Panel */}
+          <div className="absolute right-0 top-0 bottom-0 w-[50vw] max-w-3xl bg-ink border-l border-border-custom shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-custom shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="h-3.5 w-3.5 text-stone/50" />
+                <span className="text-xs font-medium text-parchment">{selectedFilePath}</span>
+              </div>
+              <button
+                onClick={() => setFileSlideOpen(false)}
+                className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+                title="Close file viewer"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <InlineFileEditor skill={skill} fileToOpen={selectedFilePath} refreshKey={fileEditorRefreshKey} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// --- Main Component ---
+
+export function SkillCreator() {
+  const [view, setView] = useState<'list' | 'editor'>(() => {
+    try {
+      const saved = localStorage.getItem('skill-creator-selected-draft')
+      return saved ? 'editor' : 'list'
+    } catch { return 'list' }
+  })
+  const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
+  const [showCreationModal, setShowCreationModal] = useState(false)
+
+  // Reconstruct selectedSkill from persisted draft on mount
+  useEffect(() => {
+    if (view === 'editor' && !selectedSkill) {
+      const savedDraft = localStorage.getItem('skill-creator-selected-draft')
+      if (!savedDraft) { setView('list'); return }
+      // Fetch draft metadata to get the proper skill name/description
+      fetch(`/api/skill-creator/drafts/${encodeURIComponent(savedDraft)}/file/${encodeURIComponent('SKILL.md')}`)
+        .then(r => r.json())
+        .then(fileData => {
+          if (fileData.ok && fileData.content) {
+            const nameMatch = fileData.content.match(/^name:\s*(.+)$/m)
+            const descMatch = fileData.content.match(/^description:\s*>?\s*\n?\s*(.+)$/m)
+            const displayName = nameMatch?.[1]?.trim() || savedDraft
+            const description = descMatch?.[1]?.trim() || ''
+            setSelectedSkill({ id: savedDraft, name: displayName, description, source: 'drafts' })
+          } else {
+            setSelectedSkill({ id: savedDraft, name: savedDraft, description: '', source: 'drafts' })
+          }
+        })
+        .catch(() => { setView('list') })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSelectSkill = useCallback((skill: TesterSkill) => {
+    setSelectedSkill(skill)
+    setView('editor')
+    try {
+      if (skill.source === 'drafts') {
+        localStorage.setItem('skill-creator-selected-draft', skill.id)
+      } else {
+        localStorage.removeItem('skill-creator-selected-draft')
+      }
+    } catch {}
+  }, [])
+
+  const handleBack = useCallback(() => {
+    setView('list')
+    setSelectedSkill(null)
+    try { localStorage.removeItem('skill-creator-selected-draft') } catch {}
+  }, [])
+
+  const handleNewSkill = useCallback(() => {
+    setShowCreationModal(true)
+  }, [])
+
+  if (view === 'editor' && selectedSkill) {
+    return (
+      <>
+        <SkillEditor skill={selectedSkill} onBack={handleBack} />
+        <CreationModal
+          open={showCreationModal}
+          onClose={() => setShowCreationModal(false)}
+          onCreated={(name) => {
+            setSelectedSkill({ id: name, name, description: '', source: 'drafts' })
+            localStorage.setItem('skill-creator-selected-draft', name)
+            setShowCreationModal(false)
+          }}
+        />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <SkillsListPage onSelectSkill={handleSelectSkill} onNewSkill={handleNewSkill} />
       <CreationModal
         open={showCreationModal}
         onClose={() => setShowCreationModal(false)}
         onCreated={(name) => {
-          setSelectedDraft(name)
-          setSelectedSkill({ id: name, name, description: '', source: 'drafts' })
-          setSkillsRefreshKey(k => k + 1)
+          handleSelectSkill({ id: name, name, description: '', source: 'drafts' })
           setShowCreationModal(false)
         }}
       />
-    </div>
+    </>
   )
 }
