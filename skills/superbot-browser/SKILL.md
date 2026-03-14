@@ -167,6 +167,55 @@ Use `wait 3000` or `wait 5000` instead.
 ### 5. Social media session limits
 Facebook: ~6-8 comments per session before throttling kicks in.
 
+## Companion: chrome-devtools-mcp
+
+The `chrome-devtools-mcp` MCP server connects to the **same Chrome instance** on port 9222 and provides DevTools capabilities that complement superbot-browser:
+
+| Tool | What it does |
+|------|-------------|
+| `take_snapshot` | Accessibility tree snapshot of the page |
+| `take_screenshot` | Capture visual output |
+| `navigate_page` | Load URLs |
+| `evaluate_script` | Run JavaScript in the page |
+| `list_console_messages` | View console output with source-mapped stack traces |
+| `list_network_requests` | Inspect network activity (404s, 500s, CORS issues) |
+| `performance_start_trace` | Start a performance trace |
+| `performance_stop_trace` | Stop and save a performance trace |
+| `performance_analyze_insight` | Extract metrics (LCP, TBT, etc.) |
+| `get_lighthouse_score` | Lighthouse audits (accessibility, SEO, best practices) |
+
+### When to use which tool
+
+- **superbot-browser (agent-browser)**: Navigation, clicking, form filling, social media automation — anything that interacts with the page as a user would.
+- **chrome-devtools-mcp**: Performance profiling, Lighthouse audits, network inspection, console debugging — anything that inspects the page from a developer perspective.
+
+### Using both together
+
+Both tools share the same Chrome instance on port 9222. They do not conflict.
+
+Typical workflow:
+1. Use `agent-browser` to navigate and interact with the page
+2. Use chrome-devtools-mcp tools to inspect performance, run audits, or debug
+
+```bash
+# 1. Navigate with superbot-browser
+agent-browser --cdp 9222 open "https://your-site.com"
+
+# 2. Then use chrome-devtools-mcp MCP tools (available as mcp__chrome-devtools__* tools):
+#    - mcp__chrome-devtools__take_screenshot
+#    - mcp__chrome-devtools__list_network_requests
+#    - mcp__chrome-devtools__get_lighthouse_score
+#    - mcp__chrome-devtools__performance_start_trace / performance_stop_trace
+```
+
+### Configuration
+
+chrome-devtools-mcp is configured as an MCP server in `.mcp.json` at the project root. It auto-connects to Chrome on port 9222 via `--browserUrl`.
+
+### Gotcha: Don't open Chrome DevTools UI
+
+Opening the Chrome DevTools UI (F12 / Cmd+Opt+I) while chrome-devtools-mcp is connected will crash Chrome. Use the MCP tools instead.
+
 ## Deep-Dive Documentation
 
 | Reference | When to Use |
