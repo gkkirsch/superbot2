@@ -299,12 +299,20 @@ function MissingBinsWarning({ pluginName, missingBins }: { pluginName: string; m
   )
 }
 
-function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: () => void }) {
+function PluginDetailModal({ plugin: initialPlugin, onClose }: { plugin: PluginInfo; onClose: () => void }) {
+  const { data: plugins } = usePlugins()
+  // Use live data from query cache so install/uninstall updates the modal in real-time
+  const plugin = useMemo(() => {
+    const live = plugins?.find(p => p.name === initialPlugin.name)
+    return live ?? initialPlugin
+  }, [plugins, initialPlugin])
+
   const [detail, setDetail] = useState<PluginDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewingFile, setViewingFile] = useState<string | null>(null)
   const [installing, setInstalling] = useState(false)
   const [uninstalling, setUninstalling] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -322,9 +330,12 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
   async function handleInstall() {
     setInstalling(true)
+    setActionError(null)
     try {
       await installPlugin(plugin.pluginId)
       await queryClient.invalidateQueries({ queryKey: ['plugins'] })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Install failed')
     } finally {
       setInstalling(false)
     }
@@ -332,10 +343,12 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
 
   async function handleUninstall() {
     setUninstalling(true)
+    setActionError(null)
     try {
       await uninstallPlugin(plugin.name)
       await queryClient.invalidateQueries({ queryKey: ['plugins'] })
-      onClose()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Uninstall failed')
     } finally {
       setUninstalling(false)
     }
@@ -375,7 +388,7 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
                 className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-md bg-ember/15 text-ember hover:bg-ember/25 transition-colors disabled:opacity-50"
               >
                 {uninstalling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                {uninstalling ? 'Uninstalling...' : 'Uninstall'}
+                {uninstalling ? 'Removing...' : 'Uninstall'}
               </button>
             ) : (
               <button
@@ -394,6 +407,13 @@ function PluginDetailModal({ plugin, onClose }: { plugin: PluginInfo; onClose: (
         </div>
 
         <div className="flex-1 overflow-auto p-6">
+          {actionError && (
+            <div className="flex items-center gap-2 rounded-lg bg-ember/10 border border-ember/30 px-4 py-3 mb-4">
+              <AlertTriangle className="h-4 w-4 text-ember shrink-0" />
+              <p className="text-xs text-ember">{actionError}</p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-stone" />

@@ -3522,6 +3522,12 @@ app.post('/api/marketplaces', async (req, res) => {
     const { url } = req.body
     if (!url) return res.status(400).json({ error: 'url required' })
     await runClaude(['plugin', 'marketplace', 'add', url])
+    // Clear caches so the new marketplace's plugins appear immediately
+    pluginMetaCache.clear()
+    pluginDetailCache.clear()
+    marketplaceCatalogCache = null
+    marketplaceCatalogFetchedAt = 0
+    metaPreFetched = false
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
