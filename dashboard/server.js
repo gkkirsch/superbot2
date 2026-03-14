@@ -4848,6 +4848,43 @@ async function writeDraftMetadata(draftPath, meta) {
   await writeFile(join(draftPath, 'draft-metadata.json'), JSON.stringify(meta, null, 2))
 }
 
+// Relocate files the AI created outside the designated draft directory.
+// The AI subprocess often creates a new dir named after the skill
+// instead of writing to the designated draft directory.
+function relocateStrayDraftFiles(draftPath, knownDirs) {
+  const draftsDir = dirname(draftPath)
+  const draftBasename = basename(draftPath)
+  const known = knownDirs || new Set()
+  let relocated = false
+  try {
+    const entries = readdirSync(draftsDir, { withFileTypes: true })
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name === draftBasename || known.has(e.name)) continue
+      const strayDir = join(draftsDir, e.name)
+      if (!existsSync(join(strayDir, 'SKILL.md'))) continue
+      try {
+        const content = readFileSync(join(strayDir, 'SKILL.md'), 'utf-8')
+        writeFileSync(join(draftPath, 'SKILL.md'), content)
+        for (const subdir of ['scripts', 'references']) {
+          const subdirPath = join(strayDir, subdir)
+          if (existsSync(subdirPath)) {
+            mkdirSync(join(draftPath, subdir), { recursive: true })
+            cpSync(subdirPath, join(draftPath, subdir), { recursive: true })
+          }
+        }
+        rmSync(strayDir, { recursive: true, force: true })
+        console.log(`[skill-creator] Relocated files from ${strayDir} → ${draftPath}`)
+        relocated = true
+      } catch (err) {
+        console.error(`[skill-creator] Relocation error:`, err.message)
+      }
+    }
+  } catch (err) {
+    console.error(`[skill-creator] Scan error:`, err.message)
+  }
+  return relocated
+}
+
 // Chat history persistence — append-only JSONL per draft
 async function appendDraftChatMessage(draftPath, message) {
   if (!draftPath) return
@@ -5242,41 +5279,9 @@ claude plugin install ${pluginSlug}
           }
 
         } else if (event.type === 'result') {
-          // Relocate files the AI created outside the draft directory.
-          // The AI subprocess often creates a new dir named after the skill
-          // instead of writing to the designated draft directory.
           const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
-          if (sess?.draftPath) {
-            try {
-              const draftsDir = dirname(sess.draftPath)
-              const draftBasename = basename(sess.draftPath)
-              const known = sess._knownDraftDirs || new Set()
-              const entries = readdirSync(draftsDir, { withFileTypes: true })
-              for (const e of entries) {
-                if (!e.isDirectory() || e.name === draftBasename || known.has(e.name)) continue
-                const newDir = join(draftsDir, e.name)
-                const skillMdPath = join(newDir, 'SKILL.md')
-                if (!existsSync(skillMdPath)) continue
-                try {
-                  const content = readFileSync(skillMdPath, 'utf-8')
-                  writeFileSync(join(sess.draftPath, 'SKILL.md'), content)
-                  for (const subdir of ['scripts', 'references']) {
-                    const subdirPath = join(newDir, subdir)
-                    if (existsSync(subdirPath)) {
-                      mkdirSync(join(sess.draftPath, subdir), { recursive: true })
-                      cpSync(subdirPath, join(sess.draftPath, subdir), { recursive: true })
-                    }
-                  }
-                  rmSync(newDir, { recursive: true, force: true })
-                  console.log(`[skill-creator] Relocated SKILL.md from ${newDir} → ${sess.draftPath}`)
-                  sseRes.write(`data: ${JSON.stringify({ type: 'files_changed' })}\n\n`)
-                } catch (err) {
-                  console.error(`[skill-creator] Relocation error in result handler:`, err.message)
-                }
-              }
-            } catch (err) {
-              console.error(`[skill-creator] Scan error in result handler:`, err.message)
-            }
+          if (sess?.draftPath && relocateStrayDraftFiles(sess.draftPath, sess._knownDraftDirs)) {
+            sseRes.write(`data: ${JSON.stringify({ type: 'files_changed' })}\n\n`)
           }
           sseRes.write(`data: ${JSON.stringify({ type: 'result', subtype: event.subtype, cost: event.total_cost_usd, duration: event.duration_ms })}\n\n`)
         }
@@ -5301,50 +5306,9 @@ claude plugin install ${pluginSlug}
       const sess = SKILL_CREATOR_SESSIONS.get(sessionId)
       if (sess) {
         sess.process = null
-        // Relocate files the AI created outside the draft directory
-        // The AI subprocess often creates a new directory named after the skill
-        // instead of writing to the designated draft directory.
         if (sess.draftPath && !sess._relocatedFiles) {
           sess._relocatedFiles = true
-          const draftsDir = dirname(sess.draftPath)
-          const draftBasename = basename(sess.draftPath)
-          const known = sess._knownDraftDirs || new Set()
-          try {
-            const entries = await readdir(draftsDir, { withFileTypes: true })
-            for (const e of entries) {
-              if (!e.isDirectory() || e.name === draftBasename || known.has(e.name)) continue
-              const newDir = join(draftsDir, e.name)
-              try {
-                const skillMdPath = join(newDir, 'SKILL.md')
-                const content = await readFile(skillMdPath, 'utf-8')
-                await writeFile(join(sess.draftPath, 'SKILL.md'), content)
-                console.log(`[skill-creator] Relocated SKILL.md from ${newDir} → ${sess.draftPath}`)
-                // Also copy any scripts/ or references/ directories
-                for (const subdir of ['scripts', 'references']) {
-                  try {
-                    const subdirPath = join(newDir, subdir)
-                    const subdirEntries = await readdir(subdirPath)
-                    if (subdirEntries.length > 0) {
-                      await mkdir(join(sess.draftPath, subdir), { recursive: true })
-                      for (const f of subdirEntries) {
-                        const srcFile = join(subdirPath, f)
-                        const dstFile = join(sess.draftPath, subdir, f)
-                        const fileContent = await readFile(srcFile)
-                        await writeFile(dstFile, fileContent)
-                      }
-                      console.log(`[skill-creator] Copied ${subdir}/ from ${newDir}`)
-                    }
-                  } catch {}
-                }
-                await rm(newDir, { recursive: true, force: true })
-                console.log(`[skill-creator] Cleaned up stray directory: ${newDir}`)
-              } catch (err) {
-                console.error(`[skill-creator] Failed to relocate from ${newDir}:`, err.message)
-              }
-            }
-          } catch (err) {
-            console.error(`[skill-creator] Scan failed:`, err.message)
-          }
+          relocateStrayDraftFiles(sess.draftPath, sess._knownDraftDirs)
         }
         // Update draft metadata on process exit
         if (sess.draftPath) {
@@ -6843,33 +6807,8 @@ Do NOT create new directories elsewhere. Do NOT use the skill name as a director
       const stderr = stderrChunks.join('')
       res.write(`data: ${JSON.stringify({ type: 'error', message: `Process exited with code ${code}`, stderr })}\n\n`)
     }
-    // Relocate files the AI created outside the draft directory
     if (draftDir) {
-      try {
-        const draftBasename = basename(draftDir)
-        const entries = readdirSync(SKILL_CREATOR_DRAFTS_DIR, { withFileTypes: true })
-        for (const e of entries) {
-          if (!e.isDirectory() || e.name === draftBasename || knownDraftDirs.has(e.name)) continue
-          const strayDir = join(SKILL_CREATOR_DRAFTS_DIR, e.name)
-          const straySkillMd = join(strayDir, 'SKILL.md')
-          if (!existsSync(straySkillMd)) continue
-          try {
-            const content = readFileSync(straySkillMd, 'utf-8')
-            writeFileSync(join(draftDir, 'SKILL.md'), content)
-            for (const subdir of ['scripts', 'references']) {
-              const subdirPath = join(strayDir, subdir)
-              if (existsSync(subdirPath)) {
-                mkdirSync(join(draftDir, subdir), { recursive: true })
-                cpSync(subdirPath, join(draftDir, subdir), { recursive: true })
-              }
-            }
-            rmSync(strayDir, { recursive: true, force: true })
-            console.log(`[skill-creator] Relocated SKILL.md from ${strayDir} → ${draftDir}`)
-          } catch (err) {
-            console.error(`[skill-creator] Relocation error:`, err.message)
-          }
-        }
-      } catch {}
+      relocateStrayDraftFiles(draftDir, knownDraftDirs)
     }
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
     res.end()
