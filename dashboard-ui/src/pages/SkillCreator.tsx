@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, Upload, File, Package, Save, Pencil, RefreshCw, ChevronDown, ChevronLeft, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2 } from 'lucide-react'
+import { Send, X, FileText, Wand2, Wifi, WifiOff, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
-import { Sheet, SheetHeader, SheetBody } from '@/components/ui/sheet'
 import yaml from 'js-yaml'
 
 // --- Types ---
@@ -131,7 +130,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
   )
 }
 
-// --- My Skills Sidebar ---
+// --- My Skills Sidebar (now used as dropdown content) ---
 
 interface ValidationIssue {
   file: string
@@ -172,8 +171,8 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill 
   }, [activeTab, refreshKey])
 
   return (
-    <div className="w-60 shrink-0 border-r border-border-custom bg-ink/40 flex flex-col overflow-hidden">
-      <div className="px-4 pt-4 pb-2">
+    <div className="w-72 flex flex-col overflow-hidden">
+      <div className="px-4 pt-3 pb-2">
         <h2 className="text-xs font-medium text-stone/60 uppercase tracking-wider">My Skills</h2>
       </div>
 
@@ -202,7 +201,7 @@ function MySkillsSidebar({ onNewDraft, refreshKey, selectedSkill, onSelectSkill 
         ) : skills.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-center px-2">
             <p className="text-xs text-stone/40">
-              {activeTab === 'drafts' ? 'No drafts yet — create your first one!' : 'No active skills installed'}
+              {activeTab === 'drafts' ? 'No drafts yet -- create your first one!' : 'No active skills installed'}
             </p>
           </div>
         ) : (
@@ -380,7 +379,7 @@ function SkillFileViewer({ skill, onPromote, isPromoting }: { skill: TesterSkill
             title="Copy this draft to ~/.superbot2/skills/ and make it active"
           >
             <Upload className="h-3 w-3" />
-            {isPromoting ? 'Promoting…' : 'Promote to Active'}
+            {isPromoting ? 'Promoting...' : 'Promote to Active'}
           </button>
         )}
       </div>
@@ -749,7 +748,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     }
 
     setTestStatus('starting')
-    // Don't clear messages — keep persisted history
+    // Don't clear messages -- keep persisted history
     testStreamTextRef.current = ''
     setTestStreamText('')
     testPendingToolsRef.current = []
@@ -793,34 +792,19 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
               }])
             }
           } else if (d.type === 'assistant') {
-            // Update streaming text with the complete snapshot for display accuracy.
-            // Don't create a message — multiple assistant snapshots fire per turn
-            // (after thinking, after text) which causes duplicate messages.
-            // Message creation is deferred to the single 'result' event.
             if (d.text && d.text.trim()) {
               testStreamTextRef.current = d.text
               setTestStreamText(d.text)
             }
-            // Always sync tools with the assistant snapshot (ground truth).
-            // Previously only updated when d.tools.length > 0, which left
-            // stale tools from earlier tool_start events — causing the result
-            // handler to suppress the final response text.
             if (d.tools) {
               testPendingToolsRef.current = d.tools
             }
           } else if (d.type === 'result') {
-            // Read from ref to avoid nesting setTestMessages inside a
-            // setTestStreamText functional updater — React StrictMode
-            // double-invokes functional updaters, which would create
-            // duplicate messages.
             const text = testStreamTextRef.current
             testPendingToolsRef.current = []
             testStreamTextRef.current = ''
             setTestStreamText('')
             if (text.trim()) {
-              // Deduplicate: if the last assistant message has the same
-              // content, skip (prevents the rare case where Claude echoes
-              // the same text across consecutive turns).
               setTestMessages(msgs => {
                 const lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant')
                 if (lastAssistant && lastAssistant.content === text) return msgs
@@ -882,7 +866,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     }
   }, [testInput, testSessionId, testStatus])
 
-  // Close the test session — keeps message history persisted
+  // Close the test session -- keeps message history persisted
   const closeTestSession = useCallback(() => {
     if (testSessionId) {
       testEventSourceRef.current?.close()
@@ -904,19 +888,19 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     setTestMessages([])
   }, [selectedSkill])
 
-  // No skill selected — empty state
+  // No skill selected -- empty state
   if (!selectedSkill) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-          <p className="text-xs text-stone/40">Select a skill from the sidebar to test</p>
+          <p className="text-xs text-stone/40">Select a skill to test</p>
         </div>
       </div>
     )
   }
 
-  // Idle — show start button (and persisted messages if any)
+  // Idle -- show start button (and persisted messages if any)
   if (testStatus === 'idle') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
@@ -1022,7 +1006,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     )
   }
 
-  // Starting — loading state
+  // Starting -- loading state
   if (testStatus === 'starting') {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -1034,7 +1018,7 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
     )
   }
 
-  // Active test session — chat UI
+  // Active test session -- chat UI
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header */}
@@ -1196,6 +1180,61 @@ function SkillTester({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
   )
 }
 
+// --- Collapsible File Tree ---
+
+function FileTree({ files, onFileClick }: {
+  files: { path: string; type: string }[]
+  onFileClick: (path: string) => void
+}) {
+  const [expanded, setExpanded] = useState(true)
+
+  if (files.length === 0) {
+    return (
+      <div className="px-3 py-2 border-t border-border-custom">
+        <button
+          onClick={() => setExpanded(prev => !prev)}
+          className="flex items-center gap-1.5 text-xs text-stone/50 hover:text-stone transition-colors w-full"
+        >
+          <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <FolderOpen className="h-3 w-3" />
+          <span>Files</span>
+        </button>
+        {expanded && (
+          <p className="text-[10px] text-stone/30 ml-5 mt-1">No files yet</p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="border-t border-border-custom">
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="flex items-center gap-1.5 text-xs text-stone/60 hover:text-stone transition-colors w-full px-3 py-2"
+      >
+        <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+        <FolderOpen className="h-3 w-3" />
+        <span>Files</span>
+        <span className="text-[10px] text-stone/30 ml-auto">{files.length}</span>
+      </button>
+      {expanded && (
+        <div className="px-2 pb-2 space-y-0.5 max-h-40 overflow-y-auto">
+          {files.map(f => (
+            <button
+              key={f.path}
+              onClick={() => onFileClick(f.path)}
+              className="w-full text-left px-3 py-1 rounded-md text-xs text-parchment/70 hover:text-parchment hover:bg-surface/30 transition-colors truncate flex items-center gap-1.5"
+            >
+              <FileText className="h-3 w-3 text-stone/40 shrink-0" />
+              {f.path}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Main Component ---
 
 export function SkillCreator() {
@@ -1217,20 +1256,21 @@ export function SkillCreator() {
     try { return localStorage.getItem('skill-creator-selected-draft') } catch { return null }
   })
   const [selectedSkill, setSelectedSkill] = useState<TesterSkill | null>(null)
-  const [, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [fileContent, setFileContent] = useState<string | null>(null)
+  const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [, setFrontmatter] = useState<Record<string, unknown> | null>(null)
-  const [fileSheetOpen, setFileSheetOpen] = useState(false)
-  const [fileEditing, setFileEditing] = useState(false)
-  const [fileDraft, setFileDraft] = useState('')
-  const [fileSaving, setFileSaving] = useState(false)
   const [, setValidation] = useState<ValidationResult | null>(null)
   const [, setValidating] = useState(false)
   const [, setValidationExpanded] = useState(false)
   const [, setSelectedDraftType] = useState<'plugin' | 'skill' | null>(null)
-  const [activePanel, setActivePanel] = useState<'chat' | 'files' | 'test'>('chat')
   const [, setPluginMeta] = useState<{ name: string; version: string; description: string; author: string } | null>(null)
+
+  // Two-panel tab state
+  const [leftTab, setLeftTab] = useState<'chat' | 'files'>('chat')
+  const [rightTab, setRightTab] = useState<'test' | 'console' | 'files' | 'web'>('test')
+
+  // Skills dropdown popover
+  const [skillsDropdownOpen, setSkillsDropdownOpen] = useState(false)
+  const skillsDropdownRef = useRef<HTMLDivElement>(null)
 
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -1257,6 +1297,18 @@ export function SkillCreator() {
   useEffect(() => { selectedDraftRef.current = selectedDraft }, [selectedDraft])
   useEffect(() => { selectedSkillRef.current = selectedSkill }, [selectedSkill])
   useEffect(() => { messagesRef.current = messages }, [messages])
+
+  // Close skills dropdown when clicking outside
+  useEffect(() => {
+    if (!skillsDropdownOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (skillsDropdownRef.current && !skillsDropdownRef.current.contains(e.target as Node)) {
+        setSkillsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [skillsDropdownOpen])
 
   // Persist selectedDraft to localStorage
   useEffect(() => {
@@ -1322,7 +1374,7 @@ export function SkillCreator() {
           pendingToolsRef.current = [...pendingToolsRef.current, { name: data.name, input: {} }]
           setIsProcessing(true)
         } else if (data.type === 'assistant') {
-          // Complete assistant message — finalize any streaming text and add tools
+          // Complete assistant message -- finalize any streaming text and add tools
           setStreamingText(prev => {
             const finalText = data.text || prev
             const tools = data.tools || pendingToolsRef.current
@@ -1339,7 +1391,7 @@ export function SkillCreator() {
             return ''
           })
         } else if (data.type === 'result') {
-          // Turn complete — finalize any remaining streaming text
+          // Turn complete -- finalize any remaining streaming text
           setStreamingText(prev => {
             if (prev.trim()) {
               const tools = pendingToolsRef.current
@@ -1498,6 +1550,7 @@ export function SkillCreator() {
         setSelectedDraft(data.name)
         setSelectedDraftType(draftType)
         setSelectedSkill({ id: data.name, name: data.name, description: '', source: 'drafts' })
+        setSkillsDropdownOpen(false)
       } else {
         setError(data.error || 'Failed to create draft')
       }
@@ -1516,7 +1569,7 @@ export function SkillCreator() {
     }
   }, [draftName, selectedDraft, selectedSkill])
 
-  // Select a skill from the sidebar — handles both drafts and active skills
+  // Select a skill from the sidebar -- handles both drafts and active skills
   const handleSelectSkill = useCallback(async (skill: TesterSkill) => {
     const currentSkill = selectedSkillRef.current
     const isDeselecting = currentSkill?.id === skill.id && currentSkill?.source === skill.source
@@ -1527,13 +1580,9 @@ export function SkillCreator() {
       draftMessagesRef.current.set(currentDraft, [...messagesRef.current])
     }
 
-    // Reset file/panel state
-    setSelectedFile(null)
-    setFileContent(null)
+    // Reset state
     setFrontmatter(null)
     setPromoteStatus('idle')
-    setFileSheetOpen(false)
-    setFileEditing(false)
     setValidation(null)
     setValidationExpanded(false)
     setSelectedDraftType(null)
@@ -1542,10 +1591,12 @@ export function SkillCreator() {
     if (isDeselecting) {
       setSelectedSkill(null)
       setSelectedDraft(null)
+      setSkillsDropdownOpen(false)
       return
     }
 
     setSelectedSkill(skill)
+    setSkillsDropdownOpen(false)
 
     if (skill.source === 'drafts') {
       setSelectedDraft(skill.id)
@@ -1587,7 +1638,7 @@ export function SkillCreator() {
       // New SSE session for this draft
       setSessionId(crypto.randomUUID())
     } else {
-      // Active skill — clear draft state
+      // Active skill -- clear draft state
       setSelectedDraft(null)
     }
   }, [])
@@ -1668,12 +1719,6 @@ export function SkillCreator() {
     return () => { cancelled = true; clearInterval(interval) }
   }, [selectedDraft])
 
-  const closeFileSheet = useCallback(() => {
-    setFileSheetOpen(false)
-    setFileEditing(false)
-  }, [])
-
-
   // Validate a draft
   const runValidation = useCallback(async (draft: string) => {
     setValidating(true)
@@ -1700,204 +1745,219 @@ export function SkillCreator() {
     }
   }, [selectedDraft, runValidation])
 
-  // Re-validate after file save
-  const handleFileSaveWithValidation = useCallback(async () => {
-    if (!selectedDraft || !selectedFile) return
-    setFileSaving(true)
-    try {
-      const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/file/${selectedFile}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: fileDraft }),
-      })
-      const data = await res.json()
-      if (data.ok) {
-        setFileContent(fileDraft)
-        setFileEditing(false)
-        runValidation(selectedDraft)
-      } else {
-        setError(data.error || 'Save failed')
-      }
-    } catch {
-      setError('Failed to save file')
-    }
-    setFileSaving(false)
-  }, [selectedDraft, selectedFile, fileDraft, runValidation])
+  // Handle file click from file tree -- switch to Files tab in left panel
+  const handleFileTreeClick = useCallback((_path: string) => {
+    setLeftTab('files')
+  }, [])
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
-      {/* Header — full width */}
-      <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-border-custom">
+      {/* Header toolbar */}
+      <div className="flex items-center justify-between px-4 py-2.5 shrink-0 border-b border-border-custom bg-ink/60">
+        {/* Left: Skill selector dropdown */}
         <div className="flex items-center gap-3">
-          <Wand2 className="h-5 w-5 text-sand" />
-          <h1 className="font-heading text-xl text-parchment">Plugin Creator</h1>
+          <div ref={skillsDropdownRef} className="relative">
+            <button
+              onClick={() => setSkillsDropdownOpen(prev => !prev)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom hover:bg-surface/50 transition-colors"
+            >
+              <Package className="h-3.5 w-3.5 text-sand" />
+              <span className="text-parchment/80">My Skills</span>
+              <ChevronDown className={`h-3 w-3 text-stone/50 transition-transform ${skillsDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {skillsDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 z-50 bg-ink border border-border-custom rounded-lg shadow-2xl overflow-hidden">
+                <MySkillsSidebar
+                  onNewDraft={handleNewDraft}
+                  refreshKey={skillsRefreshKey}
+                  selectedSkill={selectedSkill}
+                  onSelectSkill={handleSelectSkill}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Selected skill name + source badge */}
+          {selectedSkill && (
+            <div className="flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-sand" />
+              <span className="text-sm font-medium text-parchment">{selectedSkill.name}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                selectedSkill.source === 'drafts'
+                  ? 'bg-amber-500/15 text-amber-400/80'
+                  : 'bg-emerald-500/15 text-emerald-400/80'
+              }`}>
+                {selectedSkill.source === 'drafts' ? 'Draft' : 'Active'}
+              </span>
+            </div>
+          )}
+          {!selectedSkill && (
+            <div className="flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-sand" />
+              <span className="text-sm font-medium text-parchment">Plugin Creator</span>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Right: Version, Save, Publish, New, Status */}
+        <div className="flex items-center gap-2">
           {totalCost > 0 && (
             <span className="text-[11px] text-stone/60 font-mono">{formatCost(totalCost)}</span>
           )}
           <span className={`flex items-center gap-1 text-[10px] ${isConnected ? 'text-moss/70' : 'text-ember/60'}`}>
             {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {isConnected ? 'Connected' : 'Disconnected'}
           </span>
+
+          {/* Version dropdown placeholder */}
+          <select
+            disabled
+            className="px-2 py-1 rounded-md text-xs bg-surface/30 border border-border-custom text-stone/50 cursor-not-allowed"
+          >
+            <option>v1.0.0</option>
+          </select>
+
+          {/* Save button */}
+          <button
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
+            title="Save"
+          >
+            <Save className="h-3.5 w-3.5" />
+            Save
+          </button>
+
+          {/* Publish / Promote button */}
+          {selectedSkill?.source === 'drafts' && (
+            <button
+              onClick={handlePromote}
+              disabled={isPromoting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Promote to Active"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {isPromoting ? 'Publishing...' : 'Publish'}
+            </button>
+          )}
+
+          {/* New session button */}
           <button
             onClick={handleNewSession}
-            className="px-3 py-1.5 rounded-lg text-xs text-stone hover:text-parchment hover:bg-surface/40 border border-border-custom transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-stone hover:text-parchment hover:bg-surface/40 border border-border-custom transition-colors"
           >
-            New Session
+            <Plus className="h-3.5 w-3.5" />
+            New
           </button>
         </div>
       </div>
 
-      {/* Accordion layout — 3 panels: Chat, Files, Test */}
+      {/* Two-panel split layout */}
       <div className="flex-1 flex min-h-0">
-        {/* Left column — My Skills sidebar */}
-        <MySkillsSidebar onNewDraft={handleNewDraft} refreshKey={skillsRefreshKey} selectedSkill={selectedSkill} onSelectSkill={handleSelectSkill} />
+        {/* LEFT PANEL */}
+        <div className="flex-1 flex flex-col min-h-0 border-r border-border-custom">
+          {/* Tab bar: Chat | Files */}
+          <div className="flex shrink-0 border-b border-border-custom bg-ink/30">
+            {([
+              { key: 'chat' as const, label: 'Chat', icon: MessageSquare },
+              { key: 'files' as const, label: 'Files', icon: FileText },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setLeftTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                  leftTab === tab.key
+                    ? 'border-sand text-parchment'
+                    : 'border-transparent text-stone/50 hover:text-stone hover:border-stone/30'
+                }`}
+              >
+                <tab.icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-        {/* Chat panel */}
-        <div className={`transition-all duration-300 overflow-hidden ${activePanel === 'chat' ? 'flex-1 flex flex-col min-w-0' : 'w-12 shrink-0'}`}>
-          {activePanel === 'chat' ? (
-            <div className="flex-1 flex flex-col min-h-0 min-w-0">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
-                <MessageSquare className="h-4 w-4 text-sand" />
-                <h2 className="text-sm font-medium text-parchment">Chat</h2>
-                {selectedSkill && (
-                  <span className="text-xs text-stone/50 ml-1">
-                    — {selectedSkill.name}
-                  </span>
-                )}
-              </div>
-              <SkillChat selectedSkill={selectedSkill} />
-            </div>
-          ) : (
-            <button
-              onClick={() => setActivePanel('chat')}
-              className="w-12 h-full border-r border-border-custom bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
-            >
-              <MessageSquare className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
-              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Chat</span>
-              <ChevronRight className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
-            </button>
-          )}
-        </div>
-
-        {/* Files panel */}
-        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'files' ? 'flex-1 flex min-w-0' : 'w-12 shrink-0'}`}>
-          {activePanel === 'files' ? (
-            <div className="flex-1 flex flex-col min-h-0 min-w-0">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
-                <FileText className="h-4 w-4 text-sand" />
-                <h2 className="text-sm font-medium text-parchment">Files</h2>
-              </div>
-              {selectedSkill ? (
+          {/* Left panel content */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {leftTab === 'chat' ? (
+              <>
+                <SkillChat selectedSkill={selectedSkill} />
+              </>
+            ) : (
+              /* Files tab content */
+              selectedSkill ? (
                 <SkillFileViewer skill={selectedSkill} onPromote={handlePromote} isPromoting={isPromoting} />
               ) : (
                 <div className="flex-1 flex items-center justify-center px-4">
                   <div className="text-center">
                     <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                    <p className="text-xs text-stone/40">Select a skill from the sidebar to view its files</p>
+                    <p className="text-xs text-stone/40">Select a skill to view its files</p>
                   </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            <button
-              onClick={() => setActivePanel('files')}
-              className="w-12 h-full bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
-            >
-              <FileText className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
-              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Files</span>
-              <ChevronLeft className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
-            </button>
-          )}
+              )
+            )}
+          </div>
+
+          {/* Collapsible file tree at bottom of left panel */}
+          <div className="shrink-0">
+            <FileTree files={selectedDraftFiles} onFileClick={handleFileTreeClick} />
+          </div>
         </div>
 
-        {/* Test panel */}
-        <div className={`transition-all duration-300 overflow-hidden border-l border-border-custom ${activePanel === 'test' ? 'flex-1' : 'w-12 shrink-0'}`}>
-          {activePanel === 'test' ? (
-            <div className="flex flex-col h-full min-w-0">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-border-custom shrink-0">
-                <Play className="h-4 w-4 text-sand" />
-                <h2 className="text-sm font-medium text-parchment">Test</h2>
-              </div>
-              <SkillTester selectedSkill={selectedSkill} />
-            </div>
-          ) : (
-            <button
-              onClick={() => setActivePanel('test')}
-              className="w-12 h-full bg-ink/40 flex flex-col items-center justify-center gap-3 hover:bg-surface/30 transition-colors cursor-pointer group"
-            >
-              <Play className="h-3.5 w-3.5 text-stone/40 group-hover:text-sand transition-colors" />
-              <span className="text-[10px] text-stone/50 uppercase tracking-wider group-hover:text-parchment transition-colors" style={{ writingMode: 'vertical-lr' }}>Test</span>
-              <ChevronLeft className="h-4 w-4 text-stone/40 group-hover:text-parchment transition-colors" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* File viewer Sheet */}
-      {selectedFile && (
-        <Sheet open={fileSheetOpen} onOpenChange={v => { if (!v) closeFileSheet() }}>
-          <SheetHeader>
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
-                <File className="h-4 w-4 text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-medium text-parchment truncate">{selectedFile}</h3>
-                {selectedDraft && (
-                  <p className="text-xs text-stone/50">{selectedDraft}</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {!fileEditing && fileContent && !fileContent.startsWith('[Binary file') && (
-                <button
-                  onClick={() => { setFileDraft(fileContent || ''); setFileEditing(true) }}
-                  className="p-1.5 rounded-md text-stone/50 hover:text-sand hover:bg-sand/10 transition-colors"
-                  title="Edit"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
+        {/* RIGHT PANEL */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Tab bar: Test | Console | Files | Web */}
+          <div className="flex shrink-0 border-b border-border-custom bg-ink/30">
+            {([
+              { key: 'test' as const, label: 'Test', icon: Play },
+              { key: 'console' as const, label: 'Console', icon: Terminal },
+              { key: 'files' as const, label: 'Files', icon: FileText },
+              { key: 'web' as const, label: 'Web', icon: Globe },
+            ]).map(tab => (
               <button
-                onClick={closeFileSheet}
-                className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/50 transition-colors"
+                key={tab.key}
+                onClick={() => setRightTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                  rightTab === tab.key
+                    ? 'border-sand text-parchment'
+                    : 'border-transparent text-stone/50 hover:text-stone hover:border-stone/30'
+                }`}
               >
-                <X className="h-4 w-4" />
+                <tab.icon className="h-3.5 w-3.5" />
+                {tab.label}
               </button>
-            </div>
-          </SheetHeader>
-          <SheetBody className="flex flex-col h-[calc(100vh-65px)]">
-            {fileEditing ? (
-              <div className="flex flex-col flex-1">
-                <textarea
-                  value={fileDraft}
-                  onChange={e => setFileDraft(e.target.value)}
-                  className="flex-1 bg-ink/50 text-parchment/90 text-sm font-mono rounded-lg border border-border-custom p-3 resize-none focus:outline-none focus:border-sand/50"
-                />
-                <div className="flex items-center gap-2 mt-3 shrink-0">
-                  <button
-                    onClick={handleFileSaveWithValidation}
-                    disabled={fileSaving}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-3 w-3" /> {fileSaving ? 'Saving...' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => setFileEditing(false)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-stone hover:text-parchment transition-colors"
-                  >
-                    <X className="h-3 w-3" /> Cancel
-                  </button>
+            ))}
+          </div>
+
+          {/* Right panel content */}
+          <div className="flex-1 flex flex-col min-h-0">
+            {rightTab === 'test' ? (
+              <SkillTester selectedSkill={selectedSkill} />
+            ) : rightTab === 'console' ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <Terminal className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                  <p className="text-sm text-stone/50">Console</p>
+                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
+                </div>
+              </div>
+            ) : rightTab === 'files' ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                  <p className="text-sm text-stone/50">Files</p>
+                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
                 </div>
               </div>
             ) : (
-              <pre className="text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words">{fileContent}</pre>
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <Globe className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                  <p className="text-sm text-stone/50">Web Preview</p>
+                  <p className="text-xs text-stone/30 mt-1">Coming soon</p>
+                </div>
+              </div>
             )}
-          </SheetBody>
-        </Sheet>
-      )}
+          </div>
+        </div>
+      </div>
 
       {/* Lightbox */}
       {lightboxSrc && (
