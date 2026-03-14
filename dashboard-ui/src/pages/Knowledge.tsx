@@ -1,12 +1,14 @@
 import { useState, useMemo, useCallback, useRef } from 'react'
 import {
   FileText, Search, Upload, Plus, X, Pencil, Trash2, MoreHorizontal,
-  LayoutGrid, LayoutList, ChevronDown
+  LayoutGrid, LayoutList, ChevronDown, Image, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import {
   useUser, useKnowledge, useDeleteKnowledge,
-  useCreateKnowledge, useUploadKnowledge
+  useCreateKnowledge, useUploadKnowledge, useUploads
 } from '@/hooks/useSpaces'
+import { getUploadUrl } from '@/lib/api'
+import type { UploadFile } from '@/lib/api'
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from '@/components/ui/dialog'
 import { FileIcon } from '@/features/KnowledgeFileViewer'
 import { useFileViewer } from '@/contexts/FileViewerContext'
@@ -301,12 +303,178 @@ function DeleteDialog({ open, onClose, filename, onConfirm, isPending }: {
   )
 }
 
+// --- Lightbox ---
+
+function Lightbox({ file, onClose, onPrev, onNext }: {
+  file: UploadFile
+  onClose: () => void
+  onPrev?: () => void
+  onNext?: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button onClick={onClose} className="absolute top-4 right-4 text-white/60 hover:text-white p-2">
+        <X className="h-6 w-6" />
+      </button>
+      {onPrev && (
+        <button
+          onClick={e => { e.stopPropagation(); onPrev() }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white p-2 bg-black/40 rounded-full"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+      )}
+      {onNext && (
+        <button
+          onClick={e => { e.stopPropagation(); onNext() }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-white/60 hover:text-white p-2 bg-black/40 rounded-full"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      )}
+      <div className="max-w-[90vw] max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+        <img
+          src={getUploadUrl(file.name)}
+          alt={file.name}
+          className="max-w-full max-h-[80vh] object-contain rounded-lg"
+        />
+        <div className="mt-3 text-center">
+          <p className="text-sm text-white/80">{file.name}</p>
+          <p className="text-xs text-white/40">{formatFileSize(file.size)} &middot; {formatFullDate(file.modifiedAt)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Uploads Grid ---
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatFullDate(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+function UploadsGrid() {
+  const PAGE_SIZE = 60
+  const [page, setPage] = useState(0)
+  const { data, isLoading } = useUploads(PAGE_SIZE, page * PAGE_SIZE)
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null)
+
+  const files = data?.files || []
+  const total = data?.total || 0
+  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const imageFiles = useMemo(() => files.filter(f => f.isImage), [files])
+
+  const openLightbox = (file: UploadFile) => {
+    const idx = imageFiles.indexOf(file)
+    setLightboxIdx(idx >= 0 ? idx : null)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i} className="aspect-square rounded-xl bg-surface/50 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  if (files.length === 0) {
+    return (
+      <div className="rounded-xl border border-border-custom bg-surface/30 py-16 text-center">
+        <Image className="h-10 w-10 text-stone/15 mx-auto mb-3" />
+        <p className="text-sm text-stone/40">No uploads yet</p>
+        <p className="text-xs text-stone/25 mt-1">Screenshots and images from workers will appear here</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {files.map(file => (
+          <button
+            key={file.name}
+            onClick={() => file.isImage ? openLightbox(file) : undefined}
+            className="group relative flex flex-col rounded-xl border border-border-custom hover:border-stone/30 bg-surface/20 hover:bg-surface/40 transition-colors overflow-hidden text-left"
+          >
+            {file.isImage ? (
+              <div className="aspect-square bg-ink/50 overflow-hidden">
+                <img
+                  src={getUploadUrl(file.name)}
+                  alt={file.name}
+                  loading="lazy"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                />
+              </div>
+            ) : (
+              <div className="aspect-square bg-ink/50 flex items-center justify-center">
+                <FileText className="h-10 w-10 text-stone/20" />
+              </div>
+            )}
+            <div className="px-3 py-2.5 min-w-0">
+              <p className="text-xs text-parchment/70 truncate">{file.name}</p>
+              <p className="text-[10px] text-stone/40 mt-0.5">
+                {formatFileSize(file.size)} &middot; {formatDate(file.modifiedAt)}
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-6">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="px-3 py-1.5 text-xs text-stone/60 hover:text-parchment disabled:opacity-30 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 inline" /> Prev
+          </button>
+          <span className="text-xs text-stone/40">
+            {page + 1} / {totalPages} ({total} files)
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="px-3 py-1.5 text-xs text-stone/60 hover:text-parchment disabled:opacity-30 transition-colors"
+          >
+            Next <ChevronRight className="h-4 w-4 inline" />
+          </button>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxIdx !== null && imageFiles[lightboxIdx] && (
+        <Lightbox
+          file={imageFiles[lightboxIdx]}
+          onClose={() => setLightboxIdx(null)}
+          onPrev={lightboxIdx > 0 ? () => setLightboxIdx(lightboxIdx - 1) : undefined}
+          onNext={lightboxIdx < imageFiles.length - 1 ? () => setLightboxIdx(lightboxIdx + 1) : undefined}
+        />
+      )}
+    </>
+  )
+}
+
 // --- Main Page ---
 
 export function Knowledge() {
   const { data: groups, isLoading } = useKnowledge()
   const { data: userData } = useUser()
 
+  const [activeTab, setActiveTab] = useState<'library' | 'uploads'>('library')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
@@ -377,38 +545,65 @@ export function Knowledge() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="font-heading text-2xl text-parchment">Library</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-parchment'}`}
-              title="List view"
-            >
-              <LayoutList className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-parchment'}`}
-              title="Grid view"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-border-custom mx-1" />
-            <button
-              onClick={() => setNewFileOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-surface/50 text-parchment/80 rounded-lg hover:bg-surface transition-colors border border-border-custom"
-            >
-              <Plus className="h-3.5 w-3.5" /> New
-            </button>
-            <button
-              onClick={() => setUploadOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors"
-            >
-              <Upload className="h-3.5 w-3.5" /> Upload
-            </button>
-          </div>
+          {activeTab === 'library' && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-parchment'}`}
+                title="List view"
+              >
+                <LayoutList className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'text-sand bg-sand/10' : 'text-stone/40 hover:text-parchment'}`}
+                title="Grid view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <div className="w-px h-5 bg-border-custom mx-1" />
+              <button
+                onClick={() => setNewFileOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-surface/50 text-parchment/80 rounded-lg hover:bg-surface transition-colors border border-border-custom"
+              >
+                <Plus className="h-3.5 w-3.5" /> New
+              </button>
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-sand/20 text-sand rounded-lg hover:bg-sand/30 transition-colors"
+              >
+                <Upload className="h-3.5 w-3.5" /> Upload
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Search and Filter bar */}
+        {/* Tab navigation */}
+        <div className="flex gap-1 mb-6 border-b border-border-custom">
+          <button
+            onClick={() => setActiveTab('library')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'library'
+                ? 'text-sand border-b-2 border-sand -mb-px'
+                : 'text-stone/50 hover:text-parchment/70'
+            }`}
+          >
+            Knowledge
+          </button>
+          <button
+            onClick={() => setActiveTab('uploads')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'uploads'
+                ? 'text-sand border-b-2 border-sand -mb-px'
+                : 'text-stone/50 hover:text-parchment/70'
+            }`}
+          >
+            Uploads
+          </button>
+        </div>
+
+        {/* Search and Filter bar (library tab only) */}
+        {activeTab === 'library' && (
         <div className="flex items-center gap-3 mb-6">
           <div className="relative">
             <select
@@ -442,111 +637,116 @@ export function Knowledge() {
             )}
           </div>
         </div>
+        )}
 
         {/* Content */}
-        {isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-10 rounded-lg bg-surface/50 animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* USER.md */}
-            {showUser && (filter === 'all' || filter === 'global') && (
-              <div>
-                {viewMode === 'list' ? (
-                  <button
-                    onClick={() => openFile('global', 'USER.md', true)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group text-left"
-                  >
-                    <FileIcon filename="USER.md" isUser />
-                    <span className="text-sm text-parchment/80 flex-1 truncate">USER.md</span>
-                    <span className="text-xs text-stone/30 shrink-0">User Profile</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => openFile('global', 'USER.md', true)}
-                    className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
-                  >
-                    <FileIcon filename="USER.md" isUser />
-                    <span className="text-xs text-parchment/70 truncate w-full">USER.md</span>
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Knowledge groups */}
-            {allGroups.map(group => (
-              <div key={group.source}>
-                {/* Group header */}
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-px flex-1 bg-border-custom" />
-                  <span className="text-xs font-medium text-stone/50 uppercase tracking-wider">{group.label}</span>
-                  <span className="text-xs text-stone/30">{groupDate(group)}</span>
-                  <div className="h-px flex-1 bg-border-custom" />
+        {activeTab === 'library' ? (
+          isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-10 rounded-lg bg-surface/50 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* USER.md */}
+              {showUser && (filter === 'all' || filter === 'global') && (
+                <div>
+                  {viewMode === 'list' ? (
+                    <button
+                      onClick={() => openFile('global', 'USER.md', true)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group text-left"
+                    >
+                      <FileIcon filename="USER.md" isUser />
+                      <span className="text-sm text-parchment/80 flex-1 truncate">USER.md</span>
+                      <span className="text-xs text-stone/30 shrink-0">User Profile</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => openFile('global', 'USER.md', true)}
+                      className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
+                    >
+                      <FileIcon filename="USER.md" isUser />
+                      <span className="text-xs text-parchment/70 truncate w-full">USER.md</span>
+                    </button>
+                  )}
                 </div>
+              )}
 
-                {viewMode === 'list' ? (
-                  /* List view */
-                  <div>
-                    {group.files.map(file => {
-                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
-                      return (
-                        <div
-                          key={file.path}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group cursor-pointer"
-                          onClick={() => openFile(group.source, file.path)}
-                        >
-                          <FileIcon filename={file.name} />
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm text-parchment/80 truncate block">{file.name}</span>
-                            {dirPrefix && <span className="text-xs text-stone/40 truncate block">{dirPrefix}</span>}
-                          </div>
-                          <span className="text-xs text-stone/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">{formatDate(file.lastModified)}</span>
-                          <RowMenu
-                            onEdit={() => openFile(group.source, file.path)}
-                            onDelete={() => handleDelete(group.source, file.path)}
-                          />
-                        </div>
-                      )
-                    })}
+              {/* Knowledge groups */}
+              {allGroups.map(group => (
+                <div key={group.source}>
+                  {/* Group header */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-px flex-1 bg-border-custom" />
+                    <span className="text-xs font-medium text-stone/50 uppercase tracking-wider">{group.label}</span>
+                    <span className="text-xs text-stone/30">{groupDate(group)}</span>
+                    <div className="h-px flex-1 bg-border-custom" />
                   </div>
-                ) : (
-                  /* Grid view */
-                  <div className="flex flex-wrap gap-3">
-                    {group.files.map(file => {
-                      const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
-                      return (
-                        <button
-                          key={file.path}
-                          onClick={() => openFile(group.source, file.path)}
-                          className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
-                          title={file.path}
-                        >
-                          <FileIcon filename={file.name} />
-                          <div className="w-full min-w-0">
-                            <span className="text-xs text-parchment/70 truncate block">{file.name}</span>
-                            {dirPrefix && <span className="text-[10px] text-stone/40 truncate block">{dirPrefix}</span>}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
 
-            {/* Empty state */}
-            {!showUser && allGroups.length === 0 && (
-              <div className="rounded-xl border border-border-custom bg-surface/30 py-16 text-center">
-                <FileText className="h-10 w-10 text-stone/15 mx-auto mb-3" />
-                <p className="text-sm text-stone/40">
-                  {search ? 'No files match your search' : 'No knowledge files found'}
-                </p>
-              </div>
-            )}
-          </div>
+                  {viewMode === 'list' ? (
+                    /* List view */
+                    <div>
+                      {group.files.map(file => {
+                        const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
+                        return (
+                          <div
+                            key={file.path}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface/30 transition-colors group cursor-pointer"
+                            onClick={() => openFile(group.source, file.path)}
+                          >
+                            <FileIcon filename={file.name} />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-parchment/80 truncate block">{file.name}</span>
+                              {dirPrefix && <span className="text-xs text-stone/40 truncate block">{dirPrefix}</span>}
+                            </div>
+                            <span className="text-xs text-stone/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">{formatDate(file.lastModified)}</span>
+                            <RowMenu
+                              onEdit={() => openFile(group.source, file.path)}
+                              onDelete={() => handleDelete(group.source, file.path)}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    /* Grid view */
+                    <div className="flex flex-wrap gap-3">
+                      {group.files.map(file => {
+                        const dirPrefix = file.path.includes('/') ? file.path.substring(0, file.path.lastIndexOf('/')) : ''
+                        return (
+                          <button
+                            key={file.path}
+                            onClick={() => openFile(group.source, file.path)}
+                            className="inline-flex flex-col items-center gap-2 p-4 rounded-xl border border-border-custom hover:border-stone/30 hover:bg-surface/20 transition-colors text-center w-28"
+                            title={file.path}
+                          >
+                            <FileIcon filename={file.name} />
+                            <div className="w-full min-w-0">
+                              <span className="text-xs text-parchment/70 truncate block">{file.name}</span>
+                              {dirPrefix && <span className="text-[10px] text-stone/40 truncate block">{dirPrefix}</span>}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Empty state */}
+              {!showUser && allGroups.length === 0 && (
+                <div className="rounded-xl border border-border-custom bg-surface/30 py-16 text-center">
+                  <FileText className="h-10 w-10 text-stone/15 mx-auto mb-3" />
+                  <p className="text-sm text-stone/40">
+                    {search ? 'No files match your search' : 'No knowledge files found'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )
+        ) : (
+          <UploadsGrid />
         )}
       </div>
 

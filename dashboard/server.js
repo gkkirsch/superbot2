@@ -1877,6 +1877,79 @@ app.post('/api/knowledge/:source/upload', knowledgeUpload.single('file'), async 
   }
 })
 
+// --- Uploads browser ---
+
+const UPLOADS_DIR_BROWSE = join(SUPERBOT_DIR, 'uploads')
+const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'])
+
+app.get('/api/uploads', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500)
+    const offset = parseInt(req.query.offset) || 0
+
+    await mkdir(UPLOADS_DIR_BROWSE, { recursive: true })
+    const entries = await safeReaddir(UPLOADS_DIR_BROWSE)
+    const files = []
+
+    for (const name of entries) {
+      if (name.startsWith('.')) continue
+      try {
+        const fullPath = join(UPLOADS_DIR_BROWSE, name)
+        const s = await stat(fullPath)
+        if (!s.isFile()) continue
+        const ext = extname(name).toLowerCase()
+        files.push({
+          name,
+          size: s.size,
+          modifiedAt: s.mtime.toISOString(),
+          isImage: IMAGE_EXTS.has(ext),
+          ext,
+        })
+      } catch { /* skip */ }
+    }
+
+    // Sort by most recent first
+    files.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime())
+
+    res.json({
+      files: files.slice(offset, offset + limit),
+      total: files.length,
+      offset,
+      limit,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/uploads/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params
+    const safeName = filename.replace(/\.\./g, '').replace(/[^a-zA-Z0-9_\-\.]/g, '')
+    if (!safeName) return res.status(400).json({ error: 'Invalid filename' })
+
+    const filePath = join(UPLOADS_DIR_BROWSE, safeName)
+    if (!existsSync(filePath)) return res.status(404).json({ error: 'File not found' })
+
+    const ext = extname(safeName).toLowerCase()
+    const mimeTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+    }
+    const contentType = mimeTypes[ext] || 'application/octet-stream'
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Cache-Control', 'public, max-age=3600')
+    const data = await readFile(filePath)
+    res.send(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 app.put('/api/user', async (req, res) => {
   try {
     const { content } = req.body

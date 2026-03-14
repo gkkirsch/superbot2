@@ -58,6 +58,7 @@ import {
   detachSkillFromSpace,
   fetchSkillManifests,
   fetchSpaceSchedule,
+  fetchUploads,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
@@ -485,6 +486,16 @@ export function useUploadKnowledge() {
 
 export function useLatestFiles() {
   return useQuery({ queryKey: ['latest-files'], queryFn: fetchLatestFiles, staleTime: 30_000 })
+}
+
+// --- Uploads browser ---
+
+export function useUploads(limit = 100, offset = 0) {
+  return useQuery({
+    queryKey: ['uploads', limit, offset],
+    queryFn: () => fetchUploads(limit, offset),
+    staleTime: 30_000,
+  })
 }
 
 // --- Dashboard cards ---
