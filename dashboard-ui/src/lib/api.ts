@@ -830,6 +830,31 @@ export async function uploadKnowledgeFile(source: string, file: File): Promise<{
   return response.json()
 }
 
+// --- Uploads browser ---
+
+export interface UploadFile {
+  name: string
+  size: number
+  modifiedAt: string
+  isImage: boolean
+  ext: string
+}
+
+export interface UploadsResponse {
+  files: UploadFile[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export async function fetchUploads(limit = 100, offset = 0): Promise<UploadsResponse> {
+  return fetchJson<UploadsResponse>(`/uploads?limit=${limit}&offset=${offset}`)
+}
+
+export function getUploadUrl(filename: string): string {
+  return `${API_BASE}/uploads/${encodeURIComponent(filename)}`
+}
+
 // --- Latest files ---
 
 export interface LatestFile {
