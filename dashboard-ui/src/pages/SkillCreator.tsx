@@ -132,6 +132,12 @@ function TabBar<T extends string>({ tabs, activeTab, onTabChange }: {
   )
 }
 
+function autoResize(e: React.FormEvent<HTMLTextAreaElement>) {
+  const target = e.currentTarget
+  target.style.height = 'auto'
+  target.style.height = `${Math.min(target.scrollHeight, 128)}px`
+}
+
 // --- Tool Activity ---
 
 function toolDisplayName(name: string): string {
@@ -145,6 +151,17 @@ function toolDisplayName(name: string): string {
     Skill: 'Skill invoked',
   }
   return map[name] || name
+}
+
+function activeToolLabel(name: string, inputJson: string): string {
+  if (['Write', 'Edit', 'Read'].includes(name)) {
+    try {
+      const p = JSON.parse(inputJson)
+      const file = p.file_path?.split('/').pop() || 'file'
+      return `${toolDisplayName(name).replace(' file', '')} ${file}...`
+    } catch { return `${toolDisplayName(name)}...` }
+  }
+  return `${toolDisplayName(name)}...`
 }
 
 function ToolIndicator({ tools }: { tools: { name: string; input: Record<string, unknown> }[] }) {
@@ -368,19 +385,9 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
         ) : (
           <>
             {messages.map(msg => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 overflow-hidden ${
-                  msg.role === 'user'
-                    ? 'rounded-br-md bg-[rgba(180,160,120,0.15)]'
-                    : 'rounded-bl-md bg-[rgba(120,140,160,0.12)]'
-                }`}>
-                  {msg.role === 'user' ? (
-                    <p className="text-sm text-parchment/90 whitespace-pre-wrap leading-relaxed [overflow-wrap:anywhere]">{msg.content}</p>
-                  ) : (
-                    <MarkdownContent content={msg.content} className="text-parchment/80" />
-                  )}
-                </div>
-              </div>
+              msg.role === 'user'
+                ? <UserBubble key={msg.id} content={msg.content} />
+                : <AssistantBubble key={msg.id} content={msg.content} />
             ))}
             {streaming && (
               <div className="flex justify-start">
@@ -400,13 +407,7 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
                     <div className="flex gap-1.5 items-center py-1 mt-1">
                       <Loader2 className="h-3 w-3 text-blue-400/70 animate-spin shrink-0" />
                       <span className="text-xs text-blue-300/70">
-                        {activeTool === 'Write' && (() => { try { const p = JSON.parse(toolInputJson); return `Writing ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Writing file...' } })()}
-                        {activeTool === 'Edit' && (() => { try { const p = JSON.parse(toolInputJson); return `Editing ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Editing file...' } })()}
-                        {activeTool === 'Read' && (() => { try { const p = JSON.parse(toolInputJson); return `Reading ${p.file_path?.split('/').pop() || 'file'}...` } catch { return 'Reading file...' } })()}
-                        {activeTool === 'Bash' && 'Running command...'}
-                        {activeTool === 'Glob' && 'Searching files...'}
-                        {activeTool === 'Grep' && 'Searching content...'}
-                        {!['Write', 'Edit', 'Read', 'Bash', 'Glob', 'Grep'].includes(activeTool) && `Using ${activeTool}...`}
+                        {activeToolLabel(activeTool, toolInputJson)}
                       </span>
                     </div>
                   )}
@@ -444,11 +445,7 @@ function SkillChat({ selectedSkill }: { selectedSkill: TesterSkill | null }) {
                 handleSend()
               }
             }}
-            onInput={e => {
-              const target = e.currentTarget
-              target.style.height = 'auto'
-              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-            }}
+            onInput={autoResize}
           />
           {streaming ? (
             <button
@@ -1107,11 +1104,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
                 handleTestSend()
               }
             }}
-            onInput={e => {
-              const target = e.currentTarget
-              target.style.height = 'auto'
-              target.style.height = `${Math.min(target.scrollHeight, 128)}px`
-            }}
+            onInput={autoResize}
           />
           {testStatus === 'processing' ? (
             <button
@@ -1137,8 +1130,6 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
     </div>
   )
 }
-
-// --- Collapsible File Tree ---
 
 // --- Creation Modal ---
 
