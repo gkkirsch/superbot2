@@ -4966,13 +4966,18 @@ What this skill does and how to use it.
 // Fork an active skill into a new draft
 app.post('/api/skill-creator/fork', async (req, res) => {
   try {
-    const { skillId, source } = req.body
+    const { skillId, source, installPath } = req.body
     if (!skillId) return res.status(400).json({ error: 'skillId required' })
 
-    // Find source skill path
-    const sourceDir = source === 'drafts'
-      ? join(SKILL_CREATOR_DRAFTS_DIR, skillId)
-      : join(SUPERBOT_DIR, 'skills', skillId)
+    // Find source skill path — check installPath (marketplace plugins), drafts dir, or standalone skills dir
+    let sourceDir
+    if (installPath && existsSync(installPath)) {
+      sourceDir = installPath
+    } else if (source === 'drafts') {
+      sourceDir = join(SKILL_CREATOR_DRAFTS_DIR, skillId)
+    } else {
+      sourceDir = join(SUPERBOT_DIR, 'skills', skillId)
+    }
 
     // Check it exists
     try { await stat(sourceDir) } catch { return res.status(404).json({ error: 'Skill not found' }) }
@@ -4981,8 +4986,14 @@ app.post('/api/skill-creator/fork', async (req, res) => {
     const draftName = `fork-${skillId}-${Date.now()}`
     const draftPath = join(SKILL_CREATOR_DRAFTS_DIR, draftName)
 
-    // Copy entire skill directory to new draft
-    await cp(sourceDir, draftPath, { recursive: true })
+    // Copy entire skill directory to new draft, excluding .git and node_modules
+    await cp(sourceDir, draftPath, {
+      recursive: true,
+      filter: (src) => {
+        const rel = src.slice(sourceDir.length)
+        return !rel.startsWith('/.git') && !rel.startsWith('/node_modules')
+      },
+    })
 
     // Write draft metadata with forkedFrom
     const metadataPath = join(draftPath, 'draft-metadata.json')
@@ -5416,7 +5427,7 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
       }
       for (const entry of entries) {
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
-        if (['draft-metadata.json', 'chat-history.jsonl', 'versions'].includes(entry.name)) continue
+        if (['draft-metadata.json', 'chat-history.jsonl', 'versions', '.git', 'node_modules'].includes(entry.name)) continue
         if (entry.isDirectory()) {
           results.push({ path: relPath, type: 'directory' })
           const children = await listFiles(join(dir, entry.name), relPath)

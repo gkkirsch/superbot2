@@ -216,6 +216,8 @@ interface TesterSkill {
   name: string
   description: string
   source: 'drafts' | 'active'
+  installPath?: string
+  isPlugin?: boolean
 }
 
 interface SkillFileEntry {
@@ -1360,7 +1362,7 @@ function CreationModal({ open, onClose, onCreated }: {
       const res = await fetch('/api/skill-creator/fork', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId: skill.id, source: skill.source }),
+        body: JSON.stringify({ skillId: skill.id, source: skill.source, installPath: skill.installPath }),
       })
       const data = await res.json()
       if (data.ok) {
@@ -1516,7 +1518,7 @@ interface TabData {
   error: string | null
 }
 
-function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpen: string | null }) {
+function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkill; fileToOpen: string | null; refreshKey?: number }) {
   const [openTabs, setOpenTabs] = useState<Map<string, TabData>>(new Map())
   const [activeTab, setActiveTab] = useState<string | null>(null)
   const [savingTab, setSavingTab] = useState<string | null>(null)
@@ -1590,13 +1592,13 @@ function InlineFileEditor({ skill, fileToOpen }: { skill: TesterSkill; fileToOpe
     }
 
     return () => { cancelled = true }
-  }, [fileToOpen, skill.id, skill.source, isDraft])
+  }, [fileToOpen, skill.id, skill.source, isDraft, refreshKey])
 
-  // Reset tabs when skill changes
+  // Reset tabs when skill changes or when version is restored (refreshKey changes)
   useEffect(() => {
     setOpenTabs(new Map())
     setActiveTab(null)
-  }, [skill.id, skill.source])
+  }, [skill.id, skill.source, refreshKey])
 
   // Keyboard shortcut: Cmd+S / Ctrl+S
   useEffect(() => {
@@ -1800,6 +1802,7 @@ export function SkillCreator() {
   })
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
   const [skillsRefreshKey, setSkillsRefreshKey] = useState(0)
+  const [fileEditorRefreshKey, setFileEditorRefreshKey] = useState(0)
   const [isPromoting, setIsPromoting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
 
@@ -1937,8 +1940,9 @@ export function SkillCreator() {
         // Extract version number
         const num = parseInt(versionName.replace('v', ''))
         if (!isNaN(num)) setCurrentVersion(num)
-        // Force refresh files
+        // Force refresh files and editor content
         setSkillsRefreshKey(k => k + 1)
+        setFileEditorRefreshKey(k => k + 1)
       }
     } catch {}
   }, [selectedDraft])
@@ -1987,8 +1991,12 @@ export function SkillCreator() {
 
   // Handle file click from file tree -- switch to Files tab and select file
   const handleFileTreeClick = useCallback((path: string) => {
-    setSelectedFilePath(path)
-    setLeftTab('files')
+    // Clear first to ensure re-trigger if clicking the same file after version restore
+    setSelectedFilePath(null)
+    setTimeout(() => {
+      setSelectedFilePath(path)
+      setLeftTab('files')
+    }, 0)
   }, [])
 
   return (
@@ -2089,7 +2097,12 @@ export function SkillCreator() {
           {/* Export button */}
           {selectedDraft && (
             <button
-              onClick={() => window.open(`/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/export`)}
+              onClick={() => {
+                const a = document.createElement('a')
+                a.href = `/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/export`
+                a.download = `${selectedDraft}.zip`
+                a.click()
+              }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
               title="Export draft as zip"
             >
@@ -2138,22 +2151,20 @@ export function SkillCreator() {
             ))}
           </div>
 
-          {/* Left panel content */}
-          <div className="flex-1 flex flex-col min-h-0">
-            {leftTab === 'chat' ? (
-              <SkillChat selectedSkill={selectedSkill} />
+          {/* Left panel content — both tabs stay mounted to preserve state */}
+          <div className={`flex-1 flex flex-col min-h-0 ${leftTab === 'chat' ? '' : 'hidden'}`}>
+            <SkillChat selectedSkill={selectedSkill} />
+          </div>
+          <div className={`flex-1 flex flex-col min-h-0 ${leftTab === 'files' ? '' : 'hidden'}`}>
+            {selectedSkill ? (
+              <InlineFileEditor skill={selectedSkill} fileToOpen={selectedFilePath} refreshKey={fileEditorRefreshKey} />
             ) : (
-              /* Files tab content — inline editor with VS Code-style tabs */
-              selectedSkill ? (
-                <InlineFileEditor skill={selectedSkill} fileToOpen={selectedFilePath} />
-              ) : (
-                <div className="flex-1 flex items-center justify-center px-4">
-                  <div className="text-center">
-                    <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
-                    <p className="text-xs text-stone/40">Select a skill to view its files</p>
-                  </div>
+              <div className="flex-1 flex items-center justify-center px-4">
+                <div className="text-center">
+                  <FileText className="h-8 w-8 text-stone/20 mx-auto mb-2" />
+                  <p className="text-xs text-stone/40">Select a skill to view its files</p>
                 </div>
-              )
+              </div>
             )}
           </div>
 
