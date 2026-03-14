@@ -96,17 +96,6 @@ function EmptyState({ icon: Icon, message, subtitle }: { icon: React.ComponentTy
   )
 }
 
-function SourceBadge({ source }: { source: string }) {
-  const isDraft = source === 'drafts'
-  return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-      isDraft ? 'bg-amber-500/15 text-amber-400/80' : 'bg-emerald-500/15 text-emerald-400/80'
-    }`}>
-      {isDraft ? 'Draft' : 'Active'}
-    </span>
-  )
-}
-
 function TabBar<T extends string>({ tabs, activeTab, onTabChange }: {
   tabs: { key: T; label: string; icon: React.ComponentType<{ className?: string }> }[]
   activeTab: T
@@ -211,11 +200,6 @@ interface TesterSkill {
   source: 'drafts' | 'active'
   installPath?: string
   isPlugin?: boolean
-}
-
-interface SkillFileEntry {
-  path: string
-  content: string
 }
 
 // --- Skill Chat (AI assistant via claude -p) ---
@@ -969,10 +953,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <FlaskConical className="h-8 w-8 text-stone/20 mx-auto mb-3" />
-              <div className="flex items-center justify-center gap-2 mb-1">
-                <p className="text-sm text-parchment/80">{selectedSkill.name}</p>
-                <SourceBadge source={selectedSkill.source} />
-              </div>
+              <p className="text-sm text-parchment/80 mb-1">{selectedSkill.name}</p>
               <p className="text-xs text-stone/40 mb-4">Spin up an isolated Claude session with only this skill loaded</p>
               <button
                 onClick={startTestSession}
@@ -1363,14 +1344,12 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
   const [savingTab, setSavingTab] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const isDraft = skill.source === 'drafts'
-
   // Reset tabs when skill changes or when version is restored (refreshKey changes)
   // NOTE: This must be defined BEFORE the file-open effect so it runs first on mount
   useEffect(() => {
     setOpenTabs(new Map())
     setActiveTab(null)
-  }, [skill.id, skill.source, refreshKey])
+  }, [skill.id, refreshKey])
 
   // When fileToOpen changes, open that file as a new tab
   useEffect(() => {
@@ -1391,48 +1370,19 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
     // Fetch file content for new tabs
     async function fetchContent() {
       try {
-        let content = ''
-        if (isDraft) {
-          const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(file)}`)
-          const data = await res.json()
-          if (cancelled) return
-          if (data.ok) {
-            content = data.content || ''
-          } else {
-            setOpenTabs(prev => {
-              const next = new Map(prev)
-              next.set(file, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
-              return next
-            })
-            return
-          }
-        } else if (skill.installPath) {
-          // Active skill: fetch file by install path
-          const res = await fetch(`/api/skill-creator/active-skill-file?path=${encodeURIComponent(skill.installPath)}&file=${encodeURIComponent(file)}`)
-          const data = await res.json()
-          if (cancelled) return
-          if (data.ok) {
-            content = data.content || ''
-          } else {
-            setOpenTabs(prev => {
-              const next = new Map(prev)
-              next.set(file, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
-              return next
-            })
-            return
-          }
-        } else {
-          // Fallback: fetch from skill-tester endpoint
-          const res = await fetch(`/api/skill-tester/skill-files?name=${encodeURIComponent(skill.id)}&source=active`)
-          const data = await res.json()
-          if (cancelled) return
-          const matched = (data.files || []).find((f: SkillFileEntry) => f.path === file)
-          content = matched?.content || ''
-        }
-        if (!cancelled) {
+        const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(file)}`)
+        const data = await res.json()
+        if (cancelled) return
+        if (data.ok) {
           setOpenTabs(prev => {
             const next = new Map(prev)
-            next.set(file, { content, draft: content, loading: false, error: null })
+            next.set(file, { content: data.content || '', draft: data.content || '', loading: false, error: null })
+            return next
+          })
+        } else {
+          setOpenTabs(prev => {
+            const next = new Map(prev)
+            next.set(file, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
             return next
           })
         }
@@ -1453,14 +1403,14 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
     }
 
     return () => { cancelled = true }
-  }, [fileToOpen, skill.id, skill.source, isDraft, refreshKey])
+  }, [fileToOpen, skill.id, refreshKey])
 
   // Keyboard shortcut: Cmd+S / Ctrl+S
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        if (activeTab && isDraft) {
+        if (activeTab) {
           const tab = openTabs.get(activeTab)
           if (tab && tab.draft !== tab.content && !tab.loading) {
             handleSave(activeTab)
@@ -1470,7 +1420,7 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTab, openTabs, isDraft])
+  }, [activeTab, openTabs])
 
   const handleCloseTab = useCallback((path: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
@@ -1504,7 +1454,7 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
 
   const handleSave = useCallback(async (path: string) => {
     const tab = openTabs.get(path)
-    if (!tab || !isDraft) return
+    if (!tab) return
 
     setSavingTab(path)
     try {
@@ -1528,7 +1478,7 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
       }
     } catch {}
     setSavingTab(null)
-  }, [openTabs, skill.id, isDraft])
+  }, [openTabs, skill.id])
 
   const tabPaths = Array.from(openTabs.keys())
   // Auto-activate first tab if none is active but tabs exist
@@ -1590,49 +1540,40 @@ function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkil
           </div>
         ) : activeTabData ? (
           <>
-            {/* Save bar for drafts */}
-            {isDraft && (
-              <div className="flex items-center justify-between px-4 py-1.5 border-b border-border-custom shrink-0">
-                <span className="text-[10px] text-stone/40 truncate">{effectiveActiveTab}</span>
-                <div className="flex items-center gap-2">
-                  {saveSuccess === effectiveActiveTab && (
-                    <span className="text-[10px] text-moss">Saved</span>
+            {/* Save bar */}
+            <div className="flex items-center justify-between px-4 py-1.5 border-b border-border-custom shrink-0">
+              <span className="text-[10px] text-stone/40 truncate">{effectiveActiveTab}</span>
+              <div className="flex items-center gap-2">
+                {saveSuccess === effectiveActiveTab && (
+                  <span className="text-[10px] text-moss">Saved</span>
+                )}
+                <button
+                  onClick={() => effectiveActiveTab && handleSave(effectiveActiveTab)}
+                  disabled={!activeTabData || activeTabData.draft === activeTabData.content || savingTab === effectiveActiveTab}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-colors ${
+                    activeTabData && activeTabData.draft !== activeTabData.content
+                      ? 'bg-sand/20 text-sand border border-sand/30 hover:bg-sand/30'
+                      : 'bg-surface/20 text-stone/30 border border-border-custom cursor-not-allowed'
+                  }`}
+                >
+                  {savingTab === effectiveActiveTab ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Save className="h-3 w-3" />
                   )}
-                  <button
-                    onClick={() => effectiveActiveTab && handleSave(effectiveActiveTab)}
-                    disabled={!activeTabData || activeTabData.draft === activeTabData.content || savingTab === effectiveActiveTab}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-colors ${
-                      activeTabData && activeTabData.draft !== activeTabData.content
-                        ? 'bg-sand/20 text-sand border border-sand/30 hover:bg-sand/30'
-                        : 'bg-surface/20 text-stone/30 border border-border-custom cursor-not-allowed'
-                    }`}
-                  >
-                    {savingTab === effectiveActiveTab ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Save className="h-3 w-3" />
-                    )}
-                    {savingTab === effectiveActiveTab ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
+                  {savingTab === effectiveActiveTab ? 'Saving...' : 'Save'}
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* Textarea (drafts) or read-only pre (active) */}
             <div className="flex-1 min-h-0 overflow-auto p-4">
-              {isDraft ? (
-                <textarea
-                  ref={textareaRef}
-                  value={activeTabData.draft}
-                  onChange={(e) => effectiveActiveTab && handleDraftChange(effectiveActiveTab, e.target.value)}
-                  className="w-full min-h-full bg-ink/80 text-parchment/90 font-mono text-sm border border-border-custom rounded-lg p-4 resize-none focus:outline-none focus:border-stone/30 transition-colors"
-                  spellCheck={false}
-                />
-              ) : (
-                <pre className="text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words bg-ink/80 rounded-lg border border-border-custom p-4 min-h-full">
-                  <code>{activeTabData.draft}</code>
-                </pre>
-              )}
+              <textarea
+                ref={textareaRef}
+                value={activeTabData.draft}
+                onChange={(e) => effectiveActiveTab && handleDraftChange(effectiveActiveTab, e.target.value)}
+                className="w-full min-h-full bg-ink/80 text-parchment/90 font-mono text-sm border border-border-custom rounded-lg p-4 resize-none focus:outline-none focus:border-stone/30 transition-colors"
+                spellCheck={false}
+              />
             </div>
           </>
         ) : null}
@@ -1658,29 +1599,21 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
 
   useEffect(() => {
     let cancelled = false
-    async function fetchAll() {
+    async function fetchDrafts() {
       setLoading(true)
       try {
-        const [draftsRes, activeRes] = await Promise.all([
-          fetch('/api/skill-tester/skills?source=drafts'),
-          fetch('/api/skill-tester/skills?source=active'),
-        ])
-        const [draftsData, activeData] = await Promise.all([draftsRes.json(), activeRes.json()])
-        if (cancelled) return
-        const all: TesterSkill[] = [
-          ...(draftsData.ok ? draftsData.skills : []),
-          ...(activeData.ok ? activeData.skills : []),
-        ]
-        setSkills(all)
+        const res = await fetch('/api/skill-tester/skills?source=drafts')
+        const data = await res.json()
+        if (!cancelled && data.ok) setSkills(data.skills)
       } catch {}
       if (!cancelled) setLoading(false)
     }
-    fetchAll()
+    fetchDrafts()
     return () => { cancelled = true }
   }, [])
 
   const handleDelete = async (skill: TesterSkill) => {
-    if (skill.source !== 'drafts' || deleting) return
+    if (deleting) return
     setDeleting(skill.id)
     setMenuOpen(null)
     try {
@@ -1738,8 +1671,8 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
         ) : skills.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <Package className="h-12 w-12 text-stone/15 mb-3" />
-            <p className="text-sm text-stone/50 mb-1">No skills yet</p>
-            <p className="text-xs text-stone/30 mb-4">Create your first skill to get started</p>
+            <p className="text-sm text-stone/50 mb-1">No drafts yet</p>
+            <p className="text-xs text-stone/30 mb-4">Create a new skill or fork an existing one</p>
             <button
               onClick={onNewSkill}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm bg-sand/15 text-sand border border-sand/30 hover:bg-sand/25 transition-colors"
@@ -1754,17 +1687,14 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
               const isDeleting = deleting === skill.id
               return (
                 <div
-                  key={`${skill.source}-${skill.id}`}
+                  key={skill.id}
                   className={`group relative rounded-xl border border-border-custom bg-surface/20 hover:bg-surface/40 transition-all cursor-pointer ${isDeleting ? 'opacity-40' : ''}`}
                   onClick={() => !isDeleting && onSelectSkill(skill)}
                 >
                   <div className="px-4 py-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="text-sm font-medium text-parchment truncate">{skill.name}</p>
-                          <SourceBadge source={skill.source} />
-                        </div>
+                        <p className="text-sm font-medium text-parchment truncate mb-1">{skill.name}</p>
                         {skill.description && (
                           <p className="text-xs text-stone/50 line-clamp-2">{skill.description}</p>
                         )}
@@ -1784,14 +1714,12 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
                             >
                               <Copy className="h-3 w-3" /> Duplicate
                             </button>
-                            {skill.source === 'drafts' && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
-                                className="w-full text-left px-3 py-2 text-xs text-ember hover:bg-ember/10 transition-colors flex items-center gap-2 border-t border-border-custom"
-                              >
-                                <Trash2 className="h-3 w-3" /> Delete
-                              </button>
-                            )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(skill) }}
+                              className="w-full text-left px-3 py-2 text-xs text-ember hover:bg-ember/10 transition-colors flex items-center gap-2 border-t border-border-custom"
+                            >
+                              <Trash2 className="h-3 w-3" /> Delete
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1830,11 +1758,10 @@ function SkillEditor({ skill, onBack }: {
   // Right panel tab state
   const [rightTab, setRightTab] = useState<'test' | 'console' | 'files' | 'web'>('test')
 
-  const selectedDraft = skill.source === 'drafts' ? skill.id : null
+  const selectedDraft = skill.id
 
   // Fetch versions when draft changes
   useEffect(() => {
-    if (!selectedDraft) { setVersions([]); setCurrentVersion(null); return }
     let cancelled = false
     async function fetchVersions() {
       try {
@@ -1850,35 +1777,25 @@ function SkillEditor({ skill, onBack }: {
     return () => { cancelled = true }
   }, [selectedDraft])
 
-  // Fetch files for the file nav (drafts and active skills)
+  // Fetch files for the file nav
   useEffect(() => {
     let cancelled = false
     async function fetchFiles() {
       try {
-        let url: string
-        if (selectedDraft) {
-          url = `/api/skill-creator/drafts/${selectedDraft}/files`
-        } else if (skill.installPath) {
-          url = `/api/skill-creator/active-skill-files?path=${encodeURIComponent(skill.installPath)}`
-        } else {
-          setSelectedDraftFiles([])
-          return
-        }
-        const res = await fetch(url)
+        const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/files`)
         const data = await res.json()
         if (!cancelled && data.ok) setSelectedDraftFiles(data.files)
       } catch {}
     }
     fetchFiles()
-    const interval = selectedDraft ? setInterval(fetchFiles, 5000) : null
-    // Refresh on skill-files-refresh event
+    const interval = setInterval(fetchFiles, 5000)
     const handler = () => fetchFiles()
     window.addEventListener('skill-files-refresh', handler)
-    return () => { cancelled = true; if (interval) clearInterval(interval); window.removeEventListener('skill-files-refresh', handler) }
-  }, [selectedDraft, skill.id, skill.installPath])
+    return () => { cancelled = true; clearInterval(interval); window.removeEventListener('skill-files-refresh', handler) }
+  }, [selectedDraft])
 
   const handlePromote = useCallback(async () => {
-    if (!selectedDraft || isPromoting) return
+    if (isPromoting) return
     setIsPromoting(true)
     try {
       const res = await fetch('/api/skill-creator/promote', {
@@ -1892,7 +1809,7 @@ function SkillEditor({ skill, onBack }: {
   }, [selectedDraft, isPromoting])
 
   const handleSaveVersion = useCallback(async () => {
-    if (!selectedDraft || isSaving) return
+    if (isSaving) return
     setIsSaving(true)
     try {
       const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions`, {
@@ -1910,7 +1827,6 @@ function SkillEditor({ skill, onBack }: {
   }, [selectedDraft, isSaving])
 
   const handleRestoreVersion = useCallback(async (versionName: string) => {
-    if (!selectedDraft) return
     try {
       const res = await fetch(`/api/skill-creator/drafts/${selectedDraft}/versions/${versionName}/restore`, { method: 'POST' })
       const data = await res.json()
@@ -1933,7 +1849,7 @@ function SkillEditor({ skill, onBack }: {
 
   const handleRename = useCallback(async () => {
     const trimmed = nameValue.trim()
-    if (!trimmed || trimmed === skill.name || !selectedDraft) {
+    if (!trimmed || trimmed === skill.name) {
       setEditingName(false)
       setNameValue(skill.name)
       return
@@ -1970,7 +1886,7 @@ function SkillEditor({ skill, onBack }: {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-2">
-            {editingName && selectedDraft ? (
+            {editingName ? (
               <input
                 ref={nameInputRef}
                 value={nameValue}
@@ -1982,20 +1898,19 @@ function SkillEditor({ skill, onBack }: {
               />
             ) : (
               <span
-                className={`text-sm font-medium text-parchment ${selectedDraft ? 'cursor-pointer hover:bg-surface/30 rounded px-1.5 py-0.5 -mx-1.5' : ''}`}
-                onClick={() => { if (selectedDraft) { setEditingName(true); setTimeout(() => nameInputRef.current?.select(), 0) } }}
-                title={selectedDraft ? 'Click to rename' : undefined}
+                className="text-sm font-medium text-parchment cursor-pointer hover:bg-surface/30 rounded px-1.5 py-0.5 -mx-1.5"
+                onClick={() => { setEditingName(true); setTimeout(() => nameInputRef.current?.select(), 0) }}
+                title="Click to rename"
               >
                 {nameValue}
               </span>
             )}
-            <SourceBadge source={skill.source} />
           </div>
         </div>
 
         {/* Right: Version, Snapshot, Export, Publish */}
         <div className="flex items-center gap-2">
-          {selectedDraft && versions.length > 0 ? (
+          {versions.length > 0 ? (
             <select
               value={currentVersion ? `v${currentVersion}` : ''}
               onChange={(e) => { if (e.target.value) handleRestoreVersion(e.target.value) }}
@@ -2009,49 +1924,43 @@ function SkillEditor({ skill, onBack }: {
                 </option>
               ))}
             </select>
-          ) : selectedDraft ? (
+          ) : (
             <span className="px-2 py-1 text-[10px] text-stone/40">No snapshots yet</span>
-          ) : null}
-
-          {selectedDraft && (
-            <button
-              onClick={handleSaveVersion}
-              disabled={isSaving}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
-              title="Save a snapshot of all current files"
-            >
-              <Save className="h-3.5 w-3.5" />
-              {isSaving ? 'Saving...' : 'Snapshot'}
-            </button>
           )}
 
-          {selectedDraft && (
-            <button
-              onClick={() => {
-                const a = document.createElement('a')
-                a.href = `/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/export`
-                a.download = `${selectedDraft}.zip`
-                a.click()
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
-              title="Export draft as zip"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export
-            </button>
-          )}
+          <button
+            onClick={handleSaveVersion}
+            disabled={isSaving}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
+            title="Save a snapshot of all current files"
+          >
+            <Save className="h-3.5 w-3.5" />
+            {isSaving ? 'Saving...' : 'Snapshot'}
+          </button>
 
-          {skill.source === 'drafts' && (
-            <button
-              onClick={handlePromote}
-              disabled={isPromoting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50"
-              title="Install this draft as an active skill"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              {isPromoting ? 'Publishing...' : 'Publish'}
-            </button>
-          )}
+          <button
+            onClick={() => {
+              const a = document.createElement('a')
+              a.href = `/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/export`
+              a.download = `${skill.id}.zip`
+              a.click()
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
+            title="Export draft as zip"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </button>
+
+          <button
+            onClick={handlePromote}
+            disabled={isPromoting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50"
+            title="Install this draft as an active skill"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {isPromoting ? 'Publishing...' : 'Publish'}
+          </button>
         </div>
       </div>
 
@@ -2181,13 +2090,7 @@ export function SkillCreator() {
   const handleSelectSkill = useCallback((skill: TesterSkill) => {
     setSelectedSkill(skill)
     setView('editor')
-    try {
-      if (skill.source === 'drafts') {
-        localStorage.setItem('skill-creator-selected-draft', skill.id)
-      } else {
-        localStorage.removeItem('skill-creator-selected-draft')
-      }
-    } catch {}
+    try { localStorage.setItem('skill-creator-selected-draft', skill.id) } catch {}
   }, [])
 
   const handleBack = useCallback(() => {
