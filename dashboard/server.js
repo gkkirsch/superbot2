@@ -5903,8 +5903,10 @@ app.post('/api/skill-creator/promote', async (req, res) => {
 
     // Recursive copy (safe, no shell involved)
     await cp(draftPath, cachePath, { recursive: true })
-    // Remove draft-metadata.json from cache copy
+    // Remove draft-only files from cache copy
     try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
+    try { await rm(join(cachePath, 'chat-history.jsonl'), { force: true }) } catch {}
+    try { await rm(join(cachePath, 'versions'), { recursive: true, force: true }) } catch {}
 
     // Register in installed_plugins.json
     const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
@@ -7214,6 +7216,8 @@ app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) =>
       await mkdir(cachePath, { recursive: true })
       await cp(draftPath, cachePath, { recursive: true })
       try { await rm(join(cachePath, 'draft-metadata.json'), { force: true }) } catch {}
+      try { await rm(join(cachePath, 'chat-history.jsonl'), { force: true }) } catch {}
+      try { await rm(join(cachePath, 'versions'), { recursive: true, force: true }) } catch {}
 
       const installedPluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
       let installedData
@@ -7253,6 +7257,7 @@ app.post('/api/agent/skills/draft/:name/promote', agentAuth, async (req, res) =>
       await cp(draftPath, destPath, { recursive: true })
       try { await rm(join(destPath, 'draft-metadata.json'), { force: true }) } catch {}
       try { await rm(join(destPath, 'chat-history.jsonl'), { force: true }) } catch {}
+      try { await rm(join(destPath, 'versions'), { recursive: true, force: true }) } catch {}
 
       // Update draft metadata
       const metaPath = join(draftPath, 'draft-metadata.json')
