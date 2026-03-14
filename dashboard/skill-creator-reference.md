@@ -294,3 +294,174 @@ database-tools/
 └── bin/
     └── mcp-server.js    # MCP server implementation
 ```
+
+### Pattern 5: Standalone SKILL.md (Layer 1)
+
+The simplest option — a single file with no plugin directory structure.
+
+```
+draft-root/
+  SKILL.md
+```
+
+SKILL.md contains YAML frontmatter and instructions. No plugin.json needed.
+
+## metadata.superbot -- Superbot-Enhanced Metadata
+
+Location: Inside SKILL.md frontmatter, under the `metadata.superbot` key. This extends a Layer 2 plugin with dashboard integration, dependency management, and credential storage.
+
+### Full Example
+
+```yaml
+---
+name: my-tool-skill
+description: >
+  Use when the user asks to run my-tool commands.
+  Triggers: "run my-tool", "use my-tool to analyze".
+  NOT for: general shell commands.
+version: 1.0.0
+allowed-tools: Read, Bash
+
+metadata:
+  superbot:
+    emoji: "wrench"
+    requires:
+      bins: ["my-binary"]
+    install:
+      - id: brew
+        kind: brew
+        formula: my-tap/my-binary
+        bins: ["my-binary"]
+        label: "Install via Homebrew"
+      - id: manual
+        kind: manual
+        label: "Download from the website"
+        url: "https://example.com/downloads"
+    credentials:
+      - key: MY_API_KEY
+        label: "My Service API Key"
+        description: "Get your key at example.com/api"
+        required: true
+---
+```
+
+### Fields
+
+#### `emoji`
+
+Display icon for the skill on the dashboard. Use a text description of the emoji (e.g., `"wrench"`, `"lock"`, `"rocket"`).
+
+#### `requires.bins`
+
+Array of CLI binary names that must be present on `PATH` for the skill to function.
+
+```yaml
+requires:
+  bins: ["gh", "jq"]
+```
+
+The dashboard checks for these binaries and shows a warning if any are missing.
+
+#### `install`
+
+Array of install options. Each option tells the user (or the dashboard) how to install the required binaries. Every install option has these fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Unique identifier for this install option |
+| `kind` | Yes | Install method (see table below) |
+| `label` | Yes | Human-readable label shown in the UI |
+| `bins` | No | Which binaries this option installs |
+
+**`kind` values:**
+
+| kind | Use for | Extra fields |
+|------|---------|-------------|
+| `brew` | Homebrew formula or tap | `formula` (required) |
+| `npm` | npm global package (`npm install -g`) | `package` (required) |
+| `pip` | Python package (`pip install`) | `package` (required) |
+| `script` | Custom install script | `command` (required) |
+| `github-release` | Binary from GitHub releases | `url` (required) |
+| `manual` | Manual instructions with a link | `url` (required) |
+
+**Examples for each kind:**
+
+```yaml
+# Homebrew
+- id: brew
+  kind: brew
+  formula: 1password-cli
+  bins: ["op"]
+  label: "Install 1Password CLI (Homebrew)"
+
+# npm
+- id: npm
+  kind: npm
+  package: prettier
+  bins: ["prettier"]
+  label: "Install via npm"
+
+# pip
+- id: pip
+  kind: pip
+  package: awscli
+  bins: ["aws"]
+  label: "Install via pip"
+
+# Script
+- id: script
+  kind: script
+  command: "curl -fsSL https://example.com/install.sh | sh"
+  bins: ["my-tool"]
+  label: "Install via script"
+
+# GitHub release
+- id: github
+  kind: github-release
+  url: "https://github.com/org/tool/releases"
+  bins: ["tool"]
+  label: "Download from GitHub releases"
+
+# Manual
+- id: manual
+  kind: manual
+  url: "https://example.com/docs/install"
+  label: "See install instructions"
+```
+
+#### `credentials`
+
+Array of API keys or tokens the skill needs. These are stored in the macOS Keychain and managed through the dashboard.
+
+```yaml
+credentials:
+  - key: OPENAI_API_KEY
+    label: "OpenAI API Key"
+    description: "Get yours at platform.openai.com/api-keys"
+    required: true
+  - key: WEBHOOK_URL
+    label: "Webhook URL"
+    description: "Optional webhook for notifications"
+    required: false
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `key` | Yes | Environment variable name the skill will use |
+| `label` | Yes | Human-readable label shown in the dashboard |
+| `description` | No | Help text — where to get the credential |
+| `required` | No | If true, dashboard shows a warning when missing. Defaults to false |
+
+**Storage details:**
+- Service: `superbot2-plugin-credentials`
+- Account: `<pluginName>/<key>`
+- Retrieve: `security find-generic-password -s superbot2-plugin-credentials -a "plugin-name/KEY" -w`
+
+### When to Use metadata.superbot
+
+Use it when a skill needs any of the following:
+- An icon on the dashboard (`emoji`)
+- External CLI binaries that must be installed (`requires.bins` + `install`)
+- API keys or tokens from the user (`credentials`)
+
+Both `requires`/`install` and `credentials` can coexist in the same skill -- for example, a skill that wraps a CLI tool and also needs an API key.
