@@ -6370,7 +6370,7 @@ app.delete('/api/skill-creator/session/:sessionId', (req, res) => {
 
 // --- Skill Tester ---
 
-// List installed skills from ~/.superbot2/skills/
+// List installed skills from ~/.superbot2/skills/ AND installed marketplace plugins
 app.get('/api/skill-tester/skills', async (req, res) => {
   try {
     const source = req.query.source || 'all' // 'drafts' | 'active' | 'all'
@@ -6414,20 +6414,90 @@ app.get('/api/skill-tester/skills', async (req, res) => {
       return skills
     }
 
+    // Read skills from installed marketplace plugins
+    async function readInstalledPluginSkills() {
+      const installed = await readInstalledPluginsDirect()
+      const skills = []
+      for (const plugin of installed) {
+        if (!plugin.installPath) continue
+        const pluginName = plugin.name || plugin.pluginId?.split('@')[0] || ''
+        // Try root SKILL.md (standalone skill plugin)
+        try {
+          const skillMd = await readFile(join(plugin.installPath, 'SKILL.md'), 'utf-8')
+          const fm = parseFrontmatter(skillMd)
+          skills.push({
+            id: pluginName,
+            name: fm.name ? String(fm.name) : pluginName,
+            description: fm.description ? String(fm.description).trim() : (plugin.description || ''),
+            source: 'active',
+            installPath: plugin.installPath,
+            isPlugin: true,
+          })
+          continue // Don't also scan skills/ if root SKILL.md exists
+        } catch {}
+        // Try skills/ subdirectory (full plugin layout)
+        try {
+          const skillsDir = join(plugin.installPath, 'skills')
+          const subEntries = await readdir(skillsDir, { withFileTypes: true })
+          for (const sub of subEntries) {
+            if (!sub.isDirectory()) continue
+            try {
+              const skillMd = await readFile(join(skillsDir, sub.name, 'SKILL.md'), 'utf-8')
+              const fm = parseFrontmatter(skillMd)
+              skills.push({
+                id: pluginName,
+                name: fm.name ? String(fm.name) : sub.name,
+                description: fm.description ? String(fm.description).trim() : '',
+                source: 'active',
+                installPath: plugin.installPath,
+                isPlugin: true,
+              })
+            } catch {}
+          }
+        } catch {}
+        // Plugin with no skills (hooks-only, agents-only, etc.) — still show it
+        if (!skills.some(s => s.id === pluginName)) {
+          // Read description from plugin.json
+          let description = plugin.description || ''
+          if (!description) {
+            const pj = await readJsonFile(join(plugin.installPath, '.claude-plugin', 'plugin.json'))
+            if (pj?.description) description = pj.description
+          }
+          skills.push({
+            id: pluginName,
+            name: pluginName,
+            description,
+            source: 'active',
+            installPath: plugin.installPath,
+            isPlugin: true,
+          })
+        }
+      }
+      return skills
+    }
+
     const activeDir = join(SUPERBOT_DIR, 'skills')
     const draftsDir = SKILL_CREATOR_DRAFTS_DIR
 
     let skills = []
     if (source === 'active') {
-      skills = await readSkillsFrom(activeDir, 'active')
+      const [standalone, pluginSkills] = await Promise.all([
+        readSkillsFrom(activeDir, 'active'),
+        readInstalledPluginSkills(),
+      ])
+      // Deduplicate: if same id exists in both, prefer plugin version
+      const pluginIds = new Set(pluginSkills.map(s => s.id))
+      skills = [...standalone.filter(s => !pluginIds.has(s.id)), ...pluginSkills]
     } else if (source === 'drafts') {
       skills = await readSkillsFrom(draftsDir, 'drafts')
     } else {
-      const [active, drafts] = await Promise.all([
+      const [standalone, pluginSkills, drafts] = await Promise.all([
         readSkillsFrom(activeDir, 'active'),
+        readInstalledPluginSkills(),
         readSkillsFrom(draftsDir, 'drafts'),
       ])
-      skills = [...drafts, ...active]
+      const pluginIds = new Set(pluginSkills.map(s => s.id))
+      skills = [...drafts, ...standalone.filter(s => !pluginIds.has(s.id)), ...pluginSkills]
     }
     res.json({ ok: true, skills })
   } catch (err) {
