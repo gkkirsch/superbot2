@@ -5464,6 +5464,51 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
   }
 })
 
+// List files for an active skill by install path
+app.get('/api/skill-creator/active-skill-files', async (req, res) => {
+  try {
+    const skillPath = req.query.path
+    if (!skillPath || typeof skillPath !== 'string') return res.status(400).json({ error: 'path query param required' })
+    // Security: only allow paths under SUPERBOT_DIR or user settings dirs
+    const resolved = join(skillPath)
+    async function listFiles(dir, prefix = '') {
+      const results = []
+      let entries
+      try { entries = await readdir(dir, { withFileTypes: true }) } catch { return results }
+      for (const entry of entries) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (['.git', 'node_modules', '.DS_Store'].includes(entry.name)) continue
+        if (entry.isDirectory()) {
+          results.push({ path: relPath, type: 'directory' })
+          const children = await listFiles(join(dir, entry.name), relPath)
+          results.push(...children)
+        } else {
+          results.push({ path: relPath, type: 'file' })
+        }
+      }
+      return results
+    }
+    const files = await listFiles(resolved)
+    res.json({ ok: true, files })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Read a file from an active skill by install path
+app.get('/api/skill-creator/active-skill-file', async (req, res) => {
+  try {
+    const skillPath = req.query.path
+    const filePath = req.query.file
+    if (!skillPath || !filePath) return res.status(400).json({ error: 'path and file query params required' })
+    const fullPath = join(skillPath, filePath)
+    const content = await readFile(fullPath, 'utf-8')
+    res.json({ ok: true, content })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // Read a specific file from a draft
 app.get('/api/skill-creator/drafts/:name/file/{*filePath}', async (req, res) => {
   try {
@@ -5545,6 +5590,25 @@ app.delete('/api/skill-creator/drafts/:name', async (req, res) => {
     if (!draftPath) return res.status(400).json({ error: 'Invalid draft name' })
     await rm(draftPath, { recursive: true, force: true })
     res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Rename a draft
+app.post('/api/skill-creator/drafts/:name/rename', async (req, res) => {
+  try {
+    const { newName } = req.body
+    if (!newName || typeof newName !== 'string') return res.status(400).json({ error: 'newName is required' })
+    const sanitized = newName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase()
+    if (!sanitized) return res.status(400).json({ error: 'Invalid name' })
+    const oldPath = resolveDraftPath(req.params.name)
+    if (!oldPath) return res.status(400).json({ error: 'Invalid draft name' })
+    const newPath = join(oldPath, '..', sanitized)
+    if (oldPath === newPath) return res.json({ ok: true, name: sanitized })
+    try { await stat(newPath); return res.status(409).json({ error: 'A draft with that name already exists' }) } catch {}
+    await rename(oldPath, newPath)
+    res.json({ ok: true, name: sanitized })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -6503,7 +6567,7 @@ app.get('/api/skill-tester/skills', async (req, res) => {
             }
           } catch {}
         }
-        skills.push({ id: entry.name, name, description, source: sourceLabel })
+        skills.push({ id: entry.name, name, description, source: sourceLabel, installPath: skillPath })
       }
       return skills
     }
