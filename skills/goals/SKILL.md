@@ -11,6 +11,8 @@ allowed-tools: Read, Grep, Glob, Bash
 metadata:
   superbot:
     emoji: "\U0001F3AF"
+    scope: "space"
+    icon: "target"
 ---
 
 # Goals

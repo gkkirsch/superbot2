@@ -7,6 +7,15 @@ description: >
   Provides a dashboard card for reviewing, approving, rejecting, or rewriting
   social media drafts across Facebook, X/Twitter, Instagram, LinkedIn, and other platforms.
 version: 0.1.0
+allowed-tools: Read, Grep, Glob, Bash
+
+metadata:
+  superbot:
+    emoji: "\U0001F4F1"
+    scope: "space"
+    icon: "message-circle"
+    requires:
+      bins: ["jq"]
 ---
 
 # Social Media Approvals
