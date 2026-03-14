@@ -5799,6 +5799,76 @@ app.post('/api/skill-creator/drafts/:name/validate', async (req, res) => {
   }
 })
 
+// Export a draft as a zip file download
+app.get('/api/skill-creator/drafts/:name/export', async (req, res) => {
+  try {
+    const draftPath = resolve(SKILL_CREATOR_DRAFTS_DIR, req.params.name)
+    if (!draftPath.startsWith(SKILL_CREATOR_DRAFTS_DIR + '/')) {
+      return res.status(400).json({ error: 'Invalid draft name' })
+    }
+    try { await stat(draftPath) } catch { return res.status(404).json({ error: 'Draft not found' }) }
+
+    const draftName = req.params.name
+
+    // Collect files to zip (exclude metadata, chat history, and versions/)
+    const EXCLUDE = new Set(['draft-metadata.json', 'chat-history.jsonl', 'versions'])
+    async function collectFiles(dir, prefix = '') {
+      const entries = await readdir(dir, { withFileTypes: true })
+      let files = []
+      for (const entry of entries) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (!prefix && EXCLUDE.has(entry.name)) continue
+        if (entry.isDirectory()) {
+          files = files.concat(await collectFiles(join(dir, entry.name), relPath))
+        } else {
+          files.push(relPath)
+        }
+      }
+      return files
+    }
+
+    const files = await collectFiles(draftPath)
+    if (files.length === 0) {
+      return res.status(404).json({ error: 'No files to export' })
+    }
+
+    // Use the system zip command to create the archive
+    const { execFile: execFileCb } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const execFilePromise = promisify(execFileCb)
+
+    // Create a temp file for the zip
+    const tmpZip = join(tmpdir(), `${draftName}-${Date.now()}.zip`)
+
+    try {
+      await execFilePromise('zip', ['-r', tmpZip, ...files], { cwd: draftPath })
+
+      const zipStat = await stat(tmpZip)
+      res.setHeader('Content-Type', 'application/zip')
+      res.setHeader('Content-Disposition', `attachment; filename="${draftName}.zip"`)
+      res.setHeader('Content-Length', zipStat.size)
+
+      const { createReadStream } = await import('node:fs')
+      const stream = createReadStream(tmpZip)
+      stream.pipe(res)
+      stream.on('end', () => {
+        // Clean up temp file
+        rm(tmpZip, { force: true }).catch(() => {})
+      })
+      stream.on('error', () => {
+        rm(tmpZip, { force: true }).catch(() => {})
+        if (!res.headersSent) res.status(500).json({ error: 'Failed to stream zip' })
+      })
+    } catch (zipErr) {
+      await rm(tmpZip, { force: true }).catch(() => {})
+      throw zipErr
+    }
+  } catch (err) {
+    console.error('[skill-creator] export error:', err)
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to export draft' })
+  }
+})
+
 // My Skills — list installed plugins with author.name === 'superbot2'
 app.get('/api/skill-creator/my-skills', async (req, res) => {
   try {

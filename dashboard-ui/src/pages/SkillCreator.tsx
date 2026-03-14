@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, ChevronDown, ChevronRight, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft, Download } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Tool Activity ---
@@ -221,109 +221,6 @@ interface TesterSkill {
 interface SkillFileEntry {
   path: string
   content: string
-}
-
-function SkillFileViewer({ skill, onPromote, isPromoting, initialFilePath }: { skill: TesterSkill; onPromote?: () => void; isPromoting?: boolean; initialFilePath?: string | null }) {
-  const [files, setFiles] = useState<SkillFileEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeFile, setActiveFile] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    async function fetchFiles() {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(`/api/skill-tester/skill-files?name=${encodeURIComponent(skill.id)}&source=${skill.source}`)
-        const data = await res.json()
-        if (!cancelled) {
-          if (data.error) {
-            setError(data.error)
-          } else {
-            setFiles(data.files || [])
-            // If an initialFilePath was passed and matches a file, select it
-            const matchedInitial = initialFilePath && (data.files || []).some((f: SkillFileEntry) => f.path === initialFilePath)
-            setActiveFile(matchedInitial ? initialFilePath : (data.files?.[0]?.path || null))
-          }
-        }
-      } catch {
-        if (!cancelled) setError('Failed to load skill files')
-      }
-      if (!cancelled) setLoading(false)
-    }
-    fetchFiles()
-    return () => { cancelled = true }
-  }, [skill.id, skill.source, initialFilePath])
-
-  const activeContent = files.find(f => f.path === activeFile)?.content || ''
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 text-stone/40 animate-spin" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-sm text-ember/70">{error}</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0">
-      {/* Skill name + source badge */}
-      <div className="px-5 py-3 border-b border-border-custom flex items-center gap-3 shrink-0">
-        <h2 className="text-sm font-medium text-parchment">{skill.name}</h2>
-        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-          skill.source === 'active'
-            ? 'bg-moss/15 text-moss border border-moss/30'
-            : 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
-        }`}>
-          {skill.source === 'active' ? 'Active' : 'Draft'}
-        </span>
-        {skill.source === 'drafts' && onPromote && (
-          <button
-            onClick={onPromote}
-            disabled={isPromoting}
-            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Copy this draft to ~/.superbot2/skills/ and make it active"
-          >
-            <Upload className="h-3 w-3" />
-            {isPromoting ? 'Promoting...' : 'Promote to Active'}
-          </button>
-        )}
-      </div>
-
-      {/* File tabs */}
-      <div className="flex overflow-x-auto border-b border-border-custom shrink-0 bg-ink/30 px-2 no-scrollbar">
-        {files.map(f => (
-          <button
-            key={f.path}
-            onClick={() => setActiveFile(f.path)}
-            className={`px-3 py-2 text-xs whitespace-nowrap border-b-2 transition-colors ${
-              activeFile === f.path
-                ? 'border-sand text-parchment'
-                : 'border-transparent text-stone/60 hover:text-stone hover:border-stone/30'
-            }`}
-          >
-            {f.path}
-          </button>
-        ))}
-      </div>
-
-      {/* File content */}
-      <div className="flex-1 min-h-0 overflow-auto p-4">
-        <pre className="text-sm text-parchment/80 font-mono whitespace-pre-wrap break-words bg-ink/80 rounded-lg border border-border-custom p-4 min-h-full">
-          <code>{activeContent}</code>
-        </pre>
-      </div>
-    </div>
-  )
 }
 
 // --- Skill Chat (AI assistant via claude -p) ---
@@ -2186,6 +2083,18 @@ export function SkillCreator() {
             <Save className="h-3.5 w-3.5" />
             {isSaving ? 'Saving...' : 'Save'}
           </button>
+
+          {/* Export button */}
+          {selectedDraft && (
+            <button
+              onClick={() => window.open(`/api/skill-creator/drafts/${encodeURIComponent(selectedDraft)}/export`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors"
+              title="Export draft as zip"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </button>
+          )}
 
           {/* Publish / Promote button */}
           {selectedSkill?.source === 'drafts' && (
