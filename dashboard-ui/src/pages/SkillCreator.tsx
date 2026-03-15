@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, FolderOpen, Copy, Search, ArrowLeft, Download, MoreVertical, PanelRightClose } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, Folder, FolderOpen, Copy, Search, ArrowLeft, Download, MoreVertical, PanelRightClose } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Shared Hooks ---
@@ -606,7 +606,10 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
           const filesData = await filesRes.json()
           if (filesData.ok) {
             sessionFileSnapshotRef.current = JSON.stringify(
-              filesData.files.map((f: { path: string }) => f.path).sort()
+              filesData.files
+                .filter((f: { type: string }) => f.type === 'file')
+                .map((f: { path: string; modified?: number }) => ({ p: f.path, m: f.modified }))
+                .sort((a: { p: string }, b: { p: string }) => a.p.localeCompare(b.p))
             )
           }
         } catch {}
@@ -786,7 +789,10 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
         const data = await res.json()
         if (data.ok) {
           const current = JSON.stringify(
-            data.files.map((f: { path: string }) => f.path).sort()
+            data.files
+              .filter((f: { type: string }) => f.type === 'file')
+              .map((f: { path: string; modified?: number }) => ({ p: f.path, m: f.modified }))
+              .sort((a: { p: string }, b: { p: string }) => a.p.localeCompare(b.p))
           )
           if (sessionFileSnapshotRef.current && current !== sessionFileSnapshotRef.current) {
             setFilesChanged(true)
@@ -1014,14 +1020,14 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
       {filesChanged && (
         <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between shrink-0">
           <p className="text-xs text-amber-300">
-            <span className="font-medium">Files changed</span> — skill files have been updated
+            Files changed since test started
           </p>
           <button
             onClick={handleReloadSession}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors font-medium"
           >
             <RefreshCw className="h-3 w-3" />
-            Reload
+            Restart with Changes
           </button>
         </div>
       )}
@@ -1586,6 +1592,110 @@ function FileSlideOut({ skill, filePath, onClose }: { skill: TesterSkill; filePa
   )
 }
 
+// --- File Tree ---
+
+interface TreeNode {
+  name: string
+  path: string
+  type: 'file' | 'directory'
+  children: TreeNode[]
+}
+
+function buildFileTree(files: { path: string; type: string }[]): TreeNode[] {
+  const root: TreeNode[] = []
+  const fileEntries = files.filter(f => f.type === 'file')
+
+  for (const file of fileEntries) {
+    const parts = file.path.split('/')
+    let current = root
+
+    for (let i = 0; i < parts.length; i++) {
+      const name = parts[i]
+      const isLast = i === parts.length - 1
+      let existing = current.find(n => n.name === name)
+
+      if (!existing) {
+        existing = {
+          name,
+          path: parts.slice(0, i + 1).join('/'),
+          type: isLast ? 'file' : 'directory',
+          children: [],
+        }
+        current.push(existing)
+      }
+
+      if (!isLast) {
+        current = existing.children
+      }
+    }
+  }
+
+  function sortTree(nodes: TreeNode[]) {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    nodes.forEach(n => sortTree(n.children))
+  }
+  sortTree(root)
+
+  return root
+}
+
+function FileTreeNode({ node, depth, selectedPath, fileSlideOpen, onFileClick }: {
+  node: TreeNode
+  depth: number
+  selectedPath: string | null
+  fileSlideOpen: boolean
+  onFileClick: (path: string) => void
+}) {
+  const [expanded, setExpanded] = useState(true)
+
+  if (node.type === 'directory') {
+    return (
+      <div>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-left py-1 rounded-md text-xs text-stone/60 hover:text-stone hover:bg-surface/20 transition-colors flex items-center gap-1.5"
+          style={{ paddingLeft: `${depth * 14 + 8}px` }}
+        >
+          {expanded
+            ? <FolderOpen className="h-3.5 w-3.5 text-sand/50 shrink-0" />
+            : <Folder className="h-3.5 w-3.5 text-sand/50 shrink-0" />
+          }
+          <span className="truncate">{node.name}</span>
+        </button>
+        {expanded && node.children.map(child => (
+          <FileTreeNode
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            selectedPath={selectedPath}
+            fileSlideOpen={fileSlideOpen}
+            onFileClick={onFileClick}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  const isSelected = selectedPath === node.path && fileSlideOpen
+  return (
+    <button
+      onClick={() => onFileClick(node.path)}
+      className={`w-full text-left py-1.5 rounded-md text-xs transition-colors flex items-center gap-1.5 ${
+        isSelected
+          ? 'bg-blue-500/15 text-blue-300'
+          : 'text-parchment/70 hover:text-parchment hover:bg-surface/30'
+      }`}
+      style={{ paddingLeft: `${depth * 14 + 8}px` }}
+    >
+      <FileText className="h-3 w-3 text-stone/40 shrink-0" />
+      <span className="truncate">{node.name}</span>
+    </button>
+  )
+}
+
 // --- Skill Editor (Three-Column Layout) ---
 
 function SkillEditor({ skill, onBack, onRename }: {
@@ -1822,24 +1932,20 @@ function SkillEditor({ skill, onBack, onRename }: {
           <div className="px-3 py-2.5 border-b border-border-custom">
             <h3 className="text-[10px] font-medium text-stone/50 uppercase tracking-wider">Files</h3>
           </div>
-          <div className="flex-1 overflow-y-auto px-1.5 py-1.5">
+          <div className="flex-1 overflow-y-auto px-1 py-1.5">
             {selectedDraftFiles.length === 0 ? (
               <p className="text-[10px] text-stone/30 px-2 py-4 text-center">No files yet</p>
             ) : (
-              <div className="space-y-0.5">
-                {selectedDraftFiles.filter(f => f.type === 'file').map(f => (
-                  <button
-                    key={f.path}
-                    onClick={() => handleFileClick(f.path)}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-colors truncate flex items-center gap-1.5 ${
-                      selectedFilePath === f.path && fileSlideOpen
-                        ? 'bg-blue-500/15 text-blue-300'
-                        : 'text-parchment/70 hover:text-parchment hover:bg-surface/30'
-                    }`}
-                  >
-                    <FileText className="h-3 w-3 text-stone/40 shrink-0" />
-                    {f.path}
-                  </button>
+              <div>
+                {buildFileTree(selectedDraftFiles).map(node => (
+                  <FileTreeNode
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    selectedPath={selectedFilePath}
+                    fileSlideOpen={fileSlideOpen}
+                    onFileClick={handleFileClick}
+                  />
                 ))}
               </div>
             )}

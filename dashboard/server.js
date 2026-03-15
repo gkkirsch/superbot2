@@ -5425,7 +5425,8 @@ app.get('/api/skill-creator/drafts/:name/files', async (req, res) => {
           const children = await listFiles(join(dir, entry.name), relPath)
           results.push(...children)
         } else {
-          results.push({ path: relPath, type: 'file' })
+          const fileStat = await stat(join(dir, entry.name))
+          results.push({ path: relPath, type: 'file', modified: fileStat.mtimeMs })
         }
       }
       return results
