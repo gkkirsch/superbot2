@@ -5572,6 +5572,22 @@ app.post('/api/skill-creator/drafts/:name/rename', async (req, res) => {
     if (oldPath === newPath) return res.json({ ok: true, name: sanitized })
     try { await stat(newPath); return res.status(409).json({ error: 'A draft with that name already exists' }) } catch {}
     await rename(oldPath, newPath)
+    // Update name in SKILL.md frontmatter
+    const skillMdPath = join(newPath, 'SKILL.md')
+    try {
+      const skillMd = await readFile(skillMdPath, 'utf-8')
+      const updated = skillMd.replace(/^name:\s*.+$/m, `name: ${sanitized}`)
+      if (updated !== skillMd) await writeFile(skillMdPath, updated)
+    } catch {}
+    // Update draft-metadata.json
+    try {
+      const metaPath = join(newPath, 'draft-metadata.json')
+      const raw = await readFile(metaPath, 'utf-8')
+      const meta = JSON.parse(raw)
+      meta.name = sanitized
+      meta.renamedAt = new Date().toISOString()
+      await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    } catch {}
     res.json({ ok: true, name: sanitized })
   } catch (err) {
     res.status(500).json({ error: err.message })

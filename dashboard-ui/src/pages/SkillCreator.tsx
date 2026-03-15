@@ -1329,259 +1329,6 @@ function CreationModal({ open, onClose, onCreated }: {
   )
 }
 
-// --- Inline File Editor (VS Code-style tabs) ---
-
-interface TabData {
-  content: string   // original content from server
-  draft: string     // current edited content
-  loading: boolean
-  error: string | null
-}
-
-function InlineFileEditor({ skill, fileToOpen, refreshKey }: { skill: TesterSkill; fileToOpen: string | null; refreshKey?: number }) {
-  const [openTabs, setOpenTabs] = useState<Map<string, TabData>>(new Map())
-  const [activeTab, setActiveTab] = useState<string | null>(null)
-  const [savingTab, setSavingTab] = useState<string | null>(null)
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  // Reset tabs when skill changes or when version is restored (refreshKey changes)
-  // NOTE: This must be defined BEFORE the file-open effect so it runs first on mount
-  useEffect(() => {
-    setOpenTabs(new Map())
-    setActiveTab(null)
-  }, [skill.id, refreshKey])
-
-  // When fileToOpen changes, open that file as a new tab
-  useEffect(() => {
-    if (!fileToOpen) return
-    const file = fileToOpen // capture for closures (TS narrowing)
-    let cancelled = false
-
-    setActiveTab(file)
-
-    // Check if tab already exists
-    setOpenTabs(prev => {
-      if (prev.has(file)) return prev
-      const next = new Map(prev)
-      next.set(file, { content: '', draft: '', loading: true, error: null })
-      return next
-    })
-
-    // Fetch file content for new tabs
-    async function fetchContent() {
-      try {
-        const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(file)}`)
-        const data = await res.json()
-        if (cancelled) return
-        if (data.ok) {
-          setOpenTabs(prev => {
-            const next = new Map(prev)
-            next.set(file, { content: data.content || '', draft: data.content || '', loading: false, error: null })
-            return next
-          })
-        } else {
-          setOpenTabs(prev => {
-            const next = new Map(prev)
-            next.set(file, { content: '', draft: '', loading: false, error: data.error || 'Failed to load file' })
-            return next
-          })
-        }
-      } catch {
-        if (!cancelled) {
-          setOpenTabs(prev => {
-            const next = new Map(prev)
-            next.set(file, { content: '', draft: '', loading: false, error: 'Failed to load file' })
-            return next
-          })
-        }
-      }
-    }
-
-    // Only fetch if this is a newly opened tab
-    if (!openTabs.has(file)) {
-      fetchContent()
-    }
-
-    return () => { cancelled = true }
-  }, [fileToOpen, skill.id, refreshKey])
-
-  // Keyboard shortcut: Cmd+S / Ctrl+S
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault()
-        if (activeTab) {
-          const tab = openTabs.get(activeTab)
-          if (tab && tab.draft !== tab.content && !tab.loading) {
-            handleSave(activeTab)
-          }
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [activeTab, openTabs])
-
-  const handleCloseTab = useCallback((path: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation()
-    setOpenTabs(prev => {
-      const next = new Map(prev)
-      next.delete(path)
-      return next
-    })
-    if (activeTab === path) {
-      // Activate nearest tab
-      const paths = Array.from(openTabs.keys())
-      const idx = paths.indexOf(path)
-      if (paths.length > 1) {
-        setActiveTab(paths[idx > 0 ? idx - 1 : idx + 1])
-      } else {
-        setActiveTab(null)
-      }
-    }
-  }, [activeTab, openTabs])
-
-  const handleDraftChange = useCallback((path: string, value: string) => {
-    setOpenTabs(prev => {
-      const next = new Map(prev)
-      const tab = next.get(path)
-      if (tab) {
-        next.set(path, { ...tab, draft: value })
-      }
-      return next
-    })
-  }, [])
-
-  const handleSave = useCallback(async (path: string) => {
-    const tab = openTabs.get(path)
-    if (!tab) return
-
-    setSavingTab(path)
-    try {
-      const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(path)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: tab.draft }),
-      })
-      const data = await res.json()
-      if (data.ok) {
-        setOpenTabs(prev => {
-          const next = new Map(prev)
-          const current = next.get(path)
-          if (current) {
-            next.set(path, { ...current, content: current.draft })
-          }
-          return next
-        })
-        setSaveSuccess(path)
-        setTimeout(() => setSaveSuccess(prev => prev === path ? null : prev), 1500)
-      }
-    } catch {}
-    setSavingTab(null)
-  }, [openTabs, skill.id])
-
-  const tabPaths = Array.from(openTabs.keys())
-  // Auto-activate first tab if none is active but tabs exist
-  const effectiveActiveTab = (activeTab && openTabs.has(activeTab)) ? activeTab : (tabPaths[0] || null)
-  const activeTabData = effectiveActiveTab ? openTabs.get(effectiveActiveTab) : null
-
-  // Empty state -- no tabs open
-  if (tabPaths.length === 0) {
-    return <EmptyState icon={FolderOpen} message="Open a file from the tree below" subtitle="Click any file to view and edit it here" />
-  }
-
-  return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0">
-      {/* VS Code-style file tabs */}
-      <div className="flex overflow-x-auto shrink-0 bg-ink/30 no-scrollbar">
-        {tabPaths.map(path => {
-          const tab = openTabs.get(path)!
-          const isActive = path === effectiveActiveTab
-          const isDirty = tab.draft !== tab.content
-          const fileName = path.split('/').pop() || path
-
-          return (
-            <button
-              key={path}
-              onClick={() => setActiveTab(path)}
-              className={`group flex items-center gap-1.5 px-3 py-2 text-xs whitespace-nowrap border-b-2 transition-colors min-w-0 ${
-                isActive
-                  ? 'border-sand text-parchment bg-ink/60'
-                  : 'border-transparent text-stone/60 hover:text-stone bg-ink/30'
-              }`}
-              title={path}
-            >
-              {isDirty && (
-                <span className="w-1.5 h-1.5 rounded-full bg-sand shrink-0" />
-              )}
-              <span className="truncate max-w-[140px]">{fileName}</span>
-              <span
-                onClick={(e) => handleCloseTab(path, e)}
-                className="ml-1 shrink-0 text-stone/40 hover:text-stone opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                role="button"
-                tabIndex={-1}
-              >
-                <X className="h-3 w-3" />
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Editor content */}
-      <div className="flex-1 min-h-0 flex flex-col">
-        {activeTabData?.loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 text-stone/40 animate-spin" />
-          </div>
-        ) : activeTabData?.error ? (
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-sm text-ember/70">{activeTabData.error}</p>
-          </div>
-        ) : activeTabData ? (
-          <>
-            {/* Save bar */}
-            <div className="flex items-center justify-between px-4 py-1.5 border-b border-border-custom shrink-0">
-              <span className="text-[10px] text-stone/40 truncate">{effectiveActiveTab}</span>
-              <div className="flex items-center gap-2">
-                {saveSuccess === effectiveActiveTab && (
-                  <span className="text-[10px] text-moss">Saved</span>
-                )}
-                <button
-                  onClick={() => effectiveActiveTab && handleSave(effectiveActiveTab)}
-                  disabled={!activeTabData || activeTabData.draft === activeTabData.content || savingTab === effectiveActiveTab}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-colors ${
-                    activeTabData && activeTabData.draft !== activeTabData.content
-                      ? 'bg-sand/20 text-sand border border-sand/30 hover:bg-sand/30'
-                      : 'bg-surface/20 text-stone/30 border border-border-custom cursor-not-allowed'
-                  }`}
-                >
-                  {savingTab === effectiveActiveTab ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  ) : (
-                    <Save className="h-3 w-3" />
-                  )}
-                  {savingTab === effectiveActiveTab ? 'Saving...' : 'Save'}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-auto p-4">
-              <textarea
-                ref={textareaRef}
-                value={activeTabData.draft}
-                onChange={(e) => effectiveActiveTab && handleDraftChange(effectiveActiveTab, e.target.value)}
-                className="w-full min-h-full bg-ink/80 text-parchment/90 font-mono text-sm border border-border-custom rounded-lg p-4 resize-none focus:outline-none focus:border-stone/30 transition-colors"
-                spellCheck={false}
-              />
-            </div>
-          </>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
 // --- Skills List Page ---
 
 function SkillsListPage({ onSelectSkill, onNewSkill }: {
@@ -1735,14 +1482,118 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
   )
 }
 
+// --- File Slide-Out Panel ---
+
+function FileSlideOut({ skill, filePath, onClose }: { skill: TesterSkill; filePath: string; onClose: () => void }) {
+  const [content, setContent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [savedContent, setSavedContent] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(filePath)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const text = data.ok ? (data.content || '') : `Error: ${data.error || 'Failed to load'}`
+        setContent(text)
+        setSavedContent(text)
+        setLoading(false)
+      })
+      .catch(() => { if (!cancelled) { setContent('Failed to load file'); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [skill.id, filePath])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/skill-creator/drafts/${encodeURIComponent(skill.id)}/file/${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setSavedContent(content)
+        setDirty(false)
+      }
+    } catch {}
+    setSaving(false)
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (dirty) handleSave()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [dirty, content])
+
+  return (
+    <div className="fixed inset-0 z-40 flex">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute right-0 top-0 bottom-0 w-[50vw] max-w-3xl bg-ink border-l border-border-custom shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-custom shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText className="h-3.5 w-3.5 text-stone/50 shrink-0" />
+            <span className="text-xs font-medium text-parchment truncate">{filePath}</span>
+            {dirty && <span className="w-1.5 h-1.5 rounded-full bg-sand shrink-0" />}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleSave}
+              disabled={!dirty || saving}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] transition-colors ${
+                dirty
+                  ? 'bg-sand/20 text-sand border border-sand/30 hover:bg-sand/30'
+                  : 'bg-surface/20 text-stone/30 border border-border-custom cursor-not-allowed'
+              }`}
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
+              title="Close"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto p-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-5 w-5 text-stone/40 animate-spin" />
+            </div>
+          ) : (
+            <textarea
+              value={content}
+              onChange={(e) => { setContent(e.target.value); setDirty(e.target.value !== savedContent) }}
+              className="w-full h-full bg-ink/80 text-parchment/90 font-mono text-sm border border-border-custom rounded-lg p-4 resize-none focus:outline-none focus:border-stone/30 transition-colors"
+              spellCheck={false}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Skill Editor (Three-Column Layout) ---
 
-function SkillEditor({ skill, onBack }: {
+function SkillEditor({ skill, onBack, onRename }: {
   skill: TesterSkill
   onBack: () => void
+  onRename: (newSkill: TesterSkill) => void
 }) {
   const [selectedDraftFiles, setSelectedDraftFiles] = useState<{ path: string; type: string }[]>([])
-  const [fileEditorRefreshKey, setFileEditorRefreshKey] = useState(0)
   const [isPromoting, setIsPromoting] = useState(false)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [fileSlideOpen, setFileSlideOpen] = useState(false)
@@ -1833,7 +1684,8 @@ function SkillEditor({ skill, onBack }: {
       if (data.ok) {
         const num = parseInt(versionName.replace('v', ''))
         if (!isNaN(num)) setCurrentVersion(num)
-        setFileEditorRefreshKey(k => k + 1)
+        // Trigger file nav refresh after version restore
+        window.dispatchEvent(new CustomEvent('skill-files-refresh'))
       }
     } catch {}
   }, [selectedDraft])
@@ -1862,15 +1714,14 @@ function SkillEditor({ skill, onBack }: {
       })
       const data = await res.json()
       if (data.ok) {
-        // Update skill reference and localStorage
-        skill.id = data.name
-        skill.name = data.name
+        const renamed = { ...skill, id: data.name, name: data.name }
         setNameValue(data.name)
         localStorage.setItem('skill-creator-selected-draft', data.name)
+        onRename(renamed)
       }
     } catch {}
     setEditingName(false)
-  }, [nameValue, skill, selectedDraft])
+  }, [nameValue, skill, selectedDraft, onRename])
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -2024,29 +1875,11 @@ function SkillEditor({ skill, onBack }: {
 
       {/* File viewer slide-out panel */}
       {fileSlideOpen && selectedFilePath && (
-        <div className="fixed inset-0 z-40 flex">
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/30" onClick={() => setFileSlideOpen(false)} />
-          {/* Panel */}
-          <div className="absolute right-0 top-0 bottom-0 w-[50vw] max-w-3xl bg-ink border-l border-border-custom shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-custom shrink-0">
-              <div className="flex items-center gap-2">
-                <FileText className="h-3.5 w-3.5 text-stone/50" />
-                <span className="text-xs font-medium text-parchment">{selectedFilePath}</span>
-              </div>
-              <button
-                onClick={() => setFileSlideOpen(false)}
-                className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors"
-                title="Close file viewer"
-              >
-                <PanelRightClose className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0">
-              <InlineFileEditor skill={skill} fileToOpen={selectedFilePath} refreshKey={fileEditorRefreshKey} />
-            </div>
-          </div>
-        </div>
+        <FileSlideOut
+          skill={skill}
+          filePath={selectedFilePath}
+          onClose={() => setFileSlideOpen(false)}
+        />
       )}
     </div>
   )
@@ -2106,7 +1939,7 @@ export function SkillCreator() {
   if (view === 'editor' && selectedSkill) {
     return (
       <>
-        <SkillEditor skill={selectedSkill} onBack={handleBack} />
+        <SkillEditor skill={selectedSkill} onBack={handleBack} onRename={setSelectedSkill} />
         <CreationModal
           open={showCreationModal}
           onClose={() => setShowCreationModal(false)}
