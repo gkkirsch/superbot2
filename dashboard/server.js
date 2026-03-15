@@ -5062,7 +5062,17 @@ app.post('/api/skill-creator/fork', async (req, res) => {
     }
     await writeFile(metadataPath, JSON.stringify(metadata, null, 2))
 
-    res.json({ ok: true, name: draftName })
+    // Read display name and description from copied SKILL.md
+    let displayName = draftName
+    let description = ''
+    try {
+      const skillMd = await readFile(join(draftPath, 'SKILL.md'), 'utf-8')
+      const fm = parseFrontmatter(skillMd)
+      if (fm.name) displayName = String(fm.name)
+      if (fm.description) description = String(fm.description).trim()
+    } catch {}
+
+    res.json({ ok: true, name: draftName, displayName, description })
   } catch (err) {
     console.error('[skill-creator] fork error:', err)
     res.status(500).json({ error: 'Failed to fork skill' })

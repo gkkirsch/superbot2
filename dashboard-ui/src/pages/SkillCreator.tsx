@@ -1117,7 +1117,7 @@ function SkillTester({ selectedSkill, activeTab = 'test' }: { selectedSkill: Tes
 function CreationModal({ open, onClose, onCreated }: {
   open: boolean
   onClose: () => void
-  onCreated: (name: string) => void
+  onCreated: (id: string, displayName: string, description: string) => void
 }) {
   const [view, setView] = useState<'choose' | 'fork'>('choose')
   const [skills, setSkills] = useState<TesterSkill[]>([])
@@ -1169,7 +1169,7 @@ function CreationModal({ open, onClose, onCreated }: {
       })
       const data = await res.json()
       if (data.ok) {
-        onCreated(data.name)
+        onCreated(data.name, data.name, '')
       }
     } catch {}
     setCreating(false)
@@ -1186,7 +1186,7 @@ function CreationModal({ open, onClose, onCreated }: {
       })
       const data = await res.json()
       if (data.ok) {
-        onCreated(data.name)
+        onCreated(data.name, data.displayName || data.name, data.description || '')
       }
     } catch {}
     setForking(false)
@@ -1386,7 +1386,7 @@ function SkillsListPage({ onSelectSkill, onNewSkill }: {
       const data = await res.json()
       if (data.ok) {
         // Open the duplicated draft in the editor
-        onSelectSkill({ id: data.name, name: `${skill.name} (copy)`, description: skill.description, source: 'drafts' })
+        onSelectSkill({ id: data.name, name: data.displayName || skill.name, description: data.description || skill.description, source: 'drafts' })
       }
     } catch {}
     setDuplicating(null)
@@ -1943,9 +1943,9 @@ export function SkillCreator() {
         <CreationModal
           open={showCreationModal}
           onClose={() => setShowCreationModal(false)}
-          onCreated={(name) => {
-            setSelectedSkill({ id: name, name, description: '', source: 'drafts' })
-            localStorage.setItem('skill-creator-selected-draft', name)
+          onCreated={(id, displayName, description) => {
+            setSelectedSkill({ id, name: displayName, description, source: 'drafts' })
+            localStorage.setItem('skill-creator-selected-draft', id)
             setShowCreationModal(false)
           }}
         />
@@ -1959,8 +1959,8 @@ export function SkillCreator() {
       <CreationModal
         open={showCreationModal}
         onClose={() => setShowCreationModal(false)}
-        onCreated={(name) => {
-          handleSelectSkill({ id: name, name, description: '', source: 'drafts' })
+        onCreated={(id, displayName, description) => {
+          handleSelectSkill({ id, name: displayName, description, source: 'drafts' })
           setShowCreationModal(false)
         }}
       />
