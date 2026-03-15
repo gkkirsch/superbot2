@@ -77,6 +77,49 @@ user-invocable: true
 | `disable-model-invocation` | No | If true, skill only triggers via `/command`, never auto-invoked |
 | `user-invocable` | No | If true, appears in `/` menu for manual invocation |
 
+### String Substitution Variables
+
+Skills can use these variables in the SKILL.md body. They are replaced with actual values before Claude processes the skill.
+
+| Variable | Description |
+|----------|-------------|
+| `$ARGUMENTS` | All arguments after the skill name (e.g., `/my-skill these are the arguments` → `these are the arguments`) |
+| `$ARGUMENTS[N]` or `$N` | Positional argument by 0-based index (e.g., `$0` is the first argument) |
+| `${CLAUDE_SESSION_ID}` | Current Claude Code session ID |
+| `` !`command` `` | Shell preprocessing — the command runs and its stdout replaces the placeholder before Claude sees the skill body |
+
+**Example usage in SKILL.md body:**
+
+```markdown
+Analyze the file at: $0
+
+Session: ${CLAUDE_SESSION_ID}
+
+Current git branch: !`git branch --show-current`
+```
+
+### context: fork — Isolated Execution
+
+When a skill sets `context: fork` in its frontmatter, it runs in an isolated subagent rather than inline in the main conversation.
+
+**When to use `context: fork`:**
+- The skill does heavy or long-running work that shouldn't block the main conversation
+- The skill is read-only research that doesn't need to edit the user's files
+- You want the skill to run in an isolated context without polluting the main conversation
+
+**When NOT to use fork:**
+- The skill needs to edit files in the user's project — use default inline mode instead
+- The skill needs to interact with the user via follow-up questions
+- The skill is lightweight and should run in the main conversation
+
+**Available `agent` types for fork:** `Explore` (fast, read-only), `Plan` (read-only, research), `general-purpose` (full tool access including file editing)
+
+```yaml
+# Example: a research skill that runs in a fast read-only subagent
+context: fork
+agent: Explore
+```
+
 ### Body (after frontmatter)
 
 The SKILL.md body contains the instructions Claude follows when the skill is invoked. Write clear, actionable instructions. Keep under 500 lines — use `references/` for detailed docs.
@@ -325,6 +368,8 @@ allowed-tools: Read, Bash
 metadata:
   superbot:
     emoji: "wrench"
+    icon: "wrench"
+    scope: "global"
     requires:
       bins: ["my-binary"]
     install:
@@ -350,6 +395,19 @@ metadata:
 #### `emoji`
 
 Display icon for the skill on the dashboard. Use a text description of the emoji (e.g., `"wrench"`, `"lock"`, `"rocket"`).
+
+#### `icon`
+
+Lucide icon name for dashboard display (e.g., `"megaphone"`, `"database"`, `"globe"`). Browse available icons at [lucide.dev](https://lucide.dev). This is separate from `emoji` — `icon` renders as an SVG icon in the dashboard UI.
+
+#### `scope`
+
+Controls where the skill stores its data. Values: `"space"` or `"global"` (default).
+
+- `"global"` — skill data is stored in `~/.superbot2/skill-data/<skillId>/`, shared across all spaces
+- `"space"` — skill data is stored per-space, isolating data between different workspaces
+
+Use `"space"` when the skill manages data that is specific to a project or workspace (e.g., project-specific configs, local caches). Use `"global"` (or omit) when the skill's data should be shared everywhere (e.g., API integrations, cross-project tools).
 
 #### `requires.bins`
 
@@ -465,3 +523,73 @@ Use it when a skill needs any of the following:
 - API keys or tokens from the user (`credentials`)
 
 Both `requires`/`install` and `credentials` can coexist in the same skill -- for example, a skill that wraps a CLI tool and also needs an API key.
+
+## Real-World Skill Examples
+
+These are abbreviated examples of real working skills to illustrate common patterns.
+
+### Example A: Dashboard Card Skill (social-media-approvals)
+
+A skill that provides a dashboard card for reviewing and approving social media post drafts.
+
+```yaml
+---
+name: social-media-approvals
+description: >
+  Use when queuing social media post drafts for human approval before
+  publishing. Triggers: "queue post for approval", "draft social media post",
+  "submit post for review". NOT for: direct posting without review.
+version: 1.0.0
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+user-invocable: true
+argument-hint: "[platform] [post content]"
+
+metadata:
+  superbot:
+    emoji: "megaphone"
+    icon: "megaphone"
+    scope: "space"
+---
+```
+
+**Body pattern:** Instructions for writing drafts to a `data.jsonl` file, one JSON object per line. Includes a `scripts/queue-post.sh` helper for appending entries. The dashboard card reads `data.jsonl` to render a review queue.
+
+### Example B: Browser Automation Skill (superbot-browser)
+
+A skill that automates a real Chrome profile via Chrome DevTools Protocol (CDP).
+
+```yaml
+---
+name: superbot-browser
+description: >
+  Browser automation using the superbot2 Chrome profile via CDP. Use when you
+  need to automate web interactions that require authenticated sessions.
+  Triggers: "automate browser", "navigate to", "fill out form on",
+  "take screenshot of page". NOT for: headless scraping without auth.
+version: 1.0.0
+allowed-tools: Bash, Read, Write
+user-invocable: true
+argument-hint: "[url or action]"
+---
+```
+
+**Body pattern:** Instructions for connecting to Chrome on a specific CDP port, navigating pages, filling forms, clicking elements, and taking screenshots. Uses `Bash` to run CDP commands via a helper script.
+
+### Example C: Simple Reference Skill (coding-standards)
+
+A lightweight skill that provides coding guidelines — no scripts, no tools beyond reading.
+
+```yaml
+---
+name: coding-standards
+description: >
+  Use when the user asks about coding standards, style guidelines, or best
+  practices for this project. Triggers: "what are our coding standards",
+  "style guide", "naming conventions". NOT for: linting or auto-formatting code.
+version: 1.0.0
+allowed-tools: Read
+user-invocable: true
+---
+```
+
+**Body pattern:** A concise set of rules (naming conventions, file structure, commit message format) in the SKILL.md body. Detailed language-specific guides live in `references/typescript.md`, `references/python.md`, etc., loaded on demand with "Read references/..." instructions.

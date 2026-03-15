@@ -124,6 +124,51 @@ Do not over-prompt — suggest a save once per milestone, not after every minor 
 
 For detailed specifications of all plugin fields, frontmatter options, hook events, MCP server format, credential declarations, install kinds, and the full metadata.superbot spec, read the reference file at the path provided in your system context.
 
+## Writing Principles
+
+Follow these principles when authoring SKILL.md content:
+
+- **Use imperative form** — write "Read the file and extract headers" not "The skill reads the file and extracts headers."
+- **Explain reasoning, not just rules** — instead of "MUST always use JSON output," write "Use JSON output so downstream tools can parse results reliably." Claude responds better when it understands WHY a requirement exists.
+- **Keep SKILL.md under 500 lines** — use hierarchy and clear cross-references for longer content. Move detailed specifications, templates, and examples into `references/` files and reference them with "Read references/filename.md for full details."
+- **Define output formats explicitly** — include a concrete example of the expected output, not just a description. Show what success looks like.
+- **Stay lean** — remove instructions that don't meaningfully change behavior. Every line should earn its place.
+- **Generalize from specific cases** — write skills that handle a broad range of scenarios, not just the user's initial test case. Think about edge cases and variations upfront.
+- **Avoid excessive formatting crutches** — don't overuse ALL CAPS, bold, or the word MUST. Clear reasoning is more effective than shouting.
+
+## Description Optimization for Triggering
+
+Skill descriptions determine when Claude auto-invokes a skill. The description appears in Claude's `available_skills` list alongside the skill name, so it must clearly signal when the skill should activate.
+
+Key insights for effective descriptions:
+
+- **Simple, one-step queries may not trigger skills** even when descriptions match perfectly. Skills reliably trigger on complex, multi-step, or specialized queries. Design descriptions with this in mind.
+- **Be somewhat assertive** — undertriggering is more common than overtriggering. A description like "Use this skill to manage database migrations" triggers better than "Can help with database migrations."
+- **Include specific trigger phrases** — list concrete things a user might say: "Triggers when the user asks to 'deploy to staging', 'push to production', or 'run the deploy pipeline'."
+- **Add negative examples** — explicitly state what the skill is NOT for: "NOT for: running individual shell commands, editing config files, or general DevOps questions."
+- **Answer the question: "When should this activate?"** — the description should make the trigger boundary unambiguous.
+
+## Eval-Driven Development
+
+After creating or significantly editing a skill, guide the user through testing and iteration:
+
+1. **Suggest test cases** — propose 2–3 realistic user prompts that should invoke the skill. Include at least one straightforward trigger and one edge case.
+2. **Point to the test UI** — remind the user they can test in the Skill Tester panel: "You can test this skill in the Skill Tester — try pasting one of these prompts to see how it behaves."
+3. **Prompt for iteration** — after the user tests, ask: "What would you like to improve? Did it handle the edge case correctly?"
+4. **Follow the loop** — draft → test → evaluate → improve → repeat. Each round should produce a tighter, more reliable skill.
+
+Do not over-prompt about testing. Suggest it once after the initial creation and once after major revisions.
+
+## Progressive Disclosure of Skill Content
+
+Skills expose content to Claude in three tiers, each with different cost and size tradeoffs:
+
+1. **Metadata** (name + description): ~100 words. Always loaded into Claude's context alongside the available skills list. Keep it tight — this is your triggering surface.
+2. **SKILL.md body**: The full instruction set, ideally under 500 lines. Loaded into context when the skill triggers. This is where the core logic lives.
+3. **Bundled resources** (`references/` directory): Unlimited size. Loaded on demand when the skill body says "Read references/...". Use this tier for detailed specifications, API docs, templates, and examples.
+
+When authoring skills, push detailed content down to the lowest tier that still works. Metadata should trigger accurately, the body should instruct clearly, and references should provide depth.
+
 ## Best Practices
 
 - **Progressive disclosure**: Start with Layer 1. Only suggest Layer 2 if the user needs commands, agents, hooks, or multiple skills. Only suggest Layer 3 if external binaries, API keys, or dashboard integration are needed.
