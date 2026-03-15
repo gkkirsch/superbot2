@@ -6239,21 +6239,36 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
     // Create temp directory for the isolated test
     const tempDir = await mkdtemp(join(tmpdir(), 'skill-test-'))
 
+    // Init as git repo so --setting-sources project can detect the project root
+    execFileSync('git', ['init', '-q'], { cwd: tempDir })
+
     // Detect type and copy files into Claude-discoverable structure
     let skillName = draftName
     const isPlugin = existsSync(join(skillSourcePath, '.claude-plugin', 'plugin.json'))
 
     if (isPlugin) {
-      // Plugin: read plugin.json to get the name
+      // Plugin: read plugin.json to get the name, then find and copy skills as standalone
       try {
         const pjRaw = await readFile(join(skillSourcePath, '.claude-plugin', 'plugin.json'), 'utf-8')
         const pj = JSON.parse(pjRaw)
         skillName = pj.name || draftName
       } catch {}
-      // Copy entire skill/draft as a plugin: .claude/plugins/<pluginName>/
-      const pluginDest = join(tempDir, '.claude', 'plugins', skillName)
-      await mkdir(pluginDest, { recursive: true })
-      await cp(skillSourcePath, pluginDest, { recursive: true })
+      // For testing, extract skills from the plugin and copy as standalone skills
+      // (--setting-sources project doesn't support plugin installation, only .claude/skills/)
+      try {
+        const entries = await readdir(join(skillSourcePath, 'skills'), { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.isDirectory() && existsSync(join(skillSourcePath, 'skills', entry.name, 'SKILL.md'))) {
+            const skillDest = join(tempDir, '.claude', 'skills', entry.name)
+            await mkdir(skillDest, { recursive: true })
+            await cp(join(skillSourcePath, 'skills', entry.name), skillDest, {
+              recursive: true,
+              filter: (src) => !src.includes('.git') && !src.includes('node_modules')
+            })
+            skillName = entry.name
+          }
+        }
+      } catch {}
     } else {
       // Skill-only: find the skill directory containing SKILL.md and copy everything
       let skillSourceDir = skillSourcePath
@@ -6285,6 +6300,39 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
       await cp(skillSourceDir, skillDest, { recursive: true })
     }
 
+    // Also write CLAUDE.md with skill instructions as a reliable fallback.
+    // Plugin discovery via --setting-sources may not work in all cases,
+    // but CLAUDE.md in the project root is always loaded by claude -p.
+    try {
+      // Search for SKILL.md: top-level, then nested skills/<name>/SKILL.md
+      let skillMdPath = null
+      if (existsSync(join(skillSourcePath, 'SKILL.md'))) {
+        skillMdPath = join(skillSourcePath, 'SKILL.md')
+      } else {
+        try {
+          const skillsDir = join(skillSourcePath, 'skills')
+          const entries = await readdir(skillsDir, { withFileTypes: true })
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              const candidate = join(skillsDir, entry.name, 'SKILL.md')
+              if (existsSync(candidate)) {
+                skillMdPath = candidate
+                break
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (skillMdPath) {
+        const skillMdRaw = await readFile(skillMdPath, 'utf-8')
+        const body = skillMdRaw.replace(/^---[\s\S]*?---\s*/, '').trim()
+        if (body) {
+          await writeFile(join(tempDir, 'CLAUDE.md'), body, 'utf-8')
+        }
+      }
+    } catch {}
+
     const testSessionId = `test-${randomUUID()}`
 
     // Store the session (SSE will connect separately)
@@ -6311,7 +6359,7 @@ app.post('/api/skill-creator/test/start', async (req, res) => {
       '--include-partial-messages',
       '--permission-mode', 'bypassPermissions',
       '--model', 'sonnet',
-      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep',
+      '--allowed-tools', 'Read,Write,Edit,Bash,Glob,Grep,AskUserQuestion',
       '--setting-sources', 'project'
     ], {
       cwd: tempDir,
@@ -6868,11 +6916,31 @@ app.post('/api/skill-tester/run', async (req, res) => {
   // Pre-check: does the skill directory and SKILL.md exist?
   let dirExists = false
   let skillMdExists = false
+  let skillMdPath = join(skillDir, 'SKILL.md')
   try {
     await stat(skillDir)
     dirExists = true
-    await stat(join(skillDir, 'SKILL.md'))
-    skillMdExists = true
+    try {
+      await stat(skillMdPath)
+      skillMdExists = true
+    } catch {
+      // Layer 2 plugin: SKILL.md is inside skills/<name>/SKILL.md
+      try {
+        const skillsSubdir = join(skillDir, 'skills')
+        const skillEntries = await readdir(skillsSubdir, { withFileTypes: true })
+        for (const entry of skillEntries) {
+          if (entry.isDirectory()) {
+            const nested = join(skillsSubdir, entry.name, 'SKILL.md')
+            try {
+              await stat(nested)
+              skillMdPath = nested
+              skillMdExists = true
+              break
+            } catch {}
+          }
+        }
+      } catch {}
+    }
   } catch {}
 
   if (!dirExists) {
@@ -6895,7 +6963,7 @@ app.post('/api/skill-tester/run', async (req, res) => {
     execFileSync('git', ['init', '-q'], { cwd: tempDir })
 
     if (skillMdExists) {
-      const skillMdRaw = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
+      const skillMdRaw = await readFile(skillMdPath, 'utf-8')
       // Strip YAML frontmatter (everything between --- delimiters)
       const body = skillMdRaw.replace(/^---[\s\S]*?---\s*/, '').trim()
       if (body) {
@@ -6904,17 +6972,21 @@ app.post('/api/skill-tester/run', async (req, res) => {
       }
     }
 
-    // Copy scripts directory so relative paths work
-    const scriptsDir = join(skillDir, 'scripts')
-    try {
-      await stat(scriptsDir)
-      await cp(scriptsDir, join(tempDir, 'scripts'), { recursive: true })
-      // Make scripts executable
-      const scriptFiles = await readdir(join(tempDir, 'scripts'))
-      for (const f of scriptFiles) {
-        await chmod(join(tempDir, 'scripts', f), 0o755)
-      }
-    } catch {}
+    // Copy scripts and references directories so relative paths work
+    const skillMdDir = dirname(skillMdPath)
+    for (const subdir of ['scripts', 'references']) {
+      const srcDir = join(skillMdDir, subdir)
+      try {
+        await stat(srcDir)
+        await cp(srcDir, join(tempDir, subdir), { recursive: true })
+        if (subdir === 'scripts') {
+          const scriptFiles = await readdir(join(tempDir, 'scripts'))
+          for (const f of scriptFiles) {
+            await chmod(join(tempDir, 'scripts', f), 0o755)
+          }
+        }
+      } catch {}
+    }
 
     if (skillLoaded) {
       res.write(`data: ${JSON.stringify({ type: 'skill_status', status: 'loaded', skillName, path: skillDir })}\n\n`)
