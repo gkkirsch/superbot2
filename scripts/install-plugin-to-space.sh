@@ -10,8 +10,9 @@
 #   3. Resolves the space's codeDir from space.json (or defaults to <space-dir>/app)
 #   4. Symlinks <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version> → library path
 #   5. Adds a project-scope entry to the global installed_plugins.json
-#   6. Updates space.json plugins array
-#   7. Prints confirmation
+#   6. Adds enabledPlugins entry to project-level <codeDir>/.claude/settings.json
+#   7. Updates space.json plugins array
+#   8. Prints confirmation
 
 set -euo pipefail
 
@@ -44,7 +45,8 @@ VERSION=$(jq -r '.version' "$METADATA_FILE")
 MARKETPLACE=$(jq -r '.marketplace // "local"' "$METADATA_FILE")
 PLUGIN_KEY=$(jq -r '.pluginKey // empty' "$METADATA_FILE")
 if [[ -z "$PLUGIN_KEY" ]]; then
-  PLUGIN_KEY="${PLUGIN_NAME}@local"
+  # Default to marketplace name from metadata (never use @local — it's not a valid marketplace)
+  PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE}"
 fi
 
 LIBRARY_CACHE="$PLUGIN_DIR/$VERSION"
@@ -71,19 +73,16 @@ fi
 CACHE_DIR="$CODE_DIR/.claude/plugins/cache/local/$PLUGIN_NAME"
 mkdir -p "$CACHE_DIR"
 
-# --- Check if already installed ---
+# --- Create symlink if needed ---
 LINK_PATH="$CACHE_DIR/$VERSION"
 if [[ -L "$LINK_PATH" ]]; then
-  echo "Plugin '$PLUGIN_NAME' is already installed in space '$SPACE_SLUG'"
-  exit 0
-fi
-if [[ -e "$LINK_PATH" ]]; then
+  echo "Symlink already exists: $LINK_PATH"
+elif [[ -e "$LINK_PATH" ]]; then
   echo "ERROR: $LINK_PATH already exists and is not a symlink" >&2
   exit 1
+else
+  ln -s "$LIBRARY_CACHE" "$LINK_PATH"
 fi
-
-# --- Create symlink (absolute path) ---
-ln -s "$LIBRARY_CACHE" "$LINK_PATH"
 
 # --- Add project-scope entry to global installed_plugins.json ---
 INSTALL_PATH="$LINK_PATH"
@@ -113,6 +112,23 @@ if [[ "$HAS_ENTRY" -eq 0 ]]; then
     --arg installPath "$INSTALL_PATH" \
     --arg ver "$VERSION" \
     --arg now "$NOW"
+fi
+
+# --- Add enabledPlugins entry to project-level settings.json ---
+PROJECT_SETTINGS="$CODE_DIR/.claude/settings.json"
+mkdir -p "$CODE_DIR/.claude"
+
+if [[ ! -f "$PROJECT_SETTINGS" ]]; then
+  echo '{}' > "$PROJECT_SETTINGS"
+fi
+
+# Add plugin to enabledPlugins (create enabledPlugins object if missing)
+HAS_ENABLED=$(jq --arg key "$PLUGIN_KEY" '.enabledPlugins[$key] // null' "$PROJECT_SETTINGS")
+if [[ "$HAS_ENABLED" != "true" ]]; then
+  locked_write "$PROJECT_SETTINGS" \
+    '.enabledPlugins[$key] = true' \
+    --arg key "$PLUGIN_KEY"
+  echo "Added '$PLUGIN_KEY' to enabledPlugins in $PROJECT_SETTINGS"
 fi
 
 # --- Update space.json plugins array ---

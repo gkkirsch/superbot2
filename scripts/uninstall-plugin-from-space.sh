@@ -8,8 +8,9 @@
 #   1. Resolves the space's codeDir from space.json
 #   2. Removes the symlink at <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version>
 #   3. Removes the project-scope entry from global installed_plugins.json
-#   4. Removes the plugin from space.json plugins array
-#   5. Prints confirmation
+#   4. Removes enabledPlugins entry from project-level <codeDir>/.claude/settings.json
+#   5. Removes the plugin from space.json plugins array
+#   6. Prints confirmation
 
 set -euo pipefail
 
@@ -45,7 +46,9 @@ fi
 
 # --- Read metadata for version (if library entry exists) ---
 METADATA_FILE="$LIBRARY_DIR/$PLUGIN_NAME/metadata.json"
-PLUGIN_KEY="${PLUGIN_NAME}@local"
+# Read marketplace from metadata for correct plugin key (never use @local)
+MARKETPLACE=$(jq -r '.marketplace // "local"' "$METADATA_FILE" 2>/dev/null || echo "local")
+PLUGIN_KEY="${PLUGIN_NAME}@${MARKETPLACE}"
 if [[ -f "$METADATA_FILE" ]]; then
   VERSION=$(jq -r '.version' "$METADATA_FILE")
   KEY_FROM_META=$(jq -r '.pluginKey // empty' "$METADATA_FILE")
@@ -87,6 +90,20 @@ if [[ -f "$GLOBAL_PLUGINS_JSON" ]]; then
         --arg key "$KEY" \
         --arg path "$CODE_DIR"
       echo "Removed project-scope entry for '$KEY' from installed_plugins.json"
+    fi
+  done
+fi
+
+# --- Remove enabledPlugins entry from project-level settings.json ---
+PROJECT_SETTINGS="$CODE_DIR/.claude/settings.json"
+if [[ -f "$PROJECT_SETTINGS" ]]; then
+  for KEY in "$PLUGIN_KEY" "${PLUGIN_NAME}@local" "${PLUGIN_NAME}@superbot-marketplace"; do
+    HAS_ENABLED=$(jq --arg key "$KEY" '.enabledPlugins[$key] // null' "$PROJECT_SETTINGS" 2>/dev/null)
+    if [[ "$HAS_ENABLED" == "true" ]]; then
+      locked_write "$PROJECT_SETTINGS" \
+        'del(.enabledPlugins[$key])' \
+        --arg key "$KEY"
+      echo "Removed '$KEY' from enabledPlugins in $PROJECT_SETTINGS"
     fi
   done
 fi
