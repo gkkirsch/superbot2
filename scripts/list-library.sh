@@ -13,6 +13,10 @@
 #   Plugin Library:
 #     social-media-approvals  → hostreply, x-authority
 #     frontend-slides         → (not installed)
+#
+# Install detection:
+#   Checks for directory existence (copies) at the expected install path.
+#   Shows [has data] if the installed copy's data/ directory is non-empty.
 
 set -euo pipefail
 
@@ -40,23 +44,36 @@ find_installed_spaces() {
     fi
 
     if [[ "$item_type" == "skill" ]]; then
-      # Check for symlink in .claude/skills/
-      if [[ -L "$code_dir/.claude/skills/$item_name" ]]; then
-        installed+=("$slug")
+      # Check for directory (copy) or symlink (legacy) in .claude/skills/
+      local skill_path="$code_dir/.claude/skills/$item_name"
+      if [[ -d "$skill_path" || -L "$skill_path" ]]; then
+        local suffix=""
+        # Check if data/ has content
+        if [[ -d "$skill_path/data" ]] && [[ -n "$(ls -A "$skill_path/data" 2>/dev/null)" ]]; then
+          suffix=" [has data]"
+        fi
+        installed+=("${slug}${suffix}")
       fi
     elif [[ "$item_type" == "plugin" ]]; then
-      # Check for symlink in .claude/plugins/cache/local/<name>/
+      # Check for directory (copy) or symlink (legacy) in .claude/plugins/cache/local/<name>/
       local cache_dir="$code_dir/.claude/plugins/cache/local/$item_name"
       if [[ -d "$cache_dir" ]]; then
-        # Check if any version symlink exists
+        local found=false
+        local suffix=""
         for entry in "$cache_dir"/*/; do
-          if [[ -L "${entry%/}" ]]; then
-            installed+=("$slug")
-            break
+          [[ -d "$entry" || -L "${entry%/}" ]] || continue
+          found=true
+          # Check if data/ has content in any version
+          if [[ -d "${entry}data" ]] && [[ -n "$(ls -A "${entry}data" 2>/dev/null)" ]]; then
+            suffix=" [has data]"
           fi
+          break
         done
+        if [[ "$found" == true ]]; then
+          installed+=("${slug}${suffix}")
+        fi
       fi
-      # Also check space.json plugins array
+      # Also check space.json plugins array as fallback
       if [[ ${#installed[@]} -eq 0 ]]; then
         local has
         has=$(jq --arg name "$item_name" '.plugins // [] | map(select(. == $name)) | length' "$space_json" 2>/dev/null || echo "0")

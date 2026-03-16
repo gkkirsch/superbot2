@@ -8,11 +8,17 @@
 #   1. Validates the plugin exists in ~/.superbot2/plugin-library/<plugin-name>/
 #   2. Reads metadata.json for version/marketplace info
 #   3. Resolves the space's codeDir from space.json (or defaults to <space-dir>/app)
-#   4. Symlinks <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version> → library path
-#   5. Adds a project-scope entry to the global installed_plugins.json
-#   6. Adds enabledPlugins entry to project-level <codeDir>/.claude/settings.json
-#   7. Updates space.json plugins array
-#   8. Prints confirmation
+#   4. Copies the plugin version directory into <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version>
+#   5. Creates a data/ directory inside the copied plugin version dir for per-space data
+#   6. Adds a project-scope entry to the global installed_plugins.json
+#   7. Adds enabledPlugins entry to project-level <codeDir>/.claude/settings.json
+#   8. Updates space.json plugins array
+#   9. Prints confirmation
+#
+# Data convention:
+#   Each installed plugin version has a data/ subdirectory at
+#   <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version>/data/
+#   This directory is for per-space runtime data and is preserved across re-installs.
 
 set -euo pipefail
 
@@ -73,19 +79,46 @@ fi
 CACHE_DIR="$CODE_DIR/.claude/plugins/cache/local/$PLUGIN_NAME"
 mkdir -p "$CACHE_DIR"
 
-# --- Create symlink if needed ---
-LINK_PATH="$CACHE_DIR/$VERSION"
-if [[ -L "$LINK_PATH" ]]; then
-  echo "Symlink already exists: $LINK_PATH"
-elif [[ -e "$LINK_PATH" ]]; then
-  echo "ERROR: $LINK_PATH already exists and is not a symlink" >&2
-  exit 1
+# --- Install (copy) ---
+DEST_PATH="$CACHE_DIR/$VERSION"
+
+if [[ -d "$DEST_PATH" ]]; then
+  # Already installed — re-install: preserve data/, overwrite code
+  echo "Plugin '$PLUGIN_NAME' v$VERSION already installed — re-installing (preserving data/)"
+
+  # Back up data/ if it exists and has content
+  DATA_BACKUP=""
+  if [[ -d "$DEST_PATH/data" ]]; then
+    DATA_BACKUP=$(mktemp -d)
+    cp -r "$DEST_PATH/data" "$DATA_BACKUP/data"
+  fi
+
+  # Remove old copy and replace with fresh library copy
+  rm -rf "$DEST_PATH"
+  cp -r "$LIBRARY_CACHE" "$DEST_PATH"
+
+  # Restore data/
+  if [[ -n "$DATA_BACKUP" && -d "$DATA_BACKUP/data" ]]; then
+    rm -rf "$DEST_PATH/data"
+    mv "$DATA_BACKUP/data" "$DEST_PATH/data"
+    rm -rf "$DATA_BACKUP"
+    echo "Preserved existing data/ directory"
+  fi
+elif [[ -L "$DEST_PATH" ]]; then
+  # Legacy symlink — remove and replace with copy
+  echo "Replacing legacy symlink with copy"
+  rm "$DEST_PATH"
+  cp -r "$LIBRARY_CACHE" "$DEST_PATH"
 else
-  ln -s "$LIBRARY_CACHE" "$LINK_PATH"
+  # Fresh install
+  cp -r "$LIBRARY_CACHE" "$DEST_PATH"
 fi
 
+# --- Ensure data/ directory exists ---
+mkdir -p "$DEST_PATH/data"
+
 # --- Add project-scope entry to global installed_plugins.json ---
-INSTALL_PATH="$LINK_PATH"
+INSTALL_PATH="$DEST_PATH"
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
 
 if [[ ! -f "$GLOBAL_PLUGINS_JSON" ]]; then
@@ -139,4 +172,4 @@ if [[ "$HAS_PLUGIN" -eq 0 ]]; then
     --arg name "$PLUGIN_NAME"
 fi
 
-echo "Installed plugin '$PLUGIN_NAME' → space '$SPACE_SLUG' ($LINK_PATH → $LIBRARY_CACHE)"
+echo "Installed plugin '$PLUGIN_NAME' v$VERSION → space '$SPACE_SLUG' ($DEST_PATH, copied from $LIBRARY_CACHE)"

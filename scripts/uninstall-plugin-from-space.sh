@@ -2,15 +2,21 @@
 # uninstall-plugin-from-space.sh — Remove a plugin from a space
 #
 # Usage:
-#   bash ~/.superbot2/scripts/uninstall-plugin-from-space.sh <plugin-name> <space-slug>
+#   bash ~/.superbot2/scripts/uninstall-plugin-from-space.sh <plugin-name> <space-slug> [--force]
 #
 # What it does:
 #   1. Resolves the space's codeDir from space.json
-#   2. Removes the symlink at <codeDir>/.claude/plugins/cache/local/<plugin-name>/<version>
-#   3. Removes the project-scope entry from global installed_plugins.json
-#   4. Removes enabledPlugins entry from project-level <codeDir>/.claude/settings.json
-#   5. Removes the plugin from space.json plugins array
-#   6. Prints confirmation
+#   2. Checks if the plugin's data/ directory has content
+#   3. If data/ has content and --force is not set, warns and refuses to delete
+#   4. Removes the plugin directory at <codeDir>/.claude/plugins/cache/local/<plugin-name>/
+#   5. Removes the project-scope entry from global installed_plugins.json
+#   6. Removes enabledPlugins entry from project-level <codeDir>/.claude/settings.json
+#   7. Removes the plugin from space.json plugins array
+#   8. Prints confirmation
+#
+# Data convention:
+#   Each installed plugin version has a data/ subdirectory for per-space runtime data.
+#   Use --force to delete a plugin that has data.
 
 set -euo pipefail
 
@@ -22,13 +28,22 @@ SPACES_DIR="$SUPERBOT_DIR/spaces"
 GLOBAL_PLUGINS_JSON="$SUPERBOT_DIR/.claude/plugins/installed_plugins.json"
 
 # --- Parse arguments ---
-if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <plugin-name> <space-slug>" >&2
+FORCE=false
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+
+if [[ ${#POSITIONAL[@]} -lt 2 ]]; then
+  echo "Usage: $0 <plugin-name> <space-slug> [--force]" >&2
   exit 1
 fi
 
-PLUGIN_NAME="$1"
-SPACE_SLUG="$2"
+PLUGIN_NAME="${POSITIONAL[0]}"
+SPACE_SLUG="${POSITIONAL[1]}"
 
 # --- Validate space exists ---
 SPACE_DIR="$SPACES_DIR/$SPACE_SLUG"
@@ -59,19 +74,36 @@ else
   VERSION=""
 fi
 
-# --- Remove symlink(s) ---
+# --- Check for data/ content and remove plugin directory ---
 CACHE_BASE="$CODE_DIR/.claude/plugins/cache/local/$PLUGIN_NAME"
 if [[ -d "$CACHE_BASE" ]]; then
-  # Remove version symlinks
-  for entry in "$CACHE_BASE"/*/; do
-    [[ -L "${entry%/}" ]] && rm "${entry%/}" && echo "Removed symlink: ${entry%/}"
+  # Check for data/ with content in any version subdirectory
+  HAS_DATA=false
+  TOTAL_DATA_SIZE=""
+  for version_dir in "$CACHE_BASE"/*/; do
+    [[ -d "$version_dir" ]] || continue
+    DATA_DIR="${version_dir}data"
+    if [[ -d "$DATA_DIR" ]] && [[ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]]; then
+      HAS_DATA=true
+      TOTAL_DATA_SIZE=$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)
+      break
+    fi
   done
-  # If version was known, try direct removal
-  if [[ -n "$VERSION" && -L "$CACHE_BASE/$VERSION" ]]; then
-    rm "$CACHE_BASE/$VERSION" 2>/dev/null && echo "Removed symlink: $CACHE_BASE/$VERSION"
+
+  if [[ "$HAS_DATA" == true ]]; then
+    if [[ "$FORCE" != true ]]; then
+      echo "WARNING: Plugin '$PLUGIN_NAME' has data/ with content ($TOTAL_DATA_SIZE)" >&2
+      echo "  Path: $CACHE_BASE" >&2
+      echo "  Use --force to delete anyway" >&2
+      exit 1
+    fi
+    echo "Removing plugin with data/ ($TOTAL_DATA_SIZE) — --force specified"
   fi
-  # Remove empty directories
-  rmdir "$CACHE_BASE" 2>/dev/null || true
+
+  rm -rf "$CACHE_BASE"
+  echo "Removed plugin directory: $CACHE_BASE"
+else
+  echo "Plugin directory not found at $CACHE_BASE (may already be uninstalled)"
 fi
 
 # --- Remove project-scope entry from global installed_plugins.json ---

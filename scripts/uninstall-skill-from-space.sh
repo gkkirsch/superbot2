@@ -1,14 +1,20 @@
 #!/bin/bash
-# uninstall-skill-from-space.sh — Remove a skill symlink from a space
+# uninstall-skill-from-space.sh — Remove an installed skill from a space
 #
 # Usage:
-#   bash ~/.superbot2/scripts/uninstall-skill-from-space.sh <skill-name> <space-slug>
+#   bash ~/.superbot2/scripts/uninstall-skill-from-space.sh <skill-name> <space-slug> [--force]
 #
 # What it does:
 #   1. Resolves the space's codeDir from space.json
-#   2. Removes the symlink at <codeDir>/.claude/skills/<skill-name>
-#   3. Removes the skill from space.json skills array
-#   4. Prints confirmation
+#   2. Checks if the skill's data/ directory has content
+#   3. If data/ has content and --force is not set, warns and refuses to delete
+#   4. Removes the skill directory at <codeDir>/.claude/skills/<skill-name>
+#   5. Removes the skill from space.json skills array
+#   6. Prints confirmation
+#
+# Data convention:
+#   Each installed skill has a data/ subdirectory for per-space runtime data.
+#   Use --force to delete a skill that has data.
 
 set -euo pipefail
 
@@ -18,13 +24,22 @@ SUPERBOT_DIR="$HOME/.superbot2"
 SPACES_DIR="$SUPERBOT_DIR/spaces"
 
 # --- Parse arguments ---
-if [[ $# -lt 2 ]]; then
-  echo "Usage: $0 <skill-name> <space-slug>" >&2
+FORCE=false
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+
+if [[ ${#POSITIONAL[@]} -lt 2 ]]; then
+  echo "Usage: $0 <skill-name> <space-slug> [--force]" >&2
   exit 1
 fi
 
-SKILL_NAME="$1"
-SPACE_SLUG="$2"
+SKILL_NAME="${POSITIONAL[0]}"
+SPACE_SLUG="${POSITIONAL[1]}"
 
 # --- Validate space exists ---
 SPACE_DIR="$SPACES_DIR/$SPACE_SLUG"
@@ -40,16 +55,33 @@ if [[ -z "$CODE_DIR" ]]; then
   CODE_DIR="$SPACE_DIR/app"
 fi
 
-# --- Remove symlink ---
-LINK_PATH="$CODE_DIR/.claude/skills/$SKILL_NAME"
-if [[ -L "$LINK_PATH" ]]; then
-  rm "$LINK_PATH"
-  echo "Removed symlink: $LINK_PATH"
-elif [[ -e "$LINK_PATH" ]]; then
-  echo "ERROR: $LINK_PATH exists but is not a symlink — refusing to remove" >&2
+# --- Remove skill directory ---
+SKILL_DIR="$CODE_DIR/.claude/skills/$SKILL_NAME"
+
+if [[ -L "$SKILL_DIR" ]]; then
+  # Legacy symlink — just remove it
+  rm "$SKILL_DIR"
+  echo "Removed legacy symlink: $SKILL_DIR"
+elif [[ -d "$SKILL_DIR" ]]; then
+  # Check for data/ with content
+  DATA_DIR="$SKILL_DIR/data"
+  if [[ -d "$DATA_DIR" ]] && [[ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]]; then
+    DATA_SIZE=$(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)
+    if [[ "$FORCE" != true ]]; then
+      echo "WARNING: Skill '$SKILL_NAME' has data/ with content ($DATA_SIZE)" >&2
+      echo "  Path: $DATA_DIR" >&2
+      echo "  Use --force to delete anyway" >&2
+      exit 1
+    fi
+    echo "Removing skill with data/ ($DATA_SIZE) — --force specified"
+  fi
+  rm -rf "$SKILL_DIR"
+  echo "Removed skill directory: $SKILL_DIR"
+elif [[ -e "$SKILL_DIR" ]]; then
+  echo "ERROR: $SKILL_DIR exists but is not a directory or symlink — refusing to remove" >&2
   exit 1
 else
-  echo "Symlink not found at $LINK_PATH (may already be uninstalled)"
+  echo "Skill not found at $SKILL_DIR (may already be uninstalled)"
 fi
 
 # --- Update space.json skills array ---

@@ -1,5 +1,5 @@
 #!/bin/bash
-# install-skill-to-space.sh — Symlink a skill from the library into a space
+# install-skill-to-space.sh — Copy a skill from the library into a space
 #
 # Usage:
 #   bash ~/.superbot2/scripts/install-skill-to-space.sh <skill-name> <space-slug>
@@ -8,9 +8,14 @@
 #   1. Validates the skill exists in ~/.superbot2/skill-library/<skill-name>/
 #   2. Resolves the space's codeDir from space.json (or defaults to <space-dir>/app)
 #   3. Creates <codeDir>/.claude/skills/ if needed
-#   4. Symlinks <codeDir>/.claude/skills/<skill-name> → library path
-#   5. Updates space.json skills array
-#   6. Prints confirmation
+#   4. Copies the skill directory into the space (each space gets its own copy)
+#   5. Creates a data/ directory inside the copied skill for per-space data
+#   6. Updates space.json skills array
+#   7. Prints confirmation
+#
+# Data convention:
+#   Each installed skill has a data/ subdirectory at <codeDir>/.claude/skills/<skill-name>/data/
+#   This directory is for per-space runtime data and is preserved across re-installs.
 
 set -euo pipefail
 
@@ -54,19 +59,43 @@ fi
 SKILLS_DIR="$CODE_DIR/.claude/skills"
 mkdir -p "$SKILLS_DIR"
 
-# --- Check if already installed ---
-LINK_PATH="$SKILLS_DIR/$SKILL_NAME"
-if [[ -L "$LINK_PATH" ]]; then
-  echo "Skill '$SKILL_NAME' is already installed in space '$SPACE_SLUG'"
-  exit 0
-fi
-if [[ -e "$LINK_PATH" ]]; then
-  echo "ERROR: $LINK_PATH already exists and is not a symlink" >&2
-  exit 1
+# --- Install (copy) ---
+DEST_PATH="$SKILLS_DIR/$SKILL_NAME"
+
+if [[ -d "$DEST_PATH" ]]; then
+  # Already installed — re-install: preserve data/, overwrite code
+  echo "Skill '$SKILL_NAME' already installed in space '$SPACE_SLUG' — re-installing (preserving data/)"
+
+  # Back up data/ if it exists and has content
+  DATA_BACKUP=""
+  if [[ -d "$DEST_PATH/data" ]]; then
+    DATA_BACKUP=$(mktemp -d)
+    cp -r "$DEST_PATH/data" "$DATA_BACKUP/data"
+  fi
+
+  # Remove old copy and replace with fresh library copy
+  rm -rf "$DEST_PATH"
+  cp -r "$SKILL_PATH" "$DEST_PATH"
+
+  # Restore data/
+  if [[ -n "$DATA_BACKUP" && -d "$DATA_BACKUP/data" ]]; then
+    rm -rf "$DEST_PATH/data"
+    mv "$DATA_BACKUP/data" "$DEST_PATH/data"
+    rm -rf "$DATA_BACKUP"
+    echo "Preserved existing data/ directory"
+  fi
+elif [[ -L "$DEST_PATH" ]]; then
+  # Legacy symlink — remove and replace with copy
+  echo "Replacing legacy symlink with copy"
+  rm "$DEST_PATH"
+  cp -r "$SKILL_PATH" "$DEST_PATH"
+else
+  # Fresh install
+  cp -r "$SKILL_PATH" "$DEST_PATH"
 fi
 
-# --- Create symlink (absolute path) ---
-ln -s "$SKILL_PATH" "$LINK_PATH"
+# --- Ensure data/ directory exists ---
+mkdir -p "$DEST_PATH/data"
 
 # --- Update space.json skills array ---
 # Add skill name if not already present
@@ -77,4 +106,4 @@ if [[ "$HAS_SKILL" -eq 0 ]]; then
     --arg name "$SKILL_NAME"
 fi
 
-echo "Installed '$SKILL_NAME' → space '$SPACE_SLUG' ($LINK_PATH → $SKILL_PATH)"
+echo "Installed '$SKILL_NAME' → space '$SPACE_SLUG' ($DEST_PATH, copied from $SKILL_PATH)"
