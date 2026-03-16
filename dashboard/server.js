@@ -3459,24 +3459,30 @@ async function readInstalledPluginsDirect() {
     const raw = await readFile(installedPluginsPath, 'utf-8')
     const data = JSON.parse(raw)
     const plugins = data.plugins || {}
-    const result = []
+    const seen = new Map()
     for (const [key, entries] of Object.entries(plugins)) {
       if (!Array.isArray(entries)) continue
-      for (const entry of entries) {
-        const name = key.split('@')[0]
-        result.push({
+      const name = key.split('@')[0]
+      // Pick the best entry: prefer user scope, then most recently installed
+      const best = entries.reduce((a, b) => {
+        if ((a.scope || 'user') === 'user' && (b.scope || 'user') !== 'user') return a
+        if ((b.scope || 'user') === 'user' && (a.scope || 'user') !== 'user') return b
+        return (b.installedAt || '') > (a.installedAt || '') ? b : a
+      })
+      if (!seen.has(name)) {
+        seen.set(name, {
           id: key,
           pluginId: key,
           name,
-          installPath: entry.installPath,
-          version: entry.version,
-          scope: entry.scope || 'user',
-          installedAt: entry.installedAt,
-          lastUpdated: entry.lastUpdated,
+          installPath: best.installPath,
+          version: best.version,
+          scope: best.scope || 'user',
+          installedAt: best.installedAt,
+          lastUpdated: best.lastUpdated,
         })
       }
     }
-    return result
+    return Array.from(seen.values())
   } catch {
     return []
   }
@@ -3494,6 +3500,14 @@ app.get('/api/plugins', async (_req, res) => {
       // CLI failed — fall back to direct file read
     }
     if (!rawInstalled) rawInstalled = await readInstalledPluginsDirect()
+
+    // Deduplicate by plugin name (multiple project-scoped installs create duplicates)
+    const seenNames = new Map()
+    for (const p of rawInstalled) {
+      const name = p.name || (p.pluginId || p.id || '').split('@')[0]
+      if (!seenNames.has(name)) seenNames.set(name, p)
+    }
+    rawInstalled = Array.from(seenNames.values())
 
     // Fetch marketplace catalog to cross-reference installed plugins + fill available
     const catalog = await fetchMarketplaceCatalog()
