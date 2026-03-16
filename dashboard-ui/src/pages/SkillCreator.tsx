@@ -1724,7 +1724,11 @@ function PublishModal({ open, onClose, skill }: {
       fetch('/api/skill-creator/supercharge-marketplaces').then(r => r.json()),
     ])
       .then(([credData, mpData]) => {
-        if (mpData.ok && mpData.marketplaces) setMarketplaces(mpData.marketplaces)
+        if (mpData.ok && mpData.marketplaces) {
+          setMarketplaces(mpData.marketplaces)
+          const defaultMp = mpData.marketplaces.find((m: { slug: string }) => m.slug === 'superbot-marketplace')
+          if (defaultMp) setSelectedMarketplace(defaultMp.id)
+        }
         if (credData.configured) {
           setStoredEmail(credData.email)
           setStatus('idle')
