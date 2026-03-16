@@ -968,6 +968,10 @@ export interface SpaceSkillInfo {
   icon: string | null
   hasSettings: boolean
   hasSchedule: boolean
+  hasCard?: boolean
+  hasData?: boolean
+  type?: 'plugin' | 'skill' | 'project-skill'
+  version?: string
 }
 
 export interface SuperbotSkillManifest {

@@ -52,6 +52,97 @@ async function safeReaddir(dirPath) {
   }
 }
 
+/** Resolve a space's codeDir from its space.json, with default fallback */
+function getSpaceCodeDir(spaceJson, spaceDir) {
+  return spaceJson.codeDir || join(spaceDir, 'app')
+}
+
+/** Scan a space's filesystem for installed plugins at <codeDir>/.claude/plugins/cache/local/ */
+async function scanSpacePluginsFromFS(codeDir) {
+  const plugins = []
+  const localCacheDir = join(codeDir, '.claude', 'plugins', 'cache', 'local')
+  const pluginNames = await safeReaddir(localCacheDir)
+  for (const pluginName of pluginNames) {
+    if (pluginName.startsWith('.')) continue
+    const pluginDir = join(localCacheDir, pluginName)
+    try { if (!(await stat(pluginDir)).isDirectory()) continue } catch { continue }
+    const versions = (await safeReaddir(pluginDir)).filter(v => !v.startsWith('.')).sort()
+    if (versions.length === 0) continue
+    const latestVersion = versions[versions.length - 1]
+    const versionDir = join(pluginDir, latestVersion)
+    // Read plugin.json for metadata
+    const pluginJson = await readJsonFile(join(versionDir, '.claude-plugin', 'plugin.json'))
+    // Check for superbot.json / CARD.json
+    const manifest = await readSkillManifest(versionDir)
+    // Check for data/ directory
+    const dataDir = join(versionDir, 'data')
+    let hasData = false
+    try { hasData = (await stat(dataDir)).isDirectory() } catch {}
+    plugins.push({
+      name: pluginName,
+      version: latestVersion,
+      dir: versionDir,
+      pluginJson,
+      manifest: manifest?.manifest || null,
+      card: manifest?.card || null,
+      hasData,
+    })
+  }
+  return plugins
+}
+
+/** Scan a space's filesystem for installed skills at <codeDir>/.claude/skills/ */
+async function scanSpaceSkillsFromFS(codeDir) {
+  const skills = []
+  const skillsDir = join(codeDir, '.claude', 'skills')
+  const entries = await safeReaddir(skillsDir)
+  for (const entry of entries) {
+    if (entry.startsWith('.')) continue
+    const skillDir = join(skillsDir, entry)
+    try { if (!(await stat(skillDir)).isDirectory()) continue } catch { continue }
+    // Try to read SKILL.md frontmatter
+    let frontmatter = {}
+    try {
+      const skillMd = await readFile(join(skillDir, 'SKILL.md'), 'utf-8')
+      frontmatter = parseFrontmatter(skillMd)
+    } catch { /* no SKILL.md */ }
+    // Check for superbot.json / CARD.json
+    const manifest = await readSkillManifest(skillDir)
+    // Check for data/ directory
+    const dataDir = join(skillDir, 'data')
+    let hasData = false
+    try { hasData = (await stat(dataDir)).isDirectory() } catch {}
+    // Determine if this is a library skill (check if it came from skill-library)
+    const isLibrary = existsSync(join(homedir(), '.superbot2', 'skill-library', entry))
+    skills.push({
+      name: entry,
+      dir: skillDir,
+      frontmatter,
+      manifest: manifest?.manifest || null,
+      card: manifest?.card || null,
+      hasData,
+      isLibrary,
+    })
+  }
+  return skills
+}
+
+/** Get all spaces with their codeDirs for scanning */
+async function getAllSpaceCodeDirs() {
+  const result = []
+  const spaceSlugs = await safeReaddir(SPACES_DIR)
+  for (const slug of spaceSlugs) {
+    if (slug.startsWith('.')) continue
+    const spaceDir = join(SPACES_DIR, slug)
+    try { if (!(await stat(spaceDir)).isDirectory()) continue } catch { continue }
+    const spaceJson = await readJsonFile(join(spaceDir, 'space.json'))
+    if (!spaceJson) continue
+    const codeDir = getSpaceCodeDir(spaceJson, spaceDir)
+    result.push({ slug, spaceDir, codeDir, spaceJson })
+  }
+  return result
+}
+
 async function getProjectsForSpace(spaceDir) {
   const plansDir = join(spaceDir, 'plans')
   const entries = await safeReaddir(plansDir)
@@ -1217,20 +1308,49 @@ app.get('/api/spaces/:slug/skills', async (req, res) => {
     const spaceDir = join(SPACES_DIR, slug)
     if (!existsSync(spaceDir)) return res.status(404).json({ error: 'Space not found' })
     const spaceJson = await readJsonFile(join(spaceDir, 'space.json')) || {}
-    const skillIds = Array.isArray(spaceJson.skills) ? spaceJson.skills : []
-    // Load manifests for each attached skill
-    await getCardDefinitions()
-    const skills = skillIds.map(id => {
-      const manifest = _manifests.get(id)
-      return {
-        skillId: id,
-        name: manifest?.name || id,
-        description: manifest?.description || '',
+    const codeDir = getSpaceCodeDir(spaceJson, spaceDir)
+
+    // Filesystem-based detection: scan the actual directories
+    const [plugins, fsSkills] = await Promise.all([
+      scanSpacePluginsFromFS(codeDir),
+      scanSpaceSkillsFromFS(codeDir),
+    ])
+
+    const skills = []
+
+    // Add plugins
+    for (const p of plugins) {
+      const manifest = p.manifest
+      skills.push({
+        skillId: `plugin__${p.name}`,
+        name: manifest?.name || p.pluginJson?.name || p.name,
+        description: manifest?.description || p.pluginJson?.description || '',
         icon: manifest?.icon || null,
         hasSettings: !!(manifest?.settings?.schema),
         hasSchedule: !!(manifest?.schedule),
-      }
-    }).filter(s => s.name)
+        hasCard: !!p.card,
+        hasData: p.hasData,
+        type: 'plugin',
+        version: p.version,
+      })
+    }
+
+    // Add skills
+    for (const s of fsSkills) {
+      const manifest = s.manifest
+      skills.push({
+        skillId: s.name,
+        name: manifest?.name || s.frontmatter?.name || s.name,
+        description: manifest?.description || s.frontmatter?.description || '',
+        icon: manifest?.icon || null,
+        hasSettings: !!(manifest?.settings?.schema),
+        hasSchedule: !!(manifest?.schedule),
+        hasCard: !!s.card,
+        hasData: s.hasData,
+        type: s.isLibrary ? 'skill' : 'project-skill',
+      })
+    }
+
     res.json({ skills })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -3794,13 +3914,17 @@ app.delete('/api/superbot-skills/:id', async (req, res) => {
 })
 
 // --- Dashboard cards ---
-// Card data lives within the skill directory (self-contained).
+// Card data lives within the plugin/skill copy directory (self-contained).
 // dataSource in CARD.json / superbot.json is relative to the skill dir.
+// For per-space plugins/skills, data lives at <codeDir>/.claude/plugins/cache/local/<name>/<version>/data/
+// or <codeDir>/.claude/skills/<name>/data/
 
 // Map from skillId → base directory for cards not in SUPERBOT_SKILLS_DIR
 const _cardBaseDirs = new Map()
 // Map from skillId → full superbot.json manifest (includes settings, schedule, agent)
 const _manifests = new Map()
+// Map from skillId → Map<spaceSlug, dir> for per-space plugin/skill copies
+const _spaceCardDirs = new Map()
 
 // Read superbot.json or fall back to CARD.json from a directory.
 // Returns { card, manifest } where card is the CardDefinition shape and manifest is the full superbot.json.
@@ -3850,6 +3974,7 @@ async function getCardDefinitions() {
   const cards = []
   _cardBaseDirs.clear()
   _manifests.clear()
+  _spaceCardDirs.clear()
 
   // 1. Scan repo skills (skills/ directory)
   const entries = await safeReaddir(SUPERBOT_SKILLS_DIR)
@@ -3925,7 +4050,43 @@ async function getCardDefinitions() {
     } catch { /* no plugin cache dir */ }
   }
 
-  // 3. Scan skill-creator drafts for plugin cards (dev/testing)
+  // 3. Scan per-space plugin/skill copies for cards
+  // Plugins at <codeDir>/.claude/plugins/cache/local/<name>/<version>/
+  // Skills at <codeDir>/.claude/skills/<name>/
+  try {
+    const allSpaces = await getAllSpaceCodeDirs()
+    for (const { slug, codeDir } of allSpaces) {
+      // Scan space plugins
+      const spacePlugins = await scanSpacePluginsFromFS(codeDir)
+      for (const p of spacePlugins) {
+        const skillId = `plugin__${p.name}`
+        // Track per-space dir for data rollup
+        if (!_spaceCardDirs.has(skillId)) _spaceCardDirs.set(skillId, new Map())
+        _spaceCardDirs.get(skillId).set(slug, p.dir)
+        // Add card definition if not already discovered from global cache
+        if (p.card && !cards.some(c => c.skillId === skillId)) {
+          _cardBaseDirs.set(skillId, p.dir)
+          _manifests.set(skillId, p.manifest)
+          cards.push({ ...p.card, skillId })
+        }
+      }
+      // Scan space skills
+      const spaceSkills = await scanSpaceSkillsFromFS(codeDir)
+      for (const s of spaceSkills) {
+        // Track per-space dir for data rollup
+        if (!_spaceCardDirs.has(s.name)) _spaceCardDirs.set(s.name, new Map())
+        _spaceCardDirs.get(s.name).set(slug, s.dir)
+        // Add card definition if not already discovered
+        if (s.card && !cards.some(c => c.skillId === s.name)) {
+          _cardBaseDirs.set(s.name, s.dir)
+          _manifests.set(s.name, s.manifest)
+          cards.push({ ...s.card, skillId: s.name })
+        }
+      }
+    }
+  } catch { /* scanning failure shouldn't break card loading */ }
+
+  // 4. Scan skill-creator drafts for plugin cards (dev/testing)
   const draftsDir = join(SUPERBOT_DIR, 'skill-creator', 'drafts')
   try {
     const drafts = await safeReaddir(draftsDir)
@@ -3964,8 +4125,12 @@ function acquireFileLock(filePath) {
   return prev.then(() => release)
 }
 
-/** Find all space slugs that have a given skill attached */
+/** Find all space slugs that have a given skill/plugin installed (filesystem-based) */
 function getSpacesForSkill(skillId) {
+  // Use the _spaceCardDirs map populated by getCardDefinitions()
+  const spaceDirs = _spaceCardDirs.get(skillId)
+  if (spaceDirs) return Array.from(spaceDirs.keys())
+  // Fallback: check space.json skills array for backward compat
   const spaces = []
   try {
     const entries = readdirSync(SPACES_DIR)
@@ -3989,21 +4154,62 @@ function isSpaceScoped(skillId) {
 }
 
 function resolveCardDataPath(skillId, dataSource, space) {
-  let dataDir
+  function validatePath(dataDir, ds) {
+    const resolved = resolve(dataDir, ds)
+    if (!resolved.startsWith(dataDir + '/')) {
+      throw new Error('Invalid dataSource path')
+    }
+    return resolved
+  }
+
   if (space) {
-    // Space-scoped path: ~/.superbot2/spaces/<space>/skill-data/<skillId>/
-    dataDir = join(SPACES_DIR, space, 'skill-data', skillId)
-  } else {
-    // Global path: ~/.superbot2/skill-data/<skillId>/
-    dataDir = join(SKILL_DATA_DIR, skillId)
+    // New: Check per-space plugin/skill copy data/ directory
+    const spaceDirs = _spaceCardDirs.get(skillId)
+    if (spaceDirs && spaceDirs.has(space)) {
+      const copyDir = spaceDirs.get(space)
+      const newDataDir = join(copyDir, 'data')
+      const newPath = validatePath(newDataDir, dataSource)
+      // If data exists at the new copy location, use it
+      if (existsSync(newPath)) {
+        return newPath
+      }
+      // Check legacy locations (don't auto-migrate — migration happens when user re-installs with copy scripts)
+      // Legacy with skillId (e.g. plugin__social-media-approvals)
+      const legacyDataDir = join(SPACES_DIR, space, 'skill-data', skillId)
+      const legacyPath = resolve(legacyDataDir, dataSource)
+      if (existsSync(legacyPath)) return legacyPath
+      // Legacy without plugin__ prefix (e.g. social-media-approvals)
+      const bareId = skillId.replace(/^plugin__/, '')
+      if (bareId !== skillId) {
+        const bareLegacyDir = join(SPACES_DIR, space, 'skill-data', bareId)
+        const bareLegacyPath = resolve(bareLegacyDir, dataSource)
+        if (existsSync(bareLegacyPath)) return bareLegacyPath
+      }
+      // Neither exists — use new path for writes
+      mkdirSync(newDataDir, { recursive: true })
+      return newPath
+    }
+
+    // Fallback: legacy space-scoped path (check with and without plugin__ prefix)
+    const dataDir = join(SPACES_DIR, space, 'skill-data', skillId)
+    const dataPath = resolve(dataDir, dataSource)
+    if (existsSync(dataPath)) return dataPath
+    const bareId = skillId.replace(/^plugin__/, '')
+    if (bareId !== skillId) {
+      const bareDataDir = join(SPACES_DIR, space, 'skill-data', bareId)
+      const barePath = resolve(bareDataDir, dataSource)
+      if (existsSync(barePath)) return barePath
+    }
+    mkdirSync(dataDir, { recursive: true })
+    return validatePath(dataDir, dataSource)
   }
+
+  // Global path: ~/.superbot2/skill-data/<skillId>/
+  const dataDir = join(SKILL_DATA_DIR, skillId)
   mkdirSync(dataDir, { recursive: true })
-  const resolved = resolve(dataDir, dataSource)
-  if (!resolved.startsWith(dataDir + '/')) {
-    throw new Error('Invalid dataSource path')
-  }
+  const resolved = validatePath(dataDir, dataSource)
   // Auto-migrate from legacy location (plugin cache or repo skill dir) on first access
-  if (!existsSync(resolved) && !space) {
+  if (!existsSync(resolved)) {
     const legacyBase = _cardBaseDirs.get(skillId) || resolve(SUPERBOT_SKILLS_DIR, skillId)
     const legacyPath = resolve(legacyBase, dataSource)
     if (existsSync(legacyPath)) {
@@ -4026,16 +4232,20 @@ async function readCardItemsFromPath(filePath) {
 }
 
 async function readCardItems(skillId, dataSource, space) {
-  if (space === undefined && isSpaceScoped(skillId)) {
-    // Aggregate across all spaces that have this skill attached
-    const spaces = getSpacesForSkill(skillId)
-    const allItems = []
-    for (const slug of spaces) {
-      const filePath = resolveCardDataPath(skillId, dataSource, slug)
-      const items = await readCardItemsFromPath(filePath)
-      allItems.push(...items)
+  if (space === undefined) {
+    // Check if this skill has per-space copies (filesystem-based) or is space-scoped
+    const hasSpaceCopies = _spaceCardDirs.has(skillId) && _spaceCardDirs.get(skillId).size > 0
+    if (hasSpaceCopies || isSpaceScoped(skillId)) {
+      // Aggregate across all spaces that have this skill installed
+      const spaces = getSpacesForSkill(skillId)
+      const allItems = []
+      for (const slug of spaces) {
+        const filePath = resolveCardDataPath(skillId, dataSource, slug)
+        const items = await readCardItemsFromPath(filePath)
+        allItems.push(...items)
+      }
+      return allItems
     }
-    return allItems
   }
   const filePath = resolveCardDataPath(skillId, dataSource, space)
   return readCardItemsFromPath(filePath)
