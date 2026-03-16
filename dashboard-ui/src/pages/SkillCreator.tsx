@@ -1707,19 +1707,26 @@ function PublishModal({ open, onClose, skill }: {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [saveCredentials, setSaveCredentials] = useState(true)
-  const [result, setResult] = useState<{ url?: string; name?: string; error?: string; uploadErrors?: string[] } | null>(null)
+  const [result, setResult] = useState<{ url?: string; name?: string; error?: string; uploadErrors?: string[]; marketplace?: { ok: boolean; error?: string } } | null>(null)
   const [storedEmail, setStoredEmail] = useState<string | null>(null)
+  const [marketplaces, setMarketplaces] = useState<{ id: string; name: string; slug: string; pluginCount: number }[]>([])
+  const [selectedMarketplace, setSelectedMarketplace] = useState<string>('')
 
-  // Check credential status when modal opens
+  // Check credential status and fetch marketplaces when modal opens
   useEffect(() => {
     if (!open) return
     setStatus('checking')
     setResult(null)
-    fetch('/api/skill-creator/supercharge-credentials-status')
-      .then(r => r.json())
-      .then(data => {
-        if (data.configured) {
-          setStoredEmail(data.email)
+    setSelectedMarketplace('')
+
+    Promise.all([
+      fetch('/api/skill-creator/supercharge-credentials-status').then(r => r.json()),
+      fetch('/api/skill-creator/supercharge-marketplaces').then(r => r.json()),
+    ])
+      .then(([credData, mpData]) => {
+        if (mpData.ok && mpData.marketplaces) setMarketplaces(mpData.marketplaces)
+        if (credData.configured) {
+          setStoredEmail(credData.email)
           setStatus('idle')
         } else {
           setStatus('credentials')
@@ -1738,6 +1745,9 @@ function PublishModal({ open, onClose, skill }: {
         body.password = password
         body.saveCredentials = saveCredentials
       }
+      if (selectedMarketplace) {
+        body.marketplaceId = selectedMarketplace
+      }
       const res = await fetch('/api/skill-creator/publish-to-supercharge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1749,7 +1759,7 @@ function PublishModal({ open, onClose, skill }: {
         return
       }
       if (data.ok) {
-        setResult({ url: data.url, name: data.name, uploadErrors: data.uploadErrors })
+        setResult({ url: data.url, name: data.name, uploadErrors: data.uploadErrors, marketplace: data.marketplace })
         setStatus('success')
       } else {
         setResult({ error: data.error, uploadErrors: data.uploadErrors })
@@ -1762,6 +1772,24 @@ function PublishModal({ open, onClose, skill }: {
   }
 
   if (!open) return null
+
+  const marketplaceSelector = marketplaces.length > 0 ? (
+    <div>
+      <label className="text-xs text-stone/60 block mb-1">Add to marketplace (optional)</label>
+      <select
+        value={selectedMarketplace}
+        onChange={e => setSelectedMarketplace(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg bg-surface/30 border border-border-custom text-sm text-parchment focus:outline-none focus:border-stone/30"
+      >
+        <option value="">None — publish only</option>
+        {marketplaces.map(mp => (
+          <option key={mp.id} value={mp.id}>
+            {mp.name} ({mp.pluginCount} plugins)
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -1796,6 +1824,7 @@ function PublishModal({ open, onClose, skill }: {
                   <p className="text-xs text-stone/50">Publishing as {storedEmail}</p>
                 )}
               </div>
+              {marketplaceSelector}
               <div className="flex gap-2">
                 <button
                   onClick={() => handlePublish(false)}
@@ -1842,6 +1871,7 @@ function PublishModal({ open, onClose, skill }: {
                       onKeyDown={e => { if (e.key === 'Enter' && email && password) handlePublish(true) }}
                     />
                   </div>
+                  {marketplaceSelector}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -1883,6 +1913,16 @@ function PublishModal({ open, onClose, skill }: {
                   <p className="text-xs text-stone/50">{result.name} is now live on Supercharge</p>
                 </div>
               </div>
+              {result.marketplace && (
+                <div className={`rounded-lg p-3 ${result.marketplace.ok ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                  <p className={`text-xs font-medium ${result.marketplace.ok ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {result.marketplace.ok
+                      ? `Added to marketplace: ${marketplaces.find(m => m.id === selectedMarketplace)?.name || 'marketplace'}`
+                      : `Marketplace: ${result.marketplace.error}`
+                    }
+                  </p>
+                </div>
+              )}
               {result.url && (
                 <a
                   href={result.url}

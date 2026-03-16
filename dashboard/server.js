@@ -6384,7 +6384,7 @@ app.post('/api/skill-creator/promote', async (req, res) => {
 // Publish draft to superchargeclaudecode.com marketplace
 app.post('/api/skill-creator/publish-to-supercharge', async (req, res) => {
   try {
-    const { draftName, email, password, saveCredentials } = req.body
+    const { draftName, email, password, saveCredentials, marketplaceId } = req.body
     if (!draftName) return res.status(400).json({ ok: false, error: 'draftName required' })
 
     const draftPath = resolveDraftPath(draftName)
@@ -6523,6 +6523,29 @@ app.post('/api/skill-creator/publish-to-supercharge', async (req, res) => {
       })
     }
 
+    // Step 5: Add to marketplace if requested
+    let marketplaceResult = null
+    if (marketplaceId) {
+      try {
+        const mpRes = await fetch(`${MARKETPLACE_API_BASE}/marketplaces/${marketplaceId}/plugins`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ pluginId }),
+        })
+        const mpData = await mpRes.json().catch(() => ({}))
+        if (mpRes.ok) {
+          marketplaceResult = { ok: true }
+        } else {
+          marketplaceResult = { ok: false, error: mpData.error || mpData.message || 'Failed to add to marketplace' }
+        }
+      } catch (err) {
+        marketplaceResult = { ok: false, error: err.message }
+      }
+    }
+
     // Update draft metadata
     const metaPath = join(draftPath, 'draft-metadata.json')
     try {
@@ -6542,6 +6565,7 @@ app.post('/api/skill-creator/publish-to-supercharge', async (req, res) => {
       url: `${MARKETPLACE_API_BASE}/plugins/${createData.data?.slug || pluginName}`,
       filesUploaded: draftFiles.length,
       uploadErrors,
+      marketplace: marketplaceResult,
     })
   } catch (err) {
     console.error('[skill-creator] publish-to-supercharge error:', err)
@@ -6557,6 +6581,42 @@ app.get('/api/skill-creator/supercharge-credentials-status', async (req, res) =>
     res.json({ ok: true, configured: !!(email && password), email: email || null })
   } catch (err) {
     res.json({ ok: true, configured: false, email: null })
+  }
+})
+
+// Fetch user's marketplaces from superchargeclaudecode.com
+app.get('/api/skill-creator/supercharge-marketplaces', async (req, res) => {
+  try {
+    const email = await keychainGet('supercharge-api', 'SUPERCHARGE_EMAIL')
+    const password = await keychainGet('supercharge-api', 'SUPERCHARGE_PASSWORD')
+    if (!email || !password) {
+      return res.json({ ok: true, marketplaces: [] })
+    }
+
+    const loginRes = await fetch(`${MARKETPLACE_API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const loginData = await loginRes.json()
+    if (!loginRes.ok || !loginData.data?.token) {
+      return res.json({ ok: true, marketplaces: [] })
+    }
+
+    const mpRes = await fetch(`${MARKETPLACE_API_BASE}/marketplaces`, {
+      headers: { 'Authorization': `Bearer ${loginData.data.token}` },
+    })
+    const mpData = await mpRes.json()
+    const marketplaces = (mpData.data || []).map(m => ({
+      id: m.id,
+      name: m.name,
+      slug: m.slug,
+      pluginCount: m._count?.plugins || 0,
+    }))
+
+    res.json({ ok: true, marketplaces })
+  } catch (err) {
+    res.json({ ok: true, marketplaces: [] })
   }
 })
 
