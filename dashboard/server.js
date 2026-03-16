@@ -6381,6 +6381,185 @@ app.post('/api/skill-creator/promote', async (req, res) => {
   }
 })
 
+// Publish draft to superchargeclaudecode.com marketplace
+app.post('/api/skill-creator/publish-to-supercharge', async (req, res) => {
+  try {
+    const { draftName, email, password, saveCredentials } = req.body
+    if (!draftName) return res.status(400).json({ ok: false, error: 'draftName required' })
+
+    const draftPath = resolveDraftPath(draftName)
+    if (!draftPath) return res.status(400).json({ ok: false, error: 'Invalid draft name' })
+    try { await stat(draftPath) } catch { return res.status(404).json({ ok: false, error: 'Draft not found' }) }
+
+    // Get credentials: request body > keychain
+    let authEmail = email
+    let authPassword = password
+
+    if (!authEmail || !authPassword) {
+      authEmail = await keychainGet('supercharge-api', 'SUPERCHARGE_EMAIL')
+      authPassword = await keychainGet('supercharge-api', 'SUPERCHARGE_PASSWORD')
+    }
+
+    if (!authEmail || !authPassword) {
+      return res.json({ ok: false, needsCredentials: true, message: 'Supercharge credentials required. Enter your superchargeclaudecode.com email and password.' })
+    }
+
+    // Save credentials to keychain if requested
+    if (saveCredentials && email && password) {
+      await keychainSet('supercharge-api', 'SUPERCHARGE_EMAIL', email)
+      await keychainSet('supercharge-api', 'SUPERCHARGE_PASSWORD', password)
+    }
+
+    // Read plugin metadata: try plugin.json first, fall back to SKILL.md frontmatter
+    let pluginName, pluginDescription, pluginVersion, pluginTags
+    const pluginJsonPath = join(draftPath, '.claude-plugin', 'plugin.json')
+    try {
+      const raw = await readFile(pluginJsonPath, 'utf-8')
+      const pluginJson = JSON.parse(raw)
+      pluginName = pluginJson.name
+      pluginDescription = pluginJson.description
+      pluginVersion = pluginJson.version
+      pluginTags = pluginJson.tags
+    } catch {
+      // Fall back to SKILL.md frontmatter
+      try {
+        const skillMd = await readFile(join(draftPath, 'SKILL.md'), 'utf-8')
+        const fmMatch = skillMd.match(/^---\n([\s\S]*?)\n---/)
+        if (fmMatch) {
+          const fm = yaml.load(fmMatch[1])
+          pluginName = fm.name
+          pluginDescription = typeof fm.description === 'string' ? fm.description.trim() : undefined
+          pluginVersion = fm.version
+        }
+      } catch {}
+    }
+    if (!pluginName) return res.status(400).json({ ok: false, error: 'Could not determine plugin name from plugin.json or SKILL.md frontmatter' })
+
+    // Step 1: Authenticate with superchargeclaudecode.com
+    const loginRes = await fetch(`${MARKETPLACE_API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, password: authPassword }),
+    })
+    const loginData = await loginRes.json()
+    if (!loginRes.ok || !loginData.data?.token) {
+      return res.json({ ok: false, error: 'Authentication failed: ' + (loginData.error || loginData.message || 'Invalid credentials') })
+    }
+    const token = loginData.data.token
+
+    // Step 2: Create plugin on platform
+    const createRes = await fetch(`${MARKETPLACE_API_BASE}/plugins`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: pluginName,
+        description: pluginDescription || `Plugin: ${pluginName}`,
+        version: pluginVersion || '1.0.0',
+        tags: pluginTags || [],
+      }),
+    })
+    const createData = await createRes.json()
+    if (!createRes.ok || !createData.data?.id) {
+      return res.json({ ok: false, error: 'Failed to create plugin: ' + (createData.error || createData.message || JSON.stringify(createData)) })
+    }
+    const pluginId = createData.data.id
+
+    // Step 3: Upload files (exclude draft-only metadata)
+    const EXCLUDE = new Set(['draft-metadata.json', 'chat-history.jsonl', 'versions'])
+    async function collectDraftFiles(dir, prefix = '') {
+      const entries = await readdir(dir, { withFileTypes: true })
+      let result = []
+      for (const entry of entries) {
+        const relPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (!prefix && EXCLUDE.has(entry.name)) continue
+        if (entry.isDirectory()) {
+          result = result.concat(await collectDraftFiles(join(dir, entry.name), relPath))
+        } else {
+          result.push(relPath)
+        }
+      }
+      return result
+    }
+
+    const draftFiles = await collectDraftFiles(draftPath)
+    const uploadErrors = []
+
+    for (const relPath of draftFiles) {
+      const filePath = join(draftPath, relPath)
+      const fileContent = await readFile(filePath)
+      const fileName = relPath.split('/').pop()
+
+      const formData = new FormData()
+      formData.append('file', new Blob([fileContent]), fileName)
+      formData.append('relativePath', relPath)
+
+      const uploadRes = await fetch(`${MARKETPLACE_API_BASE}/plugins/${pluginId}/files`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      })
+
+      if (!uploadRes.ok) {
+        const uploadData = await uploadRes.json().catch(() => ({}))
+        uploadErrors.push(`${relPath}: ${uploadData.error || uploadData.message || 'Upload failed'}`)
+      }
+    }
+
+    // Step 4: Submit for review (auto-approved for trusted publishers)
+    const submitRes = await fetch(`${MARKETPLACE_API_BASE}/plugins/${pluginId}/submit`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+    const submitData = await submitRes.json().catch(() => ({}))
+    if (!submitRes.ok) {
+      return res.json({
+        ok: false,
+        error: 'Submit failed: ' + (submitData.error || submitData.message || 'Unknown error'),
+        pluginId,
+        uploadErrors,
+      })
+    }
+
+    // Update draft metadata
+    const metaPath = join(draftPath, 'draft-metadata.json')
+    try {
+      const raw = await readFile(metaPath, 'utf-8')
+      const meta = JSON.parse(raw)
+      meta.publishedToSupercharge = true
+      meta.publishedAt = new Date().toISOString()
+      meta.superchargePluginId = pluginId
+      await writeFile(metaPath, JSON.stringify(meta, null, 2))
+    } catch {}
+
+    res.json({
+      ok: true,
+      pluginId,
+      name: pluginName,
+      slug: createData.data?.slug || pluginName,
+      url: `${MARKETPLACE_API_BASE}/plugins/${createData.data?.slug || pluginName}`,
+      filesUploaded: draftFiles.length,
+      uploadErrors,
+    })
+  } catch (err) {
+    console.error('[skill-creator] publish-to-supercharge error:', err)
+    res.status(500).json({ ok: false, error: err.message })
+  }
+})
+
+// Check if supercharge credentials are configured
+app.get('/api/skill-creator/supercharge-credentials-status', async (req, res) => {
+  try {
+    const email = await keychainGet('supercharge-api', 'SUPERCHARGE_EMAIL')
+    const password = await keychainGet('supercharge-api', 'SUPERCHARGE_PASSWORD')
+    res.json({ ok: true, configured: !!(email && password), email: email || null })
+  } catch (err) {
+    res.json({ ok: true, configured: false, email: null })
+  }
+})
+
 // File upload endpoint
 app.post('/api/skill-creator/upload', async (req, res) => {
   try {

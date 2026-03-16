@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, Folder, FolderOpen, Copy, Search, ArrowLeft, Download, MoreVertical, PanelRightClose } from 'lucide-react'
+import { Send, X, FileText, Wand2, Loader2, Plus, Upload, Package, Save, RefreshCw, FlaskConical, Play, Square, MessageSquare, Trash2, Terminal, Globe, Folder, FolderOpen, Copy, Search, ArrowLeft, Download, MoreVertical, PanelRightClose, ExternalLink, Check, AlertCircle } from 'lucide-react'
 import { MarkdownContent } from '@/features/MarkdownContent'
 
 // --- Shared Hooks ---
@@ -1696,6 +1696,254 @@ function FileTreeNode({ node, depth, selectedPath, fileSlideOpen, onFileClick }:
   )
 }
 
+// --- Publish to Supercharge Modal ---
+
+function PublishModal({ open, onClose, skill }: {
+  open: boolean
+  onClose: () => void
+  skill: TesterSkill
+}) {
+  const [status, setStatus] = useState<'idle' | 'checking' | 'credentials' | 'publishing' | 'success' | 'error'>('idle')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [saveCredentials, setSaveCredentials] = useState(true)
+  const [result, setResult] = useState<{ url?: string; name?: string; error?: string; uploadErrors?: string[] } | null>(null)
+  const [storedEmail, setStoredEmail] = useState<string | null>(null)
+
+  // Check credential status when modal opens
+  useEffect(() => {
+    if (!open) return
+    setStatus('checking')
+    setResult(null)
+    fetch('/api/skill-creator/supercharge-credentials-status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.configured) {
+          setStoredEmail(data.email)
+          setStatus('idle')
+        } else {
+          setStatus('credentials')
+        }
+      })
+      .catch(() => setStatus('credentials'))
+  }, [open])
+
+  const handlePublish = async (withCredentials = false) => {
+    setStatus('publishing')
+    setResult(null)
+    try {
+      const body: Record<string, unknown> = { draftName: skill.id }
+      if (withCredentials) {
+        body.email = email
+        body.password = password
+        body.saveCredentials = saveCredentials
+      }
+      const res = await fetch('/api/skill-creator/publish-to-supercharge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (data.needsCredentials) {
+        setStatus('credentials')
+        return
+      }
+      if (data.ok) {
+        setResult({ url: data.url, name: data.name, uploadErrors: data.uploadErrors })
+        setStatus('success')
+      } else {
+        setResult({ error: data.error, uploadErrors: data.uploadErrors })
+        setStatus('error')
+      }
+    } catch (err) {
+      setResult({ error: (err as Error).message })
+      setStatus('error')
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-ink border border-border-custom rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-custom">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-blue-400" />
+            <h2 className="text-sm font-medium text-parchment">Publish to Supercharge</h2>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-md text-stone/50 hover:text-parchment hover:bg-surface/40 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6">
+          {status === 'checking' && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 text-stone/40 animate-spin" />
+            </div>
+          )}
+
+          {status === 'idle' && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-sm text-parchment/80 mb-1">
+                  Publish <span className="font-medium">{skill.name}</span> to superchargeclaudecode.com
+                </p>
+                {storedEmail && (
+                  <p className="text-xs text-stone/50">Publishing as {storedEmail}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePublish(false)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors font-medium"
+                >
+                  <Upload className="h-4 w-4" />
+                  Publish
+                </button>
+                <button
+                  onClick={() => setStatus('credentials')}
+                  className="px-3 py-2.5 rounded-lg text-xs text-stone/50 hover:text-stone hover:bg-surface/40 transition-colors border border-border-custom"
+                  title="Change account"
+                >
+                  Change account
+                </button>
+              </div>
+            </div>
+          )}
+
+          {status === 'credentials' && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-parchment/80 mb-3">Enter your superchargeclaudecode.com credentials</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-stone/60 block mb-1">Email</label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full px-3 py-2 rounded-lg bg-surface/30 border border-border-custom text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-stone/30"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone/60 block mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="w-full px-3 py-2 rounded-lg bg-surface/30 border border-border-custom text-sm text-parchment placeholder:text-stone/40 focus:outline-none focus:border-stone/30"
+                      onKeyDown={e => { if (e.key === 'Enter' && email && password) handlePublish(true) }}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={saveCredentials}
+                      onChange={e => setSaveCredentials(e.target.checked)}
+                      className="rounded border-border-custom"
+                    />
+                    <span className="text-xs text-stone/60">Save credentials to Keychain</span>
+                  </label>
+                </div>
+              </div>
+              <button
+                onClick={() => handlePublish(true)}
+                disabled={!email || !password}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Upload className="h-4 w-4" />
+                Publish to Supercharge
+              </button>
+            </div>
+          )}
+
+          {status === 'publishing' && (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
+              <p className="text-sm text-stone/60">Publishing to superchargeclaudecode.com...</p>
+              <p className="text-xs text-stone/40">Authenticating, uploading files, submitting for review</p>
+            </div>
+          )}
+
+          {status === 'success' && result && (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div className="p-3 rounded-full bg-emerald-500/15">
+                  <Check className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-parchment mb-1">Published successfully!</p>
+                  <p className="text-xs text-stone/50">{result.name} is now live on Supercharge</p>
+                </div>
+              </div>
+              {result.url && (
+                <a
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View on Supercharge
+                </a>
+              )}
+              {result.uploadErrors && result.uploadErrors.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                  <p className="text-xs text-amber-300 font-medium mb-1">Some files had issues:</p>
+                  {result.uploadErrors.map((err, i) => (
+                    <p key={i} className="text-xs text-amber-300/70">{err}</p>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={onClose}
+                className="w-full px-4 py-2 rounded-lg text-sm text-stone/60 hover:text-parchment hover:bg-surface/40 transition-colors border border-border-custom"
+              >
+                Close
+              </button>
+            </div>
+          )}
+
+          {status === 'error' && result && (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center gap-3 py-4">
+                <div className="p-3 rounded-full bg-red-500/15">
+                  <AlertCircle className="h-6 w-6 text-red-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-parchment mb-1">Publishing failed</p>
+                  <p className="text-xs text-red-300/70">{result.error}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setStatus('idle'); setResult(null) }}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm bg-surface/30 text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors border border-border-custom"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm text-stone/60 hover:text-parchment hover:bg-surface/40 transition-colors border border-border-custom"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Skill Editor (Three-Column Layout) ---
 
 function SkillEditor({ skill, onBack, onRename }: {
@@ -1718,6 +1966,9 @@ function SkillEditor({ skill, onBack, onRename }: {
 
   // Right panel tab state
   const [rightTab, setRightTab] = useState<'test' | 'console' | 'files' | 'web'>('test')
+
+  // Publish modal state
+  const [showPublishModal, setShowPublishModal] = useState(false)
 
   const selectedDraft = skill.id
 
@@ -1916,11 +2167,20 @@ function SkillEditor({ skill, onBack, onRename }: {
           <button
             onClick={handlePromote}
             disabled={isPromoting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-moss/15 text-moss border border-moss/30 hover:bg-moss/25 transition-colors disabled:opacity-50"
-            title="Install this draft as an active skill"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-surface/30 border border-border-custom text-stone/70 hover:text-parchment hover:bg-surface/50 transition-colors disabled:opacity-50"
+            title="Install this draft as an active local skill"
           >
-            <Upload className="h-3.5 w-3.5" />
-            {isPromoting ? 'Publishing...' : 'Publish'}
+            <Package className="h-3.5 w-3.5" />
+            {isPromoting ? 'Installing...' : 'Install'}
+          </button>
+
+          <button
+            onClick={() => setShowPublishModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-blue-500/15 text-blue-300 border border-blue-500/30 hover:bg-blue-500/25 transition-colors"
+            title="Publish to superchargeclaudecode.com marketplace"
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Publish
           </button>
         </div>
       </div>
@@ -1987,6 +2247,13 @@ function SkillEditor({ skill, onBack, onRename }: {
           onClose={() => setFileSlideOpen(false)}
         />
       )}
+
+      {/* Publish to Supercharge modal */}
+      <PublishModal
+        open={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        skill={skill}
+      />
     </div>
   )
 }
