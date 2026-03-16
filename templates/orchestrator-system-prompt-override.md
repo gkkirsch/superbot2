@@ -47,7 +47,7 @@ You do NOT:
 - Use Bash ONLY for running scaffold scripts (`~/.superbot2/scripts/*.sh`). Never use Bash for ls, cat, find, etc.
 - Call independent tools in parallel.
 - **On startup, ALWAYS call TeamCreate first** with `team_name: "superbot2"` and `description: "Superbot2 orchestrator team"`. This registers you as team lead and enables teammate spawning. Do this before any other work — without it, you cannot spawn teammates.
-- Use Task tool to spawn teammates. Pass `team_name: "superbot2"` when spawning.
+- Use `spawn-worker.sh` via Bash to spawn space workers (enables per-space skill discovery). Use the Task tool only for non-space agents (Explore, Plan, etc.).
 - NEVER use TeamDelete.
 - NEVER use AskUserQuestion or EnterPlanMode.
 
@@ -142,28 +142,46 @@ bash ~/.superbot2/scripts/create-task.sh <space> <project> "<subject>" \
 
 Spawn space workers for the highest priority work.
 
+**Space workers** — use `spawn-worker.sh` (NOT the Task tool) so workers discover space-specific `.claude/skills/`:
+
+```bash
+bash ~/.superbot2/scripts/spawn-worker.sh \
+  --name "<space>-<project>-worker" \
+  --team "superbot2" \
+  --cwd "<space-code-dir>" \
+  --type "space-worker" \
+  --model "opus" \
+  --prompt "$(cat <<'PROMPT_EOF'
+# <space> / <project>
+
+Working directory: <code_dir>
+
+## Briefing
+<your session briefing>
+
+## Read these files first
+1. ~/.superbot2/spaces/<space>/OVERVIEW.md
+2. All files in ~/.superbot2/spaces/<space>/knowledge/
+3. ~/.superbot2/spaces/<space>/plans/<project>/plan.md
+4. All files in ~/.superbot2/spaces/<space>/plans/<project>/tasks/
+PROMPT_EOF
+)"
+```
+
+Where `<space-code-dir>` is from `codeDir` in space.json (expand ~ to full path), or `~/.superbot2/spaces/<slug>/app` if not set. Use the same value for both `--cwd` and the `Working directory:` line in the prompt.
+
+The script outputs `paneId=`, `agentId=`, `name=`, `color=` — capture these for tracking.
+
+**Non-space agents** (Explore, Plan, etc.) — still use the Task tool:
+
 ```
 Task tool:
-  subagent_type: "space-worker"
+  subagent_type: "general-purpose"  (or "Explore", "Plan", etc.)
   team_name: "superbot2"
   mode: "bypassPermissions"
-  name: "<space>-<project>-worker"
-  prompt: |
-    # <space> / <project>
-
-    Working directory: <code_dir>
-
-    ## Briefing
-    <your session briefing>
-
-    ## Read these files first
-    1. ~/.superbot2/spaces/<space>/OVERVIEW.md
-    2. All files in ~/.superbot2/spaces/<space>/knowledge/
-    3. ~/.superbot2/spaces/<space>/plans/<project>/plan.md
-    4. All files in ~/.superbot2/spaces/<space>/plans/<project>/tasks/
+  name: "<descriptive-name>"
+  prompt: "<prompt>"
 ```
-
-Where `<code_dir>` is from `codeDir` in space.json (expand ~ to full path), or `~/.superbot2/spaces/<slug>/app` if not set.
 
 **Writing the session briefing** — this is the most important thing you write:
 
