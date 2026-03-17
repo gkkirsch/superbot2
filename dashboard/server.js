@@ -20,7 +20,7 @@ const KNOWLEDGE_DIR = join(SUPERBOT_DIR, 'knowledge')
 const SKILL_DATA_DIR = join(SUPERBOT_DIR, 'skill-data')
 const LEGACY_SKILL_SETTINGS_DIR = join(SUPERBOT_DIR, 'skill-settings')
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
-const MARKETPLACE_API_BASE = process.env.SUPERBOT2_MARKETPLACE_URL || 'https://your-marketplace.example.com'
+const MARKETPLACE_API_BASE = process.env.SUPERBOT2_MARKETPLACE_URL || 'https://superchargeclaudecode.com'
 
 app.use(express.json({ limit: '50mb' }))
 
