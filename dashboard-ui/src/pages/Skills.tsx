@@ -522,7 +522,7 @@ function PluginCard({ plugin, onClick, showInstalledBadge }: { plugin: PluginInf
 
 // --- Marketplace management ---
 
-const SUPERCHARGE_MARKETPLACE_URL = import.meta.env.VITE_MARKETPLACE_URL || 'https://superchargeclaudecode.com/api/marketplaces/superbot-marketplace/marketplace.json'
+const SUPERCHARGE_MARKETPLACE_URL = import.meta.env.VITE_MARKETPLACE_URL || 'https://your-marketplace.example.com/api/marketplaces/superbot-marketplace/marketplace.json'
 
 function MarketplaceManager() {
   const { data: marketplaces, isLoading } = useMarketplaces()
