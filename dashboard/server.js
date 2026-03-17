@@ -3612,8 +3612,89 @@ app.post('/api/plugins/uninstall', async (req, res) => {
   try {
     const { name } = req.body
     if (!name) return res.status(400).json({ error: 'name required' })
-    await runClaude(['plugin', 'uninstall', name])
-    res.json({ ok: true })
+
+    const errors = []
+
+    // 1. Find all spaces that have this plugin and uninstall from each
+    const uninstallScript = join(SUPERBOT_DIR, 'scripts', 'uninstall-plugin-from-space.sh')
+    const spaceSlugs = await safeReaddir(SPACES_DIR)
+    const removedFromSpaces = []
+    for (const slug of spaceSlugs) {
+      try {
+        const spaceJson = JSON.parse(await readFile(join(SPACES_DIR, slug, 'space.json'), 'utf-8'))
+        const plugins = spaceJson.plugins || []
+        if (plugins.includes(name)) {
+          try {
+            await new Promise((resolve, reject) => {
+              execFile('bash', [uninstallScript, name, slug, '--force'], { timeout: 15_000 }, (err, _stdout, stderr) => {
+                if (err) return reject(new Error(stderr || err.message))
+                resolve()
+              })
+            })
+            removedFromSpaces.push(slug)
+          } catch (scriptErr) {
+            errors.push(`Space ${slug}: ${scriptErr.message}`)
+          }
+        }
+      } catch { /* space.json doesn't exist or isn't valid */ }
+    }
+
+    // 2. Remove plugin cache directories from all spaces (script handles symlinks but not full copies)
+    for (const slug of spaceSlugs) {
+      try {
+        const spaceJson = JSON.parse(await readFile(join(SPACES_DIR, slug, 'space.json'), 'utf-8'))
+        const codeDir = spaceJson.codeDir || join(SPACES_DIR, slug, 'app')
+        const cacheDir = join(codeDir, '.claude', 'plugins', 'cache', 'local', name)
+        await rm(cacheDir, { recursive: true, force: true })
+      } catch { /* no space.json or codeDir */ }
+    }
+
+    // 3. Remove remaining entries from installed_plugins.json (user-scope or missed project-scope)
+    const installedJsonPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
+    try {
+      const raw = await readFile(installedJsonPath, 'utf-8')
+      const data = JSON.parse(raw)
+      const plugins = data.plugins || {}
+      let changed = false
+      for (const key of Object.keys(plugins)) {
+        if (key.startsWith(name + '@') || key === name) {
+          delete plugins[key]
+          changed = true
+        }
+      }
+      if (changed) await writeFile(installedJsonPath, JSON.stringify(data, null, 2))
+    } catch { /* file doesn't exist */ }
+
+    // 4. Remove user-scope settings.json enabledPlugins entries
+    const userSettingsPath = join(CLAUDE_DIR, 'settings.json')
+    try {
+      const raw = await readFile(userSettingsPath, 'utf-8')
+      const settings = JSON.parse(raw)
+      if (settings.enabledPlugins) {
+        let changed = false
+        for (const key of Object.keys(settings.enabledPlugins)) {
+          if (key.startsWith(name + '@') || key === name) {
+            delete settings.enabledPlugins[key]
+            changed = true
+          }
+        }
+        if (changed) await writeFile(userSettingsPath, JSON.stringify(settings, null, 2))
+      }
+    } catch { /* file doesn't exist */ }
+
+    // 5. Remove from plugin library
+    const libraryDir = join(SUPERBOT_DIR, 'plugin-library', name)
+    try { await rm(libraryDir, { recursive: true, force: true }) } catch { /* doesn't exist */ }
+
+    // 6. Clear caches
+    pluginMetaCache.clear()
+    pluginDetailCache.clear()
+
+    res.json({
+      ok: true,
+      removedFromSpaces,
+      errors: errors.length > 0 ? errors : undefined,
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
