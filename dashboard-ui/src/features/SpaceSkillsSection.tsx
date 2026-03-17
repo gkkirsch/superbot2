@@ -7,6 +7,18 @@ import '@/features/registerRenderers'
 import type { CardDefinition } from '@/lib/types'
 import type { SpaceSkillInfo } from '@/lib/api'
 
+function displayName(name: string) {
+  // Strip plugin prefix (e.g., "host-ai:agent-config" → "agent-config")
+  const base = name.includes(':') ? name.split(':').pop()! : name
+  return base
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\bAi\b/g, 'AI')
+    .replace(/\bApi\b/g, 'API')
+    .replace(/\bUi\b/g, 'UI')
+    .replace(/\bDb\b/g, 'DB')
+}
+
 interface SpaceSkillCardProps {
   card: CardDefinition
   space: string
@@ -45,6 +57,9 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
   const { data: extensions, isLoading } = useSpaceSkills(slug)
   const { data: cards } = useCards()
 
+  const spaceExtensions = extensions?.filter(e => e.type !== 'project-skill') ?? []
+  const projectExtensions = extensions?.filter(e => e.type === 'project-skill') ?? []
+
   return (
     <section>
       <div className="flex items-center gap-2 mb-3">
@@ -63,27 +78,44 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
       ) : !extensions || extensions.length === 0 ? (
         <p className="text-sm text-stone/50">No extensions installed</p>
       ) : (
-        <div className="space-y-4">
-          {extensions.map(ext => {
+        <div className="space-y-3">
+          {/* Space-level extensions — card style matching dashboard */}
+          {spaceExtensions.map(ext => {
             const Icon = getSkillIcon(ext.icon)
             const card = cards?.find(c => c.skillId === ext.skillId)
             return (
-              <div key={ext.skillId}>
-                {/* Extension header */}
-                <div className="flex items-center gap-2 mb-2">
+              <div key={ext.skillId} className="rounded-lg border border-border-custom bg-surface/30 p-4">
+                <div className="flex items-center gap-2.5">
                   <Icon className="h-4 w-4 text-stone/60 shrink-0" />
-                  <span className="text-sm text-parchment font-medium flex-1 min-w-0 truncate">{ext.name}</span>
+                  <span className="font-heading text-lg text-parchment flex-1 min-w-0 truncate">{displayName(ext.name)}</span>
                   <TypeBadge type={ext.type} />
                 </div>
-                {/* Interactive card content */}
                 {card ? (
-                  <SpaceSkillCard card={card} space={slug} />
+                  <div className="mt-2">
+                    <SpaceSkillCard card={card} space={slug} />
+                  </div>
                 ) : ext.description ? (
-                  <p className="text-xs text-stone/40">{ext.description}</p>
+                  <p className="text-xs text-stone/50 mt-1.5">{ext.description}</p>
                 ) : null}
               </div>
             )
           })}
+
+          {/* Project-level extensions — condensed */}
+          {projectExtensions.length > 0 && (
+            <div className="divide-y divide-border-custom">
+              {projectExtensions.map(ext => {
+                const Icon = getSkillIcon(ext.icon)
+                return (
+                  <div key={ext.skillId} className="flex items-center gap-2 py-1.5">
+                    <Icon className="h-3.5 w-3.5 text-stone/40 shrink-0" />
+                    <span className="text-xs text-parchment/80 flex-1 min-w-0 truncate">{displayName(ext.name)}</span>
+                    <TypeBadge type={ext.type} />
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </section>
