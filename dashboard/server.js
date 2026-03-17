@@ -3223,13 +3223,16 @@ app.delete('/api/hooks/:event', async (req, res) => {
   }
 })
 
-function runClaude(args) {
+function runClaude(args, { timeout = 30_000 } = {}) {
   return new Promise((resolve, reject) => {
     // Remove CLAUDECODE to prevent "nested session" errors when the dashboard
     // server itself runs inside a Claude Code session
     const { CLAUDECODE, ...cleanEnv } = process.env
-    execFile('claude', args, { timeout: 30_000, maxBuffer: 10 * 1024 * 1024, env: { ...cleanEnv, CLAUDE_CONFIG_DIR: CLAUDE_DIR } }, (err, stdout, stderr) => {
-      if (err) return reject(new Error(stderr || err.message))
+    execFile('claude', args, { timeout, maxBuffer: 10 * 1024 * 1024, env: { ...cleanEnv, CLAUDE_CONFIG_DIR: CLAUDE_DIR } }, (err, stdout, stderr) => {
+      if (err) {
+        const msg = err.killed ? `Command timed out after ${timeout / 1000}s: claude ${args.join(' ')}` : (stderr || err.message)
+        return reject(new Error(msg))
+      }
       resolve(stdout.trim())
     })
   })
@@ -3601,7 +3604,12 @@ app.post('/api/plugins/install', async (req, res) => {
   try {
     const { name } = req.body
     if (!name) return res.status(400).json({ error: 'name required' })
-    await runClaude(['plugin', 'install', name])
+    // Strip @marketplace suffix if present — CLI accepts bare names
+    const cleanName = name.includes('@') ? name.split('@')[0] : name
+    await runClaude(['plugin', 'install', cleanName], { timeout: 60_000 })
+    // Clear caches so plugin list refreshes
+    pluginMetaCache.clear()
+    pluginDetailCache.clear()
     res.json({ ok: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
