@@ -57,6 +57,10 @@ test-results/
 
 # Generated site content
 dashboard-ui/site-brief/
+site-brief/
+
+# Screenshots (local dev artifacts)
+screenshots/
 
 # Lock files
 package-lock.json
