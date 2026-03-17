@@ -68,18 +68,18 @@ function SpaceLevelExtension({ ext, card, slug }: { ext: SpaceSkillInfo; card?: 
   const itemCount = card ? (data?.items?.filter(i => !i.status || i.status === defaultStatus).length ?? 0) : 0
 
   return (
-    <section className="group">
+    <section>
       <div
-        className={`flex items-center justify-between transition-[margin] duration-300 ${collapsed ? 'mb-1' : 'mb-4'} cursor-pointer select-none`}
+        className={`flex items-center justify-between transition-[margin] duration-300 ${collapsed ? 'mb-0' : 'mb-3'} cursor-pointer select-none`}
         onClick={toggle}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <Icon className="h-5 w-5 text-sand shrink-0" />
-          <h2 className="font-heading text-xl text-parchment truncate">{displayName(ext.name)}</h2>
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <Icon className="h-4 w-4 text-stone/60 shrink-0" />
+          <span className="text-sm font-medium text-parchment/90 truncate">{displayName(ext.name)}</span>
           {collapsed && itemCount > 0 && (
             <span className="ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-sand/15 text-sand/80 leading-none shrink-0">{itemCount}</span>
           )}
-          <ChevronDown className={`h-4 w-4 text-stone/50 transition-transform duration-300 shrink-0 ${!collapsed ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-3 w-3 text-stone/40 transition-transform duration-300 shrink-0 ${!collapsed ? 'rotate-180' : ''}`} />
         </div>
       </div>
       <CollapsibleContent collapsed={collapsed}>
@@ -100,7 +100,7 @@ function ProjectSkillPills({ extensions }: { extensions: SpaceSkillInfo[] }) {
       {extensions.map(ext => (
         <span
           key={ext.skillId}
-          className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-stone/8 text-parchment/70 border border-stone/10 hover:bg-stone/12 hover:text-parchment/90 transition-colors"
+          className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-stone/10 text-parchment/80 border border-stone/12 hover:bg-stone/15 hover:text-parchment transition-colors"
           title={ext.description || undefined}
         >
           {displayName(ext.name)}
@@ -139,7 +139,7 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
       ) : !extensions || extensions.length === 0 ? (
         <p className="text-sm text-stone/50">No plugins installed</p>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-5">
           {/* Space-level — dashboard-style collapsible sections */}
           {spaceExtensions.map(ext => {
             const card = cards?.find(c => c.skillId === ext.skillId)
