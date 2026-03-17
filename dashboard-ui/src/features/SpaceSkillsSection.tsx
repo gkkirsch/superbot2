@@ -93,22 +93,19 @@ function SpaceLevelExtension({ ext, card, slug }: { ext: SpaceSkillInfo; card?: 
   )
 }
 
-/** Project-level extension — title only, expandable */
-function ProjectLevelExtension({ ext }: { ext: SpaceSkillInfo }) {
-  const [expanded, setExpanded] = useState(false)
-  const hasDetail = !!ext.description
-
+/** Project-level extensions — rendered as a wrapped row of pills */
+function ProjectSkillPills({ extensions }: { extensions: SpaceSkillInfo[] }) {
   return (
-    <div>
-      <button
-        onClick={hasDetail ? () => setExpanded(v => !v) : undefined}
-        className={`w-full text-left py-1.5 text-xs text-parchment/80 truncate ${hasDetail ? 'hover:text-parchment cursor-pointer' : ''} transition-colors`}
-      >
-        {displayName(ext.name)}
-      </button>
-      {expanded && ext.description && (
-        <p className="text-[11px] text-stone/50 pb-1.5 leading-relaxed">{ext.description}</p>
-      )}
+    <div className="flex flex-wrap gap-1.5">
+      {extensions.map(ext => (
+        <span
+          key={ext.skillId}
+          className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-stone/8 text-parchment/70 border border-stone/10 hover:bg-stone/12 hover:text-parchment/90 transition-colors"
+          title={ext.description || undefined}
+        >
+          {displayName(ext.name)}
+        </span>
+      ))}
     </div>
   )
 }
@@ -151,13 +148,9 @@ export function SpaceSkillsSection({ slug }: SpaceSkillsSectionProps) {
             )
           })}
 
-          {/* Project-level — condensed title-only list */}
+          {/* Project-level — compact pills */}
           {projectExtensions.length > 0 && (
-            <div className="divide-y divide-border-custom">
-              {projectExtensions.map(ext => (
-                <ProjectLevelExtension key={ext.skillId} ext={ext} />
-              ))}
-            </div>
+            <ProjectSkillPills extensions={projectExtensions} />
           )}
         </div>
       )}
