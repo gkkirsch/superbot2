@@ -3606,7 +3606,22 @@ app.post('/api/plugins/install', async (req, res) => {
     if (!name) return res.status(400).json({ error: 'name required' })
     // Strip @marketplace suffix if present — CLI accepts bare names
     const cleanName = name.includes('@') ? name.split('@')[0] : name
-    await runClaude(['plugin', 'install', cleanName], { timeout: 60_000 })
+    try {
+      await runClaude(['plugin', 'install', cleanName], { timeout: 60_000 })
+    } catch (firstErr) {
+      // If plugin not found in any marketplace, auto-register superbot-marketplace and retry
+      if (firstErr.message?.includes('not found in any configured marketplace')) {
+        const mpUrl = `${MARKETPLACE_API_BASE}/api/marketplaces/superbot-marketplace/marketplace.json`
+        try {
+          // Remove stale marketplace registration if present, then re-add
+          try { await runClaude(['plugin', 'marketplace', 'remove', 'superbot-marketplace']) } catch { /* not registered */ }
+          await runClaude(['plugin', 'marketplace', 'add', mpUrl], { timeout: 30_000 })
+        } catch { /* marketplace add failed — will still fail on retry below */ }
+        await runClaude(['plugin', 'install', cleanName], { timeout: 60_000 })
+      } else {
+        throw firstErr
+      }
+    }
     // Clear caches so plugin list refreshes
     pluginMetaCache.clear()
     pluginDetailCache.clear()
