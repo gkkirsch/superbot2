@@ -3647,7 +3647,22 @@ app.post('/api/plugins/uninstall', async (req, res) => {
       } catch { /* space.json doesn't exist or isn't valid */ }
     }
 
-    // 2. Remove plugin cache directories from all spaces (script handles symlinks but not full copies)
+    // 2. Remove plugin from skills arrays in space.json (separate from plugins array)
+    for (const slug of spaceSlugs) {
+      try {
+        const sjPath = join(SPACES_DIR, slug, 'space.json')
+        const spaceJson = JSON.parse(await readFile(sjPath, 'utf-8'))
+        const skills = spaceJson.skills || []
+        const idx = skills.indexOf(name)
+        if (idx !== -1) {
+          skills.splice(idx, 1)
+          spaceJson.skills = skills
+          await writeFile(sjPath, JSON.stringify(spaceJson, null, 2))
+        }
+      } catch { /* no space.json */ }
+    }
+
+    // 3. Remove plugin cache directories from all spaces (script handles symlinks but not full copies)
     for (const slug of spaceSlugs) {
       try {
         const spaceJson = JSON.parse(await readFile(join(SPACES_DIR, slug, 'space.json'), 'utf-8'))
@@ -3657,7 +3672,17 @@ app.post('/api/plugins/uninstall', async (req, res) => {
       } catch { /* no space.json or codeDir */ }
     }
 
-    // 3. Remove remaining entries from installed_plugins.json (user-scope or missed project-scope)
+    // 4. Remove global marketplace cache directories
+    const globalCacheDir = join(CLAUDE_DIR, 'plugins', 'cache')
+    try {
+      const marketplaces = await safeReaddir(globalCacheDir)
+      for (const marketplace of marketplaces) {
+        const pluginCacheDir = join(globalCacheDir, marketplace, name)
+        await rm(pluginCacheDir, { recursive: true, force: true })
+      }
+    } catch { /* cache dir doesn't exist */ }
+
+    // 5. Remove remaining entries from installed_plugins.json (user-scope or missed project-scope)
     const installedJsonPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
     try {
       const raw = await readFile(installedJsonPath, 'utf-8')
@@ -3673,7 +3698,7 @@ app.post('/api/plugins/uninstall', async (req, res) => {
       if (changed) await writeFile(installedJsonPath, JSON.stringify(data, null, 2))
     } catch { /* file doesn't exist */ }
 
-    // 4. Remove user-scope settings.json enabledPlugins entries
+    // 6. Remove user-scope settings.json enabledPlugins entries
     const userSettingsPath = join(CLAUDE_DIR, 'settings.json')
     try {
       const raw = await readFile(userSettingsPath, 'utf-8')
@@ -3690,11 +3715,11 @@ app.post('/api/plugins/uninstall', async (req, res) => {
       }
     } catch { /* file doesn't exist */ }
 
-    // 5. Remove from plugin library
+    // 7. Remove from plugin library
     const libraryDir = join(SUPERBOT_DIR, 'plugin-library', name)
     try { await rm(libraryDir, { recursive: true, force: true }) } catch { /* doesn't exist */ }
 
-    // 6. Clear caches
+    // 8. Clear caches
     pluginMetaCache.clear()
     pluginDetailCache.clear()
 
