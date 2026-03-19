@@ -1,19 +1,41 @@
 import { useState, useRef } from 'react'
-import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb, ClipboardList, Zap } from 'lucide-react'
+import { MessageCircleQuestion, ChevronDown, ChevronUp, Check, CheckCircle2, PenLine, AlertTriangle, HelpCircle, ShieldCheck, Trash2, Lightbulb, ClipboardList, Zap, Clock } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { resolveEscalation, deleteEscalation, addAutoTriageRule } from '@/lib/api'
 import { MarkdownContent } from '@/features/MarkdownContent'
 import type { Escalation } from '@/lib/types'
 
-const typeConfig: Record<string, { icon: React.ReactNode; color: string }> = {
-  decision: { icon: <MessageCircleQuestion className="h-4 w-4" />, color: 'text-sand' },
-  blocker: { icon: <AlertTriangle className="h-4 w-4" />, color: 'text-ember' },
-  question: { icon: <HelpCircle className="h-4 w-4" />, color: 'text-parchment' },
-  approval: { icon: <ShieldCheck className="h-4 w-4" />, color: 'text-moss' },
-  improvement: { icon: <Lightbulb className="h-4 w-4" />, color: 'text-amber-400' },
-  agent_plan: { icon: <ClipboardList className="h-4 w-4" />, color: 'text-sky-400' },
+const typeConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  decision: { icon: <MessageCircleQuestion className="h-4 w-4" />, color: 'text-sand', label: 'Decision' },
+  blocker: { icon: <AlertTriangle className="h-4 w-4" />, color: 'text-ember', label: 'Blocker' },
+  question: { icon: <HelpCircle className="h-4 w-4" />, color: 'text-parchment', label: 'Question' },
+  approval: { icon: <ShieldCheck className="h-4 w-4" />, color: 'text-moss', label: 'Approval' },
+  improvement: { icon: <Lightbulb className="h-4 w-4" />, color: 'text-amber-400', label: 'Improvement' },
+  agent_plan: { icon: <ClipboardList className="h-4 w-4" />, color: 'text-sky-400', label: 'Plan' },
 }
 
+function timeAgo(dateStr: string): string {
+  const now = Date.now()
+  const then = new Date(dateStr).getTime()
+  const diffMs = now - then
+  const minutes = Math.floor(diffMs / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return '1d ago'
+  return `${days}d ago`
+}
+
+function contextPreview(context: string | undefined | null): string | null {
+  if (!context) return null
+  const firstLine = context.split('\n').find(l => l.trim().length > 0)
+  if (!firstLine) return null
+  const trimmed = firstLine.trim()
+  if (trimmed.length <= 120) return trimmed
+  return trimmed.slice(0, 117) + '...'
+}
 
 interface EscalationCardProps {
   escalation: Escalation
@@ -74,9 +96,19 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
   }
 
   const typeInfo = typeConfig[escalation.type] ?? typeConfig.question
+  const preview = contextPreview(escalation.context)
+  const isHighPriority = escalation.priority === 'critical' || escalation.priority === 'high'
+  const hasQuickActions = escalation.status === 'needs_human' && (escalation.suggestedAnswers ?? []).length > 0
+
+  // Border color varies by priority
+  const borderClass = escalation.priority === 'critical'
+    ? 'border-ember/30 hover:border-ember/50'
+    : isHighPriority
+      ? 'border-sand/25 hover:border-sand/40'
+      : 'border-sand/20 hover:border-sand/35'
 
   return (
-    <div className="rounded-lg border border-sand/20 bg-sand/[0.03] overflow-hidden transition-all duration-200 hover:border-sand/35">
+    <div className={`rounded-lg border bg-sand/[0.03] overflow-hidden transition-all duration-200 ${borderClass}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-start gap-3 px-4 py-3.5 text-left group"
@@ -84,6 +116,9 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
         <span className={`shrink-0 mt-0.5 ${typeInfo.color}`}>{typeInfo.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={`text-[10px] font-mono uppercase tracking-wide ${typeInfo.color} opacity-70`}>
+              {typeInfo.label}
+            </span>
             {showSpace && escalation.space && (
               <span className="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">
                 {escalation.spaceName || escalation.space}
@@ -92,6 +127,11 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
             {escalation.project && (
               <span className="text-[10px] font-mono text-stone/60">
                 {escalation.project}
+              </span>
+            )}
+            {escalation.priority === 'critical' && (
+              <span className="text-[10px] font-medium text-ember bg-ember/10 rounded-full px-1.5 py-0.5">
+                critical
               </span>
             )}
             {escalation.blocksProject && (
@@ -108,6 +148,20 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
           <p className="text-sm text-parchment font-medium leading-snug">
             {escalation.question}
           </p>
+          {/* Context preview + time indicator in collapsed state */}
+          {!expanded && (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {preview && (
+                <p className="text-xs text-stone/50 leading-snug truncate max-w-[85%]">
+                  {preview}
+                </p>
+              )}
+              <span className="text-[10px] text-stone/40 flex items-center gap-1 shrink-0 ml-auto">
+                <Clock className="h-2.5 w-2.5" />
+                {timeAgo(escalation.createdAt)}
+              </span>
+            </div>
+          )}
         </div>
         <div className="shrink-0 mt-0.5">
           {expanded
@@ -117,8 +171,38 @@ export function EscalationCard({ escalation, showSpace = true }: EscalationCardP
         </div>
       </button>
 
+      {/* Quick-action buttons in collapsed state */}
+      {!expanded && hasQuickActions && (
+        <div className="px-4 pb-3 -mt-1 ml-7 flex items-center gap-2 flex-wrap">
+          {(escalation.suggestedAnswers ?? []).slice(0, 3).map((answer) => (
+            <button
+              key={answer.label}
+              onClick={(e) => { e.stopPropagation(); handleResolve(answer.label) }}
+              disabled={resolving}
+              className="text-xs text-stone/70 hover:text-parchment bg-surface/60 hover:bg-surface border border-border-custom hover:border-sand/30 rounded-md px-2.5 py-1 transition-all duration-150 disabled:opacity-40"
+            >
+              {answer.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {expanded && (
         <div className="px-4 pb-4 space-y-3 animate-fade-up" style={{ animationDuration: '0.2s' }}>
+          {/* Time indicator in expanded state */}
+          <div className="ml-7 flex items-center gap-2 text-[10px] text-stone/40">
+            <Clock className="h-2.5 w-2.5" />
+            <span>Created {timeAgo(escalation.createdAt)}</span>
+            {escalation.priority && (
+              <span className={`rounded-full px-1.5 py-0.5 ${
+                escalation.priority === 'critical' ? 'text-ember bg-ember/10' :
+                escalation.priority === 'high' ? 'text-sand bg-sand/10' :
+                'text-stone/50 bg-stone/5'
+              }`}>
+                {escalation.priority}
+              </span>
+            )}
+          </div>
           {escalation.context && (
             <MarkdownContent content={escalation.context} className="text-stone/80 ml-7" />
           )}
