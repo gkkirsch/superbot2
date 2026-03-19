@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X, Target, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
-import { useCards, useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem, useSpaces, useGoals } from '@/hooks/useSpaces'
+import { useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem, useSpaces, useGoals } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem, Goal } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
@@ -422,9 +422,42 @@ export function GoalRenderer({ card, space }: { card: CardDefinition; space?: st
   )
 }
 
+// Color palette for space badges — deterministic per space name
+const SPACE_COLORS = [
+  { bg: 'bg-sky-500/15', text: 'text-sky-400', dot: 'bg-sky-400' },
+  { bg: 'bg-violet-500/15', text: 'text-violet-400', dot: 'bg-violet-400' },
+  { bg: 'bg-amber-500/15', text: 'text-amber-400', dot: 'bg-amber-400' },
+  { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  { bg: 'bg-rose-500/15', text: 'text-rose-400', dot: 'bg-rose-400' },
+  { bg: 'bg-cyan-500/15', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  { bg: 'bg-fuchsia-500/15', text: 'text-fuchsia-400', dot: 'bg-fuchsia-400' },
+  { bg: 'bg-lime-500/15', text: 'text-lime-400', dot: 'bg-lime-400' },
+]
+
+function spaceColor(space: string) {
+  let hash = 0
+  for (let i = 0; i < space.length; i++) hash = ((hash << 5) - hash + space.charCodeAt(i)) | 0
+  return SPACE_COLORS[Math.abs(hash) % SPACE_COLORS.length]
+}
+
+function ColoredSpaceBadge({ space }: { space: string }) {
+  const c = spaceColor(space)
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wider ${c.bg} ${c.text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${c.dot}`} />
+      {space}
+    </span>
+  )
+}
+
+const COLLAPSED_LIMIT = 3
+const PROGRESS_TRUNCATE = 120
+
 // GoalCard: compact read-only card for the aggregated cross-space goals view
 function GoalCard({ goal }: { goal: Goal }) {
   const style = STATUS_STYLES[goal.status] || STATUS_STYLES.active
+  const [progressExpanded, setProgressExpanded] = useState(false)
+  const progressLong = (goal.progress?.length ?? 0) > PROGRESS_TRUNCATE
 
   return (
     <div className={`rounded-lg border border-border-custom p-3 ${style.bg}`}>
@@ -433,15 +466,32 @@ function GoalCard({ goal }: { goal: Goal }) {
         <div className="min-w-0 flex-1">
           <p className="text-sm text-parchment font-medium leading-snug">{goal.title}</p>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            {goal.space && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface text-stone/70 tracking-wider">
-                {goal.space}
+            {goal.space && <ColoredSpaceBadge space={goal.space} />}
+            {goal.dueDate ? (
+              <DueBadge dueDate={goal.dueDate} />
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[10px] text-stone/40">
+                <Calendar className="h-3 w-3" />
+                No deadline
               </span>
             )}
-            {goal.dueDate && <DueBadge dueDate={goal.dueDate} />}
           </div>
           {goal.progress && (
-            <p className="text-[11px] text-stone/60 mt-1.5 leading-relaxed">{goal.progress}</p>
+            <div className="mt-1.5">
+              <p className="text-[11px] text-stone/60 leading-relaxed">
+                {progressLong && !progressExpanded
+                  ? goal.progress.slice(0, PROGRESS_TRUNCATE) + '...'
+                  : goal.progress}
+              </p>
+              {progressLong && (
+                <button
+                  onClick={() => setProgressExpanded(!progressExpanded)}
+                  className="text-[10px] text-stone/40 hover:text-stone/60 transition-colors mt-0.5"
+                >
+                  {progressExpanded ? 'Show less' : 'Show more'}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -449,9 +499,24 @@ function GoalCard({ goal }: { goal: Goal }) {
   )
 }
 
+// Sort: overdue first, then soonest due date, no-deadline last
+function sortGoals(goals: Goal[]): Goal[] {
+  return [...goals].sort((a, b) => {
+    const now = Date.now()
+    const aOverdue = a.dueDate ? new Date(a.dueDate).getTime() < now : false
+    const bOverdue = b.dueDate ? new Date(b.dueDate).getTime() < now : false
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
+    if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+    if (a.dueDate) return -1
+    if (b.dueDate) return 1
+    return 0
+  })
+}
+
 // GoalSection: aggregated cross-space goals view (used by GoalsDashboardSection)
 export function GoalSection() {
   const { data: goals, isLoading } = useGoals()
+  const [expanded, setExpanded] = useState(false)
   const [showCompleted, setShowCompleted] = useState(false)
 
   if (isLoading) {
@@ -481,15 +546,36 @@ export function GoalSection() {
     )
   }
 
-  const activeGoals = goals.filter(g => g.status === 'active' || g.status === 'paused')
+  const activeGoals = sortGoals(goals.filter(g => g.status === 'active' || g.status === 'paused'))
   const completedGoals = goals.filter(g => g.status === 'completed' || g.status === 'abandoned')
-  const displayGoals = showCompleted ? [...activeGoals, ...completedGoals] : activeGoals
+
+  const visibleActive = expanded ? activeGoals : activeGoals.slice(0, COLLAPSED_LIMIT)
+  const hiddenCount = activeGoals.length - COLLAPSED_LIMIT
+  const displayGoals = showCompleted ? [...visibleActive, ...completedGoals] : visibleActive
 
   return (
     <div className="space-y-2">
       {displayGoals.map(goal => (
         <GoalCard key={goal.id} goal={goal} />
       ))}
+      {!expanded && hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="flex items-center justify-center gap-1 text-[10px] text-stone/50 hover:text-stone transition-colors w-full py-1"
+        >
+          <ChevronDown className="h-3 w-3" />
+          Show {hiddenCount} more goal{hiddenCount !== 1 ? 's' : ''}
+        </button>
+      )}
+      {expanded && activeGoals.length > COLLAPSED_LIMIT && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="flex items-center justify-center gap-1 text-[10px] text-stone/50 hover:text-stone transition-colors w-full py-1"
+        >
+          <ChevronUp className="h-3 w-3" />
+          Show less
+        </button>
+      )}
       {completedGoals.length > 0 && (
         <button
           onClick={() => setShowCompleted(!showCompleted)}

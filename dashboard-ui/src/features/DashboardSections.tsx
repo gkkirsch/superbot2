@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb, Target } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
-import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useAllBacklog, useCards, useCardItems } from '@/hooks/useSpaces'
+import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useAllBacklog, useCards, useCardItems, useGoals } from '@/hooks/useSpaces'
 import { updateHeartbeatInterval } from '@/lib/api'
 import { CombinedEscalationsSection } from '@/features/CombinedEscalationsSection'
 import type { Filter } from '@/features/CombinedEscalationsSection'
@@ -373,9 +373,11 @@ function LatestFilesDashboardSection() {
 
 function GoalsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('goals', true)
+  const { data: goals } = useGoals()
+  const activeCount = goals?.filter(g => g.status === 'active' || g.status === 'paused').length ?? 0
   return (
     <section className="group" data-section="goals">
-      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} />
+      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} badge={activeCount} />
       <CollapsibleContent collapsed={collapsed}>
         <GoalSection />
       </CollapsibleContent>
