@@ -60,6 +60,8 @@ const DASHBOARD_API_PORT = 3274;
 const WINDOW_STATE_PATH = path.join(os.homedir(), '.superbot2', 'electron-window-state.json');
 /** Path to the JSON file that tracks whether this is the first launch. */
 const FIRST_LAUNCH_FLAG_PATH = path.join(os.homedir(), '.superbot2', 'electron-first-launch-done');
+/** Path to the flag file that tracks whether setup/onboarding is complete. */
+const SETUP_COMPLETE_FLAG = path.join(os.homedir(), '.superbot2', 'electron-setup-complete');
 /** Default window dimensions. */
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_HEIGHT = 800;
@@ -350,6 +352,70 @@ electron_1.ipcMain.handle('get-process-status', (_event, name) => {
         scheduler: schedulerProcess,
     };
     return processes[name]?.getStatus() ?? 'stopped';
+});
+function runSetupChecks() {
+    const { execSync } = require('node:child_process');
+    function commandExists(cmd) {
+        try {
+            execSync(`which ${cmd}`, { stdio: 'ignore' });
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    return [
+        {
+            id: 'claude',
+            label: 'Claude CLI',
+            found: commandExists('claude'),
+            hint: 'npm install -g @anthropic-ai/claude-code',
+        },
+        {
+            id: 'node',
+            label: 'Node.js',
+            found: commandExists('node'),
+            hint: 'Install from https://nodejs.org or: brew install node',
+        },
+        {
+            id: 'npm',
+            label: 'npm',
+            found: commandExists('npm'),
+            hint: 'Included with Node.js — install Node.js first',
+        },
+        {
+            id: 'api_key',
+            label: 'ANTHROPIC_API_KEY',
+            found: !!process.env.ANTHROPIC_API_KEY,
+            hint: 'export ANTHROPIC_API_KEY="sk-ant-..." in your shell profile',
+        },
+        {
+            id: 'superbot_dir',
+            label: '~/.superbot2 directory',
+            found: fs.existsSync(path.join(os.homedir(), '.superbot2')),
+            hint: 'Run the superbot2 installer or: mkdir -p ~/.superbot2',
+        },
+    ];
+}
+electron_1.ipcMain.handle('get-setup-status', () => {
+    const complete = fs.existsSync(SETUP_COMPLETE_FLAG);
+    if (complete)
+        return { complete: true, checks: [] };
+    return { complete: false, checks: runSetupChecks() };
+});
+electron_1.ipcMain.handle('complete-setup', () => {
+    try {
+        const dir = path.dirname(SETUP_COMPLETE_FLAG);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(SETUP_COMPLETE_FLAG, new Date().toISOString(), 'utf-8');
+        return { ok: true };
+    }
+    catch {
+        return { ok: false };
+    }
+});
+electron_1.ipcMain.handle('rerun-setup-checks', () => {
+    return { checks: runSetupChecks() };
 });
 // Forward status changes from all processes to the renderer and rebuild
 // the tray menu so it always reflects current state.

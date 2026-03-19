@@ -29,5 +29,17 @@ electron_1.contextBridge.exposeInMainWorld('superbot', {
             electron_1.ipcRenderer.removeListener('process-status-changed', handler);
         };
     },
+    /**
+     * Setup / onboarding: check if setup is complete, and run dependency checks.
+     */
+    getSetupStatus: () => {
+        return electron_1.ipcRenderer.invoke('get-setup-status');
+    },
+    completeSetup: () => {
+        return electron_1.ipcRenderer.invoke('complete-setup');
+    },
+    rerunSetupChecks: () => {
+        return electron_1.ipcRenderer.invoke('rerun-setup-checks');
+    },
 });
 //# sourceMappingURL=preload.js.map

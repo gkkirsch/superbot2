@@ -30,4 +30,19 @@ contextBridge.exposeInMainWorld('superbot', {
       ipcRenderer.removeListener('process-status-changed', handler);
     };
   },
+
+  /**
+   * Setup / onboarding: check if setup is complete, and run dependency checks.
+   */
+  getSetupStatus: (): Promise<{ complete: boolean; checks: Array<{ id: string; label: string; found: boolean; hint: string }> }> => {
+    return ipcRenderer.invoke('get-setup-status');
+  },
+
+  completeSetup: (): Promise<{ ok: boolean }> => {
+    return ipcRenderer.invoke('complete-setup');
+  },
+
+  rerunSetupChecks: (): Promise<{ checks: Array<{ id: string; label: string; found: boolean; hint: string }> }> => {
+    return ipcRenderer.invoke('rerun-setup-checks');
+  },
 });
