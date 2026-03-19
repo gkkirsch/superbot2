@@ -244,6 +244,12 @@ input:-webkit-autofill:focus {
   animation: shimmer 3s infinite linear;
 }
 
+.shimmer-row {
+  background: linear-gradient(90deg, transparent 0%, rgba(194,178,128,0.06) 40%, rgba(194,178,128,0.12) 50%, rgba(194,178,128,0.06) 60%, transparent 100%);
+  background-size: 250% 100%;
+  animation: shimmer 3s infinite linear;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .shimmer-text { animation: none; }
+  .shimmer-text, .shimmer-row { animation: none; }
 }
