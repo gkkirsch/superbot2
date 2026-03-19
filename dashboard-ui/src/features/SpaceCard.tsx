@@ -34,12 +34,8 @@ function WorkerIndicator({ workers }: { workers: ActiveWorker[] }) {
   const label = workers.length === 1 ? 'Worker active' : `${workers.length} workers`
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400/80">
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-      </span>
-      {label}
+    <span className="inline-flex items-center gap-1 text-[10px]">
+      <span className="shimmer-text">{label}</span>
     </span>
   )
 }

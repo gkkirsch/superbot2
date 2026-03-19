@@ -10,13 +10,10 @@ function WorkerRow({ worker }: { worker: ActiveWorker }) {
   return (
     <Link
       to={to}
-      className="flex items-center justify-between rounded-lg border border-border-custom bg-surface/40 px-4 py-3 transition-colors hover:border-sand/30 hover:bg-surface/60"
+      className="group relative flex items-center justify-between overflow-hidden rounded-lg border border-border-custom bg-surface/40 px-4 py-3 transition-colors hover:border-sand/30 hover:bg-surface/60"
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <span className="relative flex h-2 w-2 shrink-0">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-        </span>
+      <span className="pointer-events-none absolute inset-0 shimmer-row" />
+      <div className="relative flex items-center gap-3 min-w-0">
         <div className="min-w-0">
           <p className="text-sm font-medium text-parchment truncate">{worker.name}</p>
           <div className="flex items-center gap-2">

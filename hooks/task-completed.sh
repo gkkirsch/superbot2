@@ -2,7 +2,7 @@
 # TaskCompleted hook - Enforces quality gates before a task can be marked done
 #
 # Receives JSON on stdin with: task_id, task_subject, task_description,
-#   teammate_name, team_name, cwd
+#   teammate_name, team_name, cwd, transcript_path
 # Exit 0 = allow completion
 # Exit 2 = block completion (stderr message sent back as feedback)
 
@@ -12,6 +12,8 @@ INPUT=$(cat)
 TASK_ID=$(echo "$INPUT" | jq -r '.task_id // empty')
 TASK_SUBJECT=$(echo "$INPUT" | jq -r '.task_subject // empty')
 TEAMMATE=$(echo "$INPUT" | jq -r '.teammate_name // empty')
+TASK_CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
 
 DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
 MISSING=()
@@ -55,6 +57,64 @@ if [[ "$criteria_count" -gt 0 ]]; then
     notes_length=${#notes}
     if [[ "$notes_length" -lt 20 ]]; then
       MISSING+=("completionNotes are too brief. Describe how acceptance criteria were met for '$TASK_SUBJECT'.")
+    fi
+  fi
+fi
+
+# --- Check 4: Checklist evaluation ---
+# Extract space and project from the task file path
+# Path format: $DIR/spaces/<space>/plans/<project>/tasks/<file>.json
+SPACE=""
+PROJECT=""
+if [[ -n "$TASK_FILE" ]]; then
+  # Strip the DIR prefix and split
+  relative="${TASK_FILE#$DIR/spaces/}"
+  SPACE="${relative%%/*}"
+  rest="${relative#*/plans/}"
+  PROJECT="${rest%%/*}"
+fi
+
+# Extract task labels
+LABELS=$(jq -r '(.labels // []) | join(",")' "$TASK_FILE" 2>/dev/null)
+
+# Resolve working directory: use task cwd, fall back to space codeDir, fall back to repo root
+EVAL_CWD="$TASK_CWD"
+if [[ -z "$EVAL_CWD" && -n "$SPACE" ]]; then
+  SPACE_JSON="$DIR/spaces/$SPACE/space.json"
+  if [[ -f "$SPACE_JSON" ]]; then
+    code_dir=$(jq -r '.codeDir // empty' "$SPACE_JSON" 2>/dev/null)
+    code_dir="${code_dir/#\~/$HOME}"
+    if [[ -n "$code_dir" && -d "$code_dir" ]]; then
+      EVAL_CWD="$code_dir"
+    fi
+  fi
+fi
+
+# Run the checklist evaluator
+EVAL_SCRIPT="$DIR/scripts/evaluate-checklist.sh"
+if [[ -x "$EVAL_SCRIPT" && -n "$SPACE" && -n "$PROJECT" ]]; then
+  EVAL_ARGS=(--space "$SPACE" --project "$PROJECT")
+  [[ -n "$LABELS" ]] && EVAL_ARGS+=(--labels "$LABELS")
+  [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]] && EVAL_ARGS+=(--transcript "$TRANSCRIPT")
+  [[ -n "$EVAL_CWD" ]] && EVAL_ARGS+=(--cwd "$EVAL_CWD")
+
+  EVAL_OUTPUT=$(bash "$EVAL_SCRIPT" "${EVAL_ARGS[@]}" 2>/dev/null)
+  EVAL_EXIT=$?
+
+  if [[ $EVAL_EXIT -ne 0 && -n "$EVAL_OUTPUT" ]]; then
+    # Parse failures from the JSON output
+    FAILED_ITEMS=$(echo "$EVAL_OUTPUT" | jq -r '
+      .results[]
+      | select(.passed == false and .skipped == false)
+      | "  \(.id): \(if .output != "" then .output else "check failed" end)"
+    ' 2>/dev/null)
+
+    if [[ -n "$FAILED_ITEMS" ]]; then
+      MISSING+=("Checklist checks failed for '$TASK_SUBJECT':")
+      while IFS= read -r line; do
+        MISSING+=("$line")
+      done <<< "$FAILED_ITEMS"
+      MISSING+=("Fix the failing checks and try again.")
     fi
   fi
 fi
