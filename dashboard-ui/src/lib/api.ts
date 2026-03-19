@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, Goal } from './types'
 
 export type { PluginDetail }
 
@@ -821,6 +821,13 @@ export async function uploadKnowledgeFile(source: string, file: File): Promise<{
   })
   if (!response.ok) throw new Error(`Upload failed: ${response.status}`)
   return response.json()
+}
+
+// --- Goals (cross-space) ---
+
+export async function fetchGoals(): Promise<Goal[]> {
+  const data = await fetchJson<{ goals: Goal[] }>('/goals')
+  return data.goals
 }
 
 // --- Dashboard cards ---

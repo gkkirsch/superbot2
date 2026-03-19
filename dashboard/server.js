@@ -3379,6 +3379,58 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
   }
 })
 
+// --- Goals (aggregated from all spaces) ---
+
+app.get('/api/goals', async (_req, res) => {
+  try {
+    const goals = []
+    const spaceDirs = await safeReaddir(SPACES_DIR)
+    for (const slug of spaceDirs) {
+      const dataPath = join(SPACES_DIR, slug, 'skill-data', 'goals', 'data.jsonl')
+      try {
+        const content = await readFile(dataPath, 'utf-8')
+        const lines = content.trim().split('\n').filter(Boolean)
+        for (const line of lines) {
+          try {
+            const item = JSON.parse(line)
+            item.space = item.space || slug
+            goals.push(item)
+          } catch { /* skip malformed lines */ }
+        }
+      } catch { /* no goals file for this space */ }
+    }
+    // Also read global goals from skill-data
+    const globalPath = join(SUPERBOT_DIR, 'skill-data', 'goals', 'data.jsonl')
+    try {
+      const content = await readFile(globalPath, 'utf-8')
+      const lines = content.trim().split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line)
+          if (!goals.some(g => g.id === item.id)) {
+            item.space = item.space || 'global'
+            goals.push(item)
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    } catch { /* no global goals */ }
+    // Sort: active first, then by due date (soonest first), no-date last
+    goals.sort((a, b) => {
+      const statusOrder = { active: 0, paused: 1, completed: 2, abandoned: 3 }
+      const sa = statusOrder[a.status] ?? 1
+      const sb = statusOrder[b.status] ?? 1
+      if (sa !== sb) return sa - sb
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+      if (a.dueDate) return -1
+      if (b.dueDate) return 1
+      return 0
+    })
+    res.json({ goals })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const VALID_CARD_STATUSES = new Set(['approved', 'rejected', 'rewrite', 'pending', 'active', 'completed', 'paused', 'abandoned'])
 const IMMUTABLE_CARD_FIELDS = new Set(['id', 'createdAt', 'skillId'])
 

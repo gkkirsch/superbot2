@@ -38,6 +38,7 @@ import {
   fetchCards,
   fetchCardItems,
   updateCardItem,
+  fetchGoals,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem } from '@/lib/types'
 
@@ -361,6 +362,12 @@ export function useUploadKnowledge() {
       qc.invalidateQueries({ queryKey: ['knowledge'] })
     },
   })
+}
+
+// --- Goals (cross-space) ---
+
+export function useGoals() {
+  return useQuery({ queryKey: ['goals'], queryFn: fetchGoals, staleTime: 30_000, refetchInterval: 60_000 })
 }
 
 // --- Dashboard cards ---
