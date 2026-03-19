@@ -1,4 +1,4 @@
-import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, BacklogItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
+import type { SpaceOverview, SpaceDetail, Task, Escalation, ContextFile, ProjectDocument, ScheduleData, ScheduledJob, ActivityBucket, SkillInfo, AgentInfo, HookInfo, PluginInfo, MarketplaceInfo, PluginDetail, SkillDetail, AgentDetail, SessionSummary, SuperbotSkill, SuperbotSkillDetail, InboxMessage, DashboardConfig, TodoItem, BacklogItem, PluginCredentialStatus, KnowledgeGroup, ActiveWorker, CardDefinition, CardItem, Goal, SuperbotManifest, SkillSettingsResponse, SkillScheduleInfo } from './types'
 
 export type { PluginDetail }
 
@@ -873,6 +873,13 @@ export async function fetchLatestFiles(): Promise<LatestFile[]> {
 
 export async function fetchFileContent(path: string): Promise<ContextFile> {
   return fetchJson<ContextFile>(`/file-content?path=${encodeURIComponent(path)}`)
+}
+
+// --- Goals (cross-space) ---
+
+export async function fetchGoals(): Promise<Goal[]> {
+  const data = await fetchJson<{ goals: Goal[] }>('/goals')
+  return data.goals
 }
 
 // --- Dashboard cards ---

@@ -59,6 +59,7 @@ import {
   fetchSkillManifests,
   fetchSpaceSchedule,
   fetchUploads,
+  fetchGoals,
 } from '@/lib/api'
 import type { DashboardConfig, TodoItem, BacklogItem } from '@/lib/types'
 
@@ -496,6 +497,12 @@ export function useUploads(limit = 100, offset = 0) {
     queryFn: () => fetchUploads(limit, offset),
     staleTime: 30_000,
   })
+}
+
+// --- Goals (cross-space) ---
+
+export function useGoals() {
+  return useQuery({ queryKey: ['goals'], queryFn: fetchGoals, staleTime: 30_000, refetchInterval: 60_000 })
 }
 
 // --- Dashboard cards ---

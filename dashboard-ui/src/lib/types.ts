@@ -309,6 +309,19 @@ export interface KnowledgeGroup {
   files: KnowledgeFile[]
 }
 
+// --- Goals ---
+
+export interface Goal {
+  id: string
+  title: string
+  status: string
+  progress?: string
+  dueDate?: string
+  notes?: string
+  space?: string
+  createdAt?: string
+}
+
 // --- Dashboard cards ---
 
 export interface CardAction {
