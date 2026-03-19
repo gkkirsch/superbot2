@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Pause, PenLine, Loader2, Play, Trash2, Plus, X, Target, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, Pause, PenLine, Loader2, Play, Plus, Target, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
 import { useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem, useSpaces, useGoals } from '@/hooks/useSpaces'
 import type { CardDefinition, CardItem, Goal } from '@/lib/types'
 
@@ -60,7 +60,7 @@ interface GoalItemProps {
   isPending: boolean
 }
 
-function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
+function GoalItem({ item, onAction, onDelete: _onDelete, isPending }: GoalItemProps) {
   const [editing, setEditing] = useState(false)
   const [editNotes, setEditNotes] = useState(item.notes || '')
   const [editProgress, setEditProgress] = useState(item.progress || '')
@@ -77,10 +77,6 @@ function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
       onAction(item.id, updates)
     }
     setEditing(false)
-  }
-
-  const handleDelete = () => {
-    onDelete(item.id)
   }
 
   const borderColor = item.status === 'completed'
