@@ -23,7 +23,7 @@
     "productName": "Superbot2",
     "publish": {
       "provider": "github",
-      "owner": "your-username",
+      "owner": "gkkirsch",
       "repo": "superbot2"
     },
     "mac": {

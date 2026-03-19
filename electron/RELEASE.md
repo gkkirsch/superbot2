@@ -4,7 +4,7 @@
 
 - `gh` CLI authenticated (`gh auth status`)
 - `electron-builder` installed (`npm install` in `electron/`)
-- Repo is public at `github.com/your-username/superbot2`
+- Repo is public at `github.com/gkkirsch/superbot2`
 
 ## Steps
 
@@ -27,7 +27,7 @@
 
 4. **Verify the release** at:
    ```
-   https://github.com/your-username/superbot2/releases
+   https://github.com/gkkirsch/superbot2/releases
    ```
 
 ## What Gets Published
