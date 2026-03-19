@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>superbot2 — Autonomous AI Project Management</title>
-  <meta name="description" content="A persistent AI system that manages a portfolio of software projects autonomously. Orchestrator, space workers, dashboard, and more.">
+  <title>superbot2 — Autonomous AI That Runs Your Projects While You Sleep</title>
+  <meta name="description" content="A persistent multi-agent AI system built on Claude Code. Orchestrates workers, ships code, manages social media, handles escalations, and self-improves — 24/7.">
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -122,7 +122,7 @@
       <div class="hidden md:flex items-center gap-6 text-sm text-stone">
         <a href="#features" class="hover:text-parchment transition-colors">Features</a>
         <a href="#architecture" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" class="hover:text-parchment transition-colors">Dashboard</a>
+        <a href="#how-it-works" class="hover:text-parchment transition-colors">How It Works</a>
         <a href="#install" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/your-username/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -139,7 +139,7 @@
       <div class="flex flex-col px-6 py-4 gap-3 text-sm text-stone">
         <a href="#features" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Features</a>
         <a href="#architecture" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Architecture</a>
-        <a href="#dashboard" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Dashboard</a>
+        <a href="#how-it-works" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">How It Works</a>
         <a href="#install" onclick="closeMobileNav()" class="hover:text-parchment transition-colors">Install</a>
         <a href="https://github.com/your-username/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
       </div>
@@ -149,13 +149,13 @@
   <!-- Hero -->
   <section id="hero" class="min-h-screen flex items-center justify-center px-6 pt-20">
     <div class="max-w-3xl text-center fade-up">
-      <p class="font-mono text-sand text-sm tracking-widest uppercase mb-6">Autonomous AI Project Management</p>
+      <p class="font-mono text-sand text-sm tracking-widest uppercase mb-6">Autonomous Multi-Agent System</p>
       <h1 class="font-mono font-bold text-4xl md:text-6xl text-parchment mb-6 leading-tight">
         superbot2
       </h1>
       <p class="text-lg md:text-xl text-stone max-w-2xl mx-auto mb-10 leading-relaxed">
-        A persistent AI system that manages a portfolio of software projects autonomously.
-        Orchestrator spawns workers. Workers ship code. You review the results.
+        A persistent AI system built on Claude Code that manages your entire project portfolio.
+        It spawns workers, ships code, drafts content, handles escalations, and self-improves &mdash; while you sleep.
       </p>
       <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
         <a href="#install" class="bg-sand text-ink font-mono font-bold px-8 py-3 rounded-lg hover:bg-sand/90 transition-colors">
@@ -172,63 +172,63 @@
   <section id="features" class="px-6 py-24">
     <div class="max-w-5xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Features</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">Everything you need to run an autonomous software development operation.</p>
+      <p class="text-stone text-center mb-16 max-w-xl mx-auto">Everything you need to run an autonomous operation across software, content, and business.</p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <!-- Spaces -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x25A1;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Spaces</h3>
-          <p class="text-stone text-sm leading-relaxed">Isolated project areas, each with its own plans, tasks, knowledge, and escalations.</p>
+          <p class="text-stone text-sm leading-relaxed">Isolated work areas for each project. Plans, tasks, knowledge, and escalations &mdash; all scoped and organized.</p>
         </div>
 
         <!-- Orchestrator -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x2B21;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Orchestrator</h3>
-          <p class="text-stone text-sm leading-relaxed">Central brain that triages work, spawns space workers, and coordinates across projects.</p>
+          <p class="text-stone text-sm leading-relaxed">The central brain. Reads your portfolio, triages work, spawns workers, makes decisions, and only escalates what it can't resolve.</p>
         </div>
 
         <!-- Dashboard -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x25C8;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Dashboard</h3>
-          <p class="text-stone text-sm leading-relaxed">Real-time web UI with chat, escalation management, scheduling, and system pulse.</p>
+          <p class="text-stone text-sm leading-relaxed">Web UI for approving content drafts, resolving escalations, chatting with the orchestrator, and monitoring system activity in real time.</p>
         </div>
 
-        <!-- Hooks -->
+        <!-- Escalations -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x2693;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Hooks</h3>
-          <p class="text-stone text-sm leading-relaxed">PM discipline enforcement. Workers can't go idle without updating tasks, distilling knowledge, and reporting.</p>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Escalations</h3>
+          <p class="text-stone text-sm leading-relaxed">Workers escalate decisions they can't make. You resolve them from the dashboard. Auto-triage rules learn your preferences over time.</p>
         </div>
 
         <!-- Knowledge -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x2261;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Knowledge</h3>
-          <p class="text-stone text-sm leading-relaxed">Persistent memory across sessions. Conventions, decisions, patterns, and research — nothing gets lost.</p>
+          <p class="text-stone text-sm leading-relaxed">Persistent memory across sessions. Conventions, decisions, patterns, and research survive restarts. Nothing gets lost.</p>
         </div>
 
-        <!-- Skills -->
+        <!-- Skills & Plugins -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x2726;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Skills</h3>
-          <p class="text-stone text-sm leading-relaxed">Reusable capabilities: TDD, systematic debugging, brainstorming, implementation pipelines, and more.</p>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Skills & Plugins</h3>
+          <p class="text-stone text-sm leading-relaxed">Extensible capability system. TDD, debugging, brainstorming, browser automation, social media posting &mdash; install from a marketplace or build your own.</p>
         </div>
 
-        <!-- Scheduled Jobs -->
+        <!-- Scheduler -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x23F0;</div>
-          <h3 class="font-mono text-sand text-sm font-bold mb-2">Scheduled Jobs</h3>
-          <p class="text-stone text-sm leading-relaxed">Cron-like scheduler runs heartbeats, self-improvement analysis, and custom recurring tasks.</p>
+          <h3 class="font-mono text-sand text-sm font-bold mb-2">Scheduler</h3>
+          <p class="text-stone text-sm leading-relaxed">Cron-like job runner for heartbeats, content schedules, self-improvement analysis, and any recurring task you define.</p>
         </div>
 
         <!-- Self-Improvement -->
         <div class="feature-card border border-border-custom bg-surface/30 rounded-lg p-6">
           <div class="text-2xl mb-3">&#x21BB;</div>
           <h3 class="font-mono text-sand text-sm font-bold mb-2">Self-Improvement</h3>
-          <p class="text-stone text-sm leading-relaxed">Analyzes its own conversation logs and suggests improvements to skills, hooks, and workflows.</p>
+          <p class="text-stone text-sm leading-relaxed">Analyzes its own conversation logs, identifies failure patterns, and rewrites its skills, hooks, and workflows to get better every cycle.</p>
         </div>
       </div>
     </div>
@@ -238,7 +238,7 @@
   <section id="architecture" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-4xl mx-auto fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Architecture</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A multi-agent system where the orchestrator delegates work to specialized space workers.</p>
+      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A multi-agent system where the orchestrator delegates work to specialized space workers, each operating in an isolated project context.</p>
 
       <!-- Diagram -->
       <div class="flex flex-col items-center gap-0">
@@ -246,7 +246,7 @@
         <!-- Orchestrator -->
         <div class="arch-node border-sand/60 w-64">
           <div class="font-mono text-sand text-sm font-bold">Orchestrator</div>
-          <div class="text-stone text-xs mt-1">Triages &middot; Dispatches &middot; Coordinates</div>
+          <div class="text-stone text-xs mt-1">Triages &middot; Dispatches &middot; Decides</div>
         </div>
 
         <!-- Connector down -->
@@ -264,16 +264,16 @@
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
                 <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">meta</div>
+                <div class="text-stone text-xs mt-1">saas-product</div>
               </div>
               <div class="arch-connector h-6"></div>
               <div class="arch-arrow"></div>
               <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">Meta Space</div>
+                <div class="font-mono text-parchment text-xs font-bold mb-2">SaaS Space</div>
                 <div class="flex flex-wrap gap-1 justify-center">
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">dashboard</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">landing-page</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">dev-workflow</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">api</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">billing</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">onboarding</span>
                 </div>
               </div>
             </div>
@@ -282,15 +282,15 @@
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
                 <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">api</div>
+                <div class="text-stone text-xs mt-1">social-media</div>
               </div>
               <div class="arch-connector h-6"></div>
               <div class="arch-arrow"></div>
               <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">API Space</div>
+                <div class="font-mono text-parchment text-xs font-bold mb-2">Social Space</div>
                 <div class="flex flex-wrap gap-1 justify-center">
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">endpoints</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">auth</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">drafts</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">engagement</span>
                 </div>
               </div>
             </div>
@@ -299,15 +299,15 @@
             <div class="flex flex-col items-center gap-0">
               <div class="arch-node border-sand/40 w-full">
                 <div class="font-mono text-parchment text-xs font-bold">Space Worker</div>
-                <div class="text-stone text-xs mt-1">frontend</div>
+                <div class="text-stone text-xs mt-1">meta</div>
               </div>
               <div class="arch-connector h-6"></div>
               <div class="arch-arrow"></div>
               <div class="arch-node border-border-custom bg-surface/50 w-full mt-2">
-                <div class="font-mono text-parchment text-xs font-bold mb-2">Frontend Space</div>
+                <div class="font-mono text-parchment text-xs font-bold mb-2">Meta Space</div>
                 <div class="flex flex-wrap gap-1 justify-center">
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">components</span>
-                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">pages</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">dashboard</span>
+                  <span class="text-[10px] font-mono text-stone bg-stone/10 rounded-full px-2 py-0.5">plugins</span>
                 </div>
               </div>
             </div>
@@ -333,16 +333,34 @@
     </div>
   </section>
 
-  <!-- Dashboard Preview -->
-  <section id="dashboard" class="px-6 py-24 border-t border-border-custom">
+  <!-- How It Works -->
+  <section id="how-it-works" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-5xl mx-auto fade-up-scroll">
-      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">Dashboard</h2>
-      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A real-time web UI for managing escalations, chatting with the orchestrator, and monitoring system health.</p>
+      <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4 text-center">How It Works</h2>
+      <p class="text-stone text-center mb-16 max-w-xl mx-auto">A real-time dashboard for approving content, resolving decisions, and monitoring everything the system does.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-16">
+        <div class="text-center">
+          <div class="font-mono text-sand text-4xl font-bold mb-3">1</div>
+          <h3 class="font-mono text-parchment text-sm font-bold mb-2">Define Your Spaces</h3>
+          <p class="text-stone text-sm leading-relaxed">Create spaces for each domain &mdash; a SaaS product, social media presence, client project. Each gets its own plans, tasks, and knowledge.</p>
+        </div>
+        <div class="text-center">
+          <div class="font-mono text-sand text-4xl font-bold mb-3">2</div>
+          <h3 class="font-mono text-parchment text-sm font-bold mb-2">The Orchestrator Works</h3>
+          <p class="text-stone text-sm leading-relaxed">The orchestrator reads your portfolio, spawns workers for each space, and coordinates across projects. Heartbeat monitors detect changes and trigger work.</p>
+        </div>
+        <div class="text-center">
+          <div class="font-mono text-sand text-4xl font-bold mb-3">3</div>
+          <h3 class="font-mono text-parchment text-sm font-bold mb-2">You Review Results</h3>
+          <p class="text-stone text-sm leading-relaxed">Workers escalate decisions they can't make. You approve content drafts, resolve architectural questions, and watch the system get smarter.</p>
+        </div>
+      </div>
 
       <div class="screenshot-placeholder rounded-lg aspect-video flex items-center justify-center max-w-4xl mx-auto">
         <div class="text-center">
-          <div class="text-stone/40 text-sm font-mono mb-2">[ Dashboard Screenshot ]</div>
-          <div class="text-stone/25 text-xs">3-column layout: Escalations &middot; Chat &middot; System Status</div>
+          <div class="text-stone/40 text-sm font-mono mb-2">[ Dashboard ]</div>
+          <div class="text-stone/25 text-xs">Escalations &middot; Chat &middot; Approvals &middot; Activity Pulse &middot; Scheduling</div>
         </div>
       </div>
     </div>
@@ -352,7 +370,7 @@
   <section id="install" class="px-6 py-24 border-t border-border-custom">
     <div class="max-w-3xl mx-auto text-center fade-up-scroll">
       <h2 class="font-mono text-2xl md:text-3xl text-parchment mb-4">Install</h2>
-      <p class="text-stone mb-10">One command. That's it.</p>
+      <p class="text-stone mb-10">One command. Clones the repo, builds the dashboard, deploys hooks and skills, starts everything.</p>
 
       <div class="relative bg-codebg border border-border-custom rounded-lg p-6 text-left max-w-2xl mx-auto">
         <div class="flex items-center justify-between gap-4">
@@ -370,8 +388,35 @@
       </div>
 
       <p class="text-stone/60 text-xs mt-6">
-        Requires: git, node, jq, and <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener" class="text-sand/60 hover:text-sand transition-colors">Claude Code</a>
+        Requires: macOS, git, node v18+, jq. <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener" class="text-sand/60 hover:text-sand transition-colors">Claude Code</a> is installed automatically if missing.
       </p>
+
+      <div class="mt-12 text-left max-w-2xl mx-auto">
+        <h3 class="font-mono text-parchment text-sm font-bold mb-4">After install:</h3>
+        <div class="bg-codebg border border-border-custom rounded-lg p-4 space-y-2">
+          <div class="flex items-start gap-3">
+            <span class="text-stone/40 text-xs font-mono shrink-0 mt-0.5">$</span>
+            <div>
+              <code class="text-sand text-sm font-mono">superbot2</code>
+              <span class="text-stone/50 text-xs ml-3">Start the orchestrator + dashboard</span>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <span class="text-stone/40 text-xs font-mono shrink-0 mt-0.5">$</span>
+            <div>
+              <code class="text-sand text-sm font-mono">superbot2 update</code>
+              <span class="text-stone/50 text-xs ml-3">Pull latest code, redeploy</span>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <span class="text-stone/40 text-xs font-mono shrink-0 mt-0.5">$</span>
+            <div>
+              <code class="text-sand text-sm font-mono">superbot2 setup</code>
+              <span class="text-stone/50 text-xs ml-3">Re-run initial setup</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -380,6 +425,7 @@
     <div class="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
       <div class="font-mono text-sm text-stone">
         <span class="text-parchment">superbot2</span>
+        <span class="text-stone/40 ml-2">Built on Claude Code</span>
       </div>
       <div class="flex items-center gap-6 text-sm text-stone">
         <a href="https://github.com/your-username/superbot2" target="_blank" rel="noopener" class="hover:text-parchment transition-colors">GitHub</a>
