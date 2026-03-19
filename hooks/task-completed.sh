@@ -98,8 +98,15 @@ if [[ -x "$EVAL_SCRIPT" && -n "$SPACE" && -n "$PROJECT" ]]; then
   [[ -n "$TRANSCRIPT" && -f "$TRANSCRIPT" ]] && EVAL_ARGS+=(--transcript "$TRANSCRIPT")
   [[ -n "$EVAL_CWD" ]] && EVAL_ARGS+=(--cwd "$EVAL_CWD")
 
-  EVAL_OUTPUT=$(bash "$EVAL_SCRIPT" "${EVAL_ARGS[@]}" 2>/dev/null)
+  EVAL_STDERR=$(mktemp)
+  trap "rm -f '$EVAL_STDERR'" EXIT
+  EVAL_OUTPUT=$(bash "$EVAL_SCRIPT" "${EVAL_ARGS[@]}" 2>"$EVAL_STDERR")
   EVAL_EXIT=$?
+
+  # If evaluator crashed with no JSON output, surface the error
+  if [[ $EVAL_EXIT -ne 0 && -z "$EVAL_OUTPUT" && -s "$EVAL_STDERR" ]]; then
+    MISSING+=("Checklist evaluator error: $(head -1 "$EVAL_STDERR")")
+  fi
 
   if [[ $EVAL_EXIT -ne 0 && -n "$EVAL_OUTPUT" ]]; then
     # Parse failures from the JSON output

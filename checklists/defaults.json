@@ -23,7 +23,7 @@
       "id": "committed",
       "label": "Work committed to git",
       "check": "command",
-      "command": "test -z \"$(git status --porcelain)\"",
+      "command": "git diff --quiet && git diff --cached --quiet",
       "required": true,
       "appliesTo": ["*"]
     },
@@ -31,7 +31,7 @@
       "id": "on-branch",
       "label": "On feature branch (not main)",
       "check": "command",
-      "command": "test \"$(git branch --show-current)\" != 'main'",
+      "command": "branch=$(git branch --show-current) && test -n \"$branch\" && test \"$branch\" != 'main'",
       "required": true,
       "appliesTo": ["*"]
     },

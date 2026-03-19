@@ -18,6 +18,8 @@
 #   0 = all required checks passed (or skipped)
 #   1 = one or more required checks failed
 
+# Note: -e (errexit) is deliberately omitted — we need to continue after
+# individual check failures to collect all results before reporting.
 set -uo pipefail
 
 DIR="${SUPERBOT2_HOME:-$HOME/.superbot2}"
