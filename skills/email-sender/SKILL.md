@@ -51,14 +51,14 @@ Requires `gog` CLI v0.9.0+ authenticated with a Gmail account.
 ```bash
 # Check gog is installed and authenticated
 gog --version
-gog gmail search "in:sent" --account=ibekidkirsch@gmail.com --json 2>&1 | head -5
+gog gmail search "in:sent" --account=YOUR_EMAIL@example.com --json 2>&1 | head -5
 ```
 
 If not authenticated, run `gog auth login` first.
 
 ## Account
 
-All commands use `--account=ibekidkirsch@gmail.com`.
+All commands use `--account=YOUR_EMAIL@example.com`.
 
 ## Actions
 
@@ -84,7 +84,7 @@ The user provides recipient, subject, and body (or a template name + variables).
 ```bash
 # Plain text email
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="recipient@example.com" \
   --subject="Subject line" \
   --body="Email body text" \
@@ -92,7 +92,7 @@ gog gmail send \
 
 # HTML email
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="recipient@example.com" \
   --subject="Subject line" \
   --body-html="<p>HTML body</p>" \
@@ -100,7 +100,7 @@ gog gmail send \
 
 # With attachments
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="recipient@example.com" \
   --subject="Subject line" \
   --body="Body text" \
@@ -109,7 +109,7 @@ gog gmail send \
 
 # With CC/BCC
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="main@example.com" \
   --cc="cc@example.com" \
   --bcc="bcc@example.com" \
@@ -119,7 +119,7 @@ gog gmail send \
 
 # With open tracking
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="recipient@example.com" \
   --subject="Subject" \
   --body="Body" \
@@ -162,7 +162,7 @@ Create a Gmail draft for review without sending.
 
 ```bash
 gog gmail drafts create \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="recipient@example.com" \
   --subject="Subject line" \
   --body="Email body text" \
@@ -186,7 +186,7 @@ JSONL
 ### Listing drafts
 
 ```bash
-gog gmail drafts list --account=ibekidkirsch@gmail.com --json
+gog gmail drafts list --account=YOUR_EMAIL@example.com --json
 ```
 
 ### Sending a draft
@@ -194,7 +194,7 @@ gog gmail drafts list --account=ibekidkirsch@gmail.com --json
 When the user approves a draft:
 
 ```bash
-gog gmail drafts send <draftId> --account=ibekidkirsch@gmail.com --json
+gog gmail drafts send <draftId> --account=YOUR_EMAIL@example.com --json
 ```
 
 Then log the send to `sent.jsonl` and update the draft status.
@@ -414,7 +414,7 @@ Grant
 BODY
 
 gog gmail send \
-  --account=ibekidkirsch@gmail.com \
+  --account=YOUR_EMAIL@example.com \
   --to="jane@example.com" \
   --subject="Hello" \
   --body-file="$TMPFILE" \
