@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb } from 'lucide-react'
+import { MessageCircleQuestion, Clock, Activity, Plus, ListChecks, Zap, MoreHorizontal, Check, Lightbulb, Target } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { SectionHeader } from '@/components/SectionHeader'
 import { useHeartbeatConfig, useSystemStatus, useEscalations, useTodos, useAllBacklog, useCards, useCardItems } from '@/hooks/useSpaces'
@@ -17,6 +17,7 @@ import { CardSkillSection } from '@/features/CardSection'
 import { getRendererOrDefault } from '@/features/cardRenderers'
 import { LatestFilesSection } from '@/features/LatestFilesSection'
 import { TipsRotator } from '@/features/TipsRotator'
+import { GoalSection } from '@/features/GoalSection'
 import { Send, FileCode, Settings, RefreshCw } from 'lucide-react'
 import { useRefreshCardItems } from '@/hooks/useSpaces'
 // Register all built-in card renderers on import
@@ -370,6 +371,18 @@ function LatestFilesDashboardSection() {
   )
 }
 
+function GoalsDashboardSection() {
+  const [collapsed, toggle] = useCollapsedState('goals', true)
+  return (
+    <section className="group" data-section="goals">
+      <SectionHeader title="Goals" icon={Target} collapsed={collapsed} onToggle={toggle} />
+      <CollapsibleContent collapsed={collapsed}>
+        <GoalSection />
+      </CollapsibleContent>
+    </section>
+  )
+}
+
 function TipsDashboardSection() {
   const [collapsed, toggle] = useCollapsedState('tips')
   return (
@@ -410,7 +423,11 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
     id: 'todos',
     Component: TodoDashboardSection,
   },
-'cards': {
+'goals': {
+    id: 'goals',
+    Component: GoalsDashboardSection,
+  },
+  'cards': {
     id: 'cards',
     Component: CardsDashboardSection,
   },
@@ -433,6 +450,6 @@ export const SECTION_REGISTRY: Record<string, SectionDef> = {
 export const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   leftColumn: ['chat'],
   centerColumn: [],
-  rightColumn: ['pulse', 'cards', 'escalations', 'latest-files', 'schedule', 'todos'],
+  rightColumn: ['pulse', 'goals', 'cards', 'escalations', 'latest-files', 'schedule', 'todos'],
   hidden: ['recent-activity', 'tips'],
 }
