@@ -45,11 +45,40 @@ const PLATFORM_COLORS: Record<string, string> = {
   linkedin: 'bg-sky-500/20 text-sky-400',
 }
 
+const PLATFORM_CHAR_LIMITS: Record<string, number> = {
+  x: 280,
+  twitter: 280,
+  instagram: 2200,
+  linkedin: 3000,
+}
+
+const PLATFORM_ACCENT: Record<string, string> = {
+  facebook: 'border-blue-500/20',
+  x: 'border-stone/20',
+  twitter: 'border-stone/20',
+  instagram: 'border-pink-500/20',
+  linkedin: 'border-sky-500/20',
+}
+
 function PlatformBadge({ platform }: { platform: string }) {
   const colors = PLATFORM_COLORS[platform.toLowerCase()] || 'bg-stone/20 text-stone'
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider ${colors}`}>
       {platform}
+    </span>
+  )
+}
+
+function CharCount({ text, platform }: { text: string; platform?: string }) {
+  if (!platform) return null
+  const limit = PLATFORM_CHAR_LIMITS[platform.toLowerCase()]
+  if (!limit) return null
+  const len = text.length
+  const pct = len / limit
+  const color = pct > 1 ? 'text-ember' : pct > 0.9 ? 'text-sand' : 'text-stone/40'
+  return (
+    <span className={`text-[10px] tabular-nums ${color}`}>
+      {len}/{limit}
     </span>
   )
 }
@@ -154,6 +183,10 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
   const defaultFilter = card.defaultFilter?.status || 'pending'
   const showActions = item.status === defaultFilter && !editingField
 
+  const isSocialMedia = !!item.platform
+  const bodyText = bodyField ? String(item[bodyField] || '') : ''
+  const accentBorder = item.platform ? (PLATFORM_ACCENT[item.platform.toLowerCase()] || 'border-stone/20') : ''
+
   return (
     <div className={`rounded-lg border p-3 transition-all ${statusColors[item.status] || 'border-border-custom'}`}>
       {/* Header: platform/title + subtitle + timestamp */}
@@ -164,8 +197,29 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
             <span className="text-xs text-stone/60 truncate">{String(item[subtitleField])}</span>
           )}
         </div>
-        <span className="text-[10px] text-stone/40 shrink-0">{timeAgo(item.createdAt)}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {isSocialMedia && <CharCount text={bodyText} platform={item.platform} />}
+          <span className="text-[10px] text-stone/40">{timeAgo(item.createdAt)}</span>
+        </div>
       </div>
+
+      {/* Original post excerpt (for replies/comments) */}
+      {item.excerpt && (
+        <div className={`rounded-md border-l-2 ${accentBorder} bg-surface/40 px-3 py-2 mb-2`}>
+          <div className="text-[10px] text-stone/40 uppercase tracking-wider mb-0.5">Replying to</div>
+          <p className="text-[11px] text-stone/60 leading-relaxed line-clamp-3">{item.excerpt}</p>
+          {item.postUrl && (
+            <a
+              href={String(item.postUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-[10px] text-stone/40 hover:text-sand transition-colors mt-1"
+            >
+              View original <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Body: editable field or display */}
       {editingField === bodyField ? (
@@ -177,37 +231,46 @@ function CardItemRow({ item, card, onAction, isPending }: CardItemRowProps) {
             rows={4}
             autoFocus
           />
-          <div className="flex gap-1.5 mt-1.5">
-            <button
-              onClick={handleSaveEdit}
-              disabled={isPending}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-sand/20 text-sand hover:bg-sand/30 transition-colors"
-            >
-              <Check className="h-3 w-3" /> Save
-            </button>
-            <button
-              onClick={handleCancelEdit}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
-            >
-              <X className="h-3 w-3" /> Cancel
-            </button>
+          <div className="flex items-center justify-between mt-1.5">
+            <CharCount text={editValue} platform={item.platform} />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleSaveEdit}
+                disabled={isPending}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-sand/20 text-sand hover:bg-sand/30 transition-colors"
+              >
+                <Check className="h-3 w-3" /> Save
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded bg-surface text-stone hover:bg-surface/80 transition-colors"
+              >
+                <X className="h-3 w-3" /> Cancel
+              </button>
+            </div>
           </div>
+        </div>
+      ) : isSocialMedia ? (
+        <div className={`rounded-md border ${accentBorder} bg-surface/30 px-3 py-2.5 mb-2`}>
+          <p className="text-xs text-parchment/90 leading-relaxed whitespace-pre-wrap">
+            {bodyText}
+          </p>
         </div>
       ) : (
         <p className="text-xs text-parchment/90 leading-relaxed mb-2 whitespace-pre-wrap">
-          {bodyField ? String(item[bodyField] || '') : ''}
+          {bodyText}
         </p>
       )}
 
-      {/* Meta + post link */}
-      {(metaField && item[metaField]) || item.postUrl ? (
+      {/* Meta + post link (only if no excerpt already showed the link) */}
+      {(metaField && item[metaField]) || (item.postUrl && !item.excerpt) ? (
         <div className="flex items-start justify-between gap-2 mb-2">
           {metaField && !!item[metaField] && (
             <div className="text-[10px] text-stone/50 italic border-l-2 border-stone/20 pl-2 min-w-0">
               {String(item[metaField])}
             </div>
           )}
-          {item.postUrl && (
+          {item.postUrl && !item.excerpt && (
             <a
               href={String(item.postUrl)}
               target="_blank"
