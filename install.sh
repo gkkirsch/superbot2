@@ -2,7 +2,7 @@
 set -e
 
 # Superbot2 installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/your-username/superbot2/main/install.sh | bash
 
 SUPERBOT2_NAME="${SUPERBOT2_NAME:-superbot2}"
 INSTALL_DIR="${SUPERBOT2_APP_DIR:-$HOME/.${SUPERBOT2_NAME}-app}"
@@ -125,7 +125,7 @@ else
     rm -rf "$INSTALL_DIR"
   fi
   echo "Cloning superbot2 to $INSTALL_DIR..."
-  git clone https://github.com/gkkirsch/superbot2.git "$INSTALL_DIR"
+  git clone https://github.com/your-username/superbot2.git "$INSTALL_DIR"
 fi
 
 # --- Run setup ---

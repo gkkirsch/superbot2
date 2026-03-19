@@ -64,7 +64,7 @@ if [[ ! -f "$TEAM_DIR/config.json" ]]; then
       "name": "team-lead",
       "agentType": "team-lead",
       "joinedAt": $NOW_MS,
-      "cwd": "$HOME/dev",
+      "cwd": "$HOME",
       "subscriptions": []
     },
     {
@@ -72,7 +72,7 @@ if [[ ! -f "$TEAM_DIR/config.json" ]]; then
       "name": "heartbeat",
       "agentType": "heartbeat",
       "joinedAt": $NOW_MS,
-      "cwd": "$HOME/dev",
+      "cwd": "$HOME",
       "subscriptions": [],
       "isBackground": true
     }

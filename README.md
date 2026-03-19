@@ -5,7 +5,7 @@ An autonomous AI orchestrator built on [Claude Code](https://claude.ai/). Superb
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/your-username/superbot2/main/install.sh | bash
 ```
 
 This clones the repo, builds the dashboard, deploys hooks/skills/agents, and opens the dashboard in your browser. After install, restart your terminal and run `superbot2` to start the full system.
@@ -79,7 +79,7 @@ superbot2 help
 
 ```bash
 # Install code to a custom directory
-SUPERBOT2_APP_DIR=~/my-superbot2 curl -fsSL https://raw.githubusercontent.com/gkkirsch/superbot2/main/install.sh | bash
+SUPERBOT2_APP_DIR=~/my-superbot2 curl -fsSL https://raw.githubusercontent.com/your-username/superbot2/main/install.sh | bash
 
 # Use a custom runtime directory
 SUPERBOT2_HOME=/tmp/superbot2-test superbot2

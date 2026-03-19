@@ -6,12 +6,12 @@
 #
 # Output:
 #   Skill Library:
-#     social-media-approvals  → hostreply, x-authority
-#     supercharge-api         → supercharge
+#     social-media-approvals  → space-a, space-b
+#     my-custom-skill         → my-project
 #     apple-notes             → (not installed)
 #
 #   Plugin Library:
-#     social-media-approvals  → hostreply, x-authority
+#     social-media-manager    → space-a, space-b
 #     frontend-slides         → (not installed)
 #
 # Install detection:
