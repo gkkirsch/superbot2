@@ -141,6 +141,8 @@ Task tool:
 
 This applies to ALL Task tool calls: Explore, code-reviewer, general-purpose, and any other subagent type.
 
+**NEVER pass `team_name` to the Task tool.** Only the orchestrator (team lead) spawns teammates. If you pass `team_name`, you create a full teammate that persists in the team config and can self-replicate — causing zombie worker chains. Use regular subagents (no `team_name`) for code review, exploration, and implementation dispatch. They run, complete, and terminate cleanly.
+
 ### Coding Discipline
 
 - **`superpowers:test-driven-development`** — Use when implementing features or fixing bugs. Write the test first, watch it fail, write minimal code to pass.
