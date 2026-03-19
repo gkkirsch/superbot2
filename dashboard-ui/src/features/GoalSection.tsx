@@ -64,7 +64,6 @@ function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
   const [editing, setEditing] = useState(false)
   const [editNotes, setEditNotes] = useState(item.notes || '')
   const [editProgress, setEditProgress] = useState(item.progress || '')
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const handleComplete = () => onAction(item.id, { status: 'completed' })
   const handlePause = () => onAction(item.id, { status: 'paused' })
@@ -81,12 +80,7 @@ function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
   }
 
   const handleDelete = () => {
-    if (confirmingDelete) {
-      onDelete(item.id)
-      setConfirmingDelete(false)
-    } else {
-      setConfirmingDelete(true)
-    }
+    onDelete(item.id)
   }
 
   const borderColor = item.status === 'completed'
@@ -102,43 +96,17 @@ function GoalItem({ item, onAction, onDelete, isPending }: GoalItemProps) {
       {/* Title + Delete */}
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-sm text-parchment font-medium leading-snug">{item.title || ''}</p>
-        {confirmingDelete ? (
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={handleDelete}
-              disabled={isPending}
-              className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-            >
-              Delete
-            </button>
-            <button
-              onClick={() => setConfirmingDelete(false)}
-              className="p-0.5 text-stone/40 hover:text-stone transition-colors"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={handleDelete}
-            disabled={isPending}
-            className="p-1 text-stone/30 hover:text-red-400 transition-colors shrink-0 opacity-0 group-hover/goal:opacity-100 focus:opacity-100"
-            title="Delete goal"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
       </div>
 
       {/* Badges row */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <StatusBadge status={item.status} />
-        {!!item.space && <SpaceBadge space={String(item.space)} />}
-        {!!item.progress && (
-          <span className="text-[10px] text-stone/60">{String(item.progress)}</span>
+        {item.space && <SpaceBadge space={item.space} />}
+        {item.progress && (
+          <span className="text-[10px] text-stone/60">{item.progress}</span>
         )}
-        {!!item.dueDate && (
-          <span className="text-[10px] text-stone/50">due {String(item.dueDate)}</span>
+        {item.dueDate && (
+          <span className="text-[10px] text-stone/50">due {item.dueDate}</span>
         )}
       </div>
 
