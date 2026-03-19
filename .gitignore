@@ -44,10 +44,7 @@ analysis-history/
 
 # Electron build output
 electron/release/
-electron/dist/*.map
-electron/dist/**/*.map
-electron/dist/*.d.ts
-electron/dist/**/*.d.ts
+electron/dist/
 
 # Cloudflare Wrangler
 .wrangler/
