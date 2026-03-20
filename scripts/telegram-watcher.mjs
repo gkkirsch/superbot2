@@ -59,11 +59,14 @@ let callbackCounter = 0
 // Message ID tracking for reply threading
 // lastUserMessageId: the Telegram message_id of the user's most recent non-command message
 // messageMap: maps inbox index -> Telegram message_id of the bot's sent reply
-// This lets us thread orchestrator replies back to the user's message,
-// and preserve reply context when the user replies to a specific bot message.
+// userMessageAnchors: array of {inboxCountAtSend, telegramMessageId} recording which
+//   user message was active when each inbox reply arrived. Used to thread each
+//   orchestrator reply back to the correct user message instead of always the latest.
 let lastUserMessageId = null
 let messageMap = {} // { inboxIdx: telegramMessageId, ... } + { lastUserMessageId }
+let userMessageAnchors = [] // [{inboxCountAtSend, telegramMessageId}, ...]
 const MAX_MESSAGE_MAP_SIZE = 200 // Keep map bounded
+const MAX_ANCHORS = 200 // Keep anchors bounded
 
 // --- Helpers ---
 
@@ -375,6 +378,7 @@ async function loadMessageMap() {
   const data = await readJsonFile(MESSAGE_MAP_FILE)
   if (data && typeof data === 'object') {
     if (data.lastUserMessageId) lastUserMessageId = data.lastUserMessageId
+    if (Array.isArray(data._userMessageAnchors)) userMessageAnchors = data._userMessageAnchors
     return data
   }
   return {}
@@ -382,7 +386,7 @@ async function loadMessageMap() {
 
 async function saveMessageMap() {
   // Prune old entries to keep the map bounded
-  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId')
+  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId' && k !== '_userMessageAnchors')
   if (keys.length > MAX_MESSAGE_MAP_SIZE) {
     // Keep only the most recent entries (highest numeric keys)
     const numericKeys = keys.filter(k => !isNaN(parseInt(k, 10))).map(Number).sort((a, b) => a - b)
@@ -391,7 +395,12 @@ async function saveMessageMap() {
       delete messageMap[String(k)]
     }
   }
+  // Prune old anchors
+  if (userMessageAnchors.length > MAX_ANCHORS) {
+    userMessageAnchors = userMessageAnchors.slice(-MAX_ANCHORS)
+  }
   messageMap.lastUserMessageId = lastUserMessageId
+  messageMap._userMessageAnchors = userMessageAnchors
   await writeJsonFile(MESSAGE_MAP_FILE, messageMap)
 }
 
@@ -480,19 +489,33 @@ async function handleTextMessage(text, msg) {
   // Track the user's message ID for reply threading
   if (msg && msg.message_id) {
     lastUserMessageId = msg.message_id
-    await saveMessageMap()
   }
 
   // Activate Telegram conversation — set baseline to current inbox count so we
-  // only forward orchestrator replies that arrive AFTER this message
+  // only forward orchestrator replies that arrive AFTER this message.
+  // Also record an anchor linking the current inbox count to this user message
+  // so replies can be threaded back to the correct message.
   try {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
     replyBaseline = orchestratorReplies.length
+    if (msg && msg.message_id) {
+      userMessageAnchors.push({
+        inboxCountAtSend: orchestratorReplies.length,
+        telegramMessageId: msg.message_id,
+      })
+    }
   } catch {
     replyBaseline = lastSentReplyCount
+    if (msg && msg.message_id) {
+      userMessageAnchors.push({
+        inboxCountAtSend: lastSentReplyCount,
+        telegramMessageId: msg.message_id,
+      })
+    }
   }
   lastTelegramMessageTime = Date.now()
+  await saveMessageMap()
 
   // Build the relayed text, prepending reply context if the user replied to a specific message
   const replyContext = msg?.reply_to_message ? buildReplyContext(msg.reply_to_message) : ''
@@ -1004,16 +1027,28 @@ async function checkForReplies() {
 
     const newReplies = orchestratorReplies.slice(startIdx)
 
-    // Use lastUserMessageId for reply threading — the orchestrator reply
-    // should thread back to the user's most recent message
-    const replyToId = lastUserMessageId || null
-
     for (const reply of newReplies) {
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
       // Track the inbox index for this reply (for future reverse-mapping)
       const replyIdx = startIdx + newReplies.indexOf(reply)
+
+      // Find the correct user message to thread this reply to.
+      // Walk the anchors to find the most recent user message sent
+      // BEFORE this inbox index — that's the message that triggered this reply.
+      let replyToId = lastUserMessageId || null
+      if (userMessageAnchors.length > 0) {
+        let bestAnchor = null
+        for (const anchor of userMessageAnchors) {
+          if (anchor.inboxCountAtSend <= replyIdx) {
+            bestAnchor = anchor
+          }
+        }
+        if (bestAnchor) {
+          replyToId = bestAnchor.telegramMessageId
+        }
+      }
 
       // Check for image paths in the message
       const imagePaths = extractImagePaths(text)

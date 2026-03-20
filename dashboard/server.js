@@ -1547,24 +1547,17 @@ app.post('/api/telegram/save', async (req, res) => {
     config.telegram = { ...config.telegram, enabled: true, botToken: botToken.trim() }
     await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
 
-    // Start watcher if not running
+    // Start watcher via watchdog if not running
     const { execSync } = await import('node:child_process')
     let watcherRunning = false
     try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); watcherRunning = true } catch {}
 
     if (!watcherRunning) {
-      const logsDir = join(SUPERBOT_DIR, 'logs')
-      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
-      const watcherLog = join(logsDir, 'telegram-watcher.log')
-      const watcherScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watcher.mjs')
-      const child = spawn('node', [watcherScript], {
+      const watchdogScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watchdog.sh')
+      const child = spawn('bash', [watchdogScript], {
         detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: 'ignore',
       })
-      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
-      child.stdout.pipe(logStream, { end: false })
-      child.stderr.pipe(logStream, { end: false })
-      child.on('close', () => logStream.end())
       child.unref()
       watcherRunning = true
     }
@@ -1588,18 +1581,11 @@ app.post('/api/telegram/start', async (_req, res) => {
     try { execSync('pgrep -f telegram-watcher', { stdio: 'pipe' }); watcherRunning = true } catch {}
 
     if (!watcherRunning) {
-      const logsDir = join(SUPERBOT_DIR, 'logs')
-      if (!existsSync(logsDir)) await mkdir(logsDir, { recursive: true })
-      const watcherLog = join(logsDir, 'telegram-watcher.log')
-      const watcherScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watcher.mjs')
-      const child = spawn('node', [watcherScript], {
+      const watchdogScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watchdog.sh')
+      const child = spawn('bash', [watchdogScript], {
         detached: true,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: 'ignore',
       })
-      const logStream = (await import('node:fs')).createWriteStream(watcherLog, { flags: 'a' })
-      child.stdout.pipe(logStream, { end: false })
-      child.stderr.pipe(logStream, { end: false })
-      child.on('close', () => logStream.end())
       child.unref()
     }
 
@@ -1612,6 +1598,8 @@ app.post('/api/telegram/start', async (_req, res) => {
 app.post('/api/telegram/stop', async (_req, res) => {
   try {
     const { execSync } = await import('node:child_process')
+    // Kill the watchdog first (prevents auto-restart), then the watcher
+    try { execSync('pkill -f telegram-watchdog', { stdio: 'pipe' }) } catch {}
     try { execSync('pkill -f telegram-watcher', { stdio: 'pipe' }) } catch {}
     res.json({ watcherRunning: false })
   } catch (err) {
