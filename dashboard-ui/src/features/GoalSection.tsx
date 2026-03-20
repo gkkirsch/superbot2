@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Check, Pause, PenLine, Loader2, Play, Plus, Target, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
+import { Check, Pause, PenLine, Loader2, Play, Plus, Target, Calendar, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
 import { useCardItems, useSpaceCardItems, useUpdateCardItem, useDeleteCardItem, useCreateCardItem, useSpaces, useGoals } from '@/hooks/useSpaces'
-import type { CardDefinition, CardItem, Goal } from '@/lib/types'
+import type { CardDefinition, CardItem, Goal, GoalProgressEntry } from '@/lib/types'
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   active: { bg: 'bg-sky-500/10', text: 'text-sky-400', dot: 'bg-sky-400' },
@@ -50,6 +50,39 @@ function SpaceBadge({ space }: { space: string }) {
     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-surface text-stone/70 tracking-wider">
       {space}
     </span>
+  )
+}
+
+function formatProgressDate(ts: string): string {
+  const d = new Date(ts)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function ProgressTimeline({ history }: { history: GoalProgressEntry[] }) {
+  if (!history || history.length === 0) return null
+
+  // Show most recent entries (up to 5)
+  const recent = history.slice(-5)
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border-custom/50">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <TrendingUp className="h-3 w-3 text-sky-400/60" />
+        <span className="text-[10px] text-stone/50 uppercase tracking-wider">Progress history</span>
+      </div>
+      <div className="space-y-1">
+        {recent.map((entry, idx) => (
+          <div key={idx} className="flex items-center gap-2 text-[11px]">
+            <span className="text-stone/40 shrink-0 w-[52px]">{formatProgressDate(entry.timestamp)}</span>
+            <span className="h-px flex-1 bg-stone/10 min-w-[8px]" />
+            <span className="text-parchment/80 font-medium shrink-0">{entry.progress}</span>
+          </div>
+        ))}
+      </div>
+      {history.length > 5 && (
+        <p className="text-[10px] text-stone/30 mt-1">+{history.length - 5} earlier updates</p>
+      )}
+    </div>
   )
 }
 
@@ -149,6 +182,11 @@ function GoalItem({ item, onAction, onDelete: _onDelete, isPending }: GoalItemPr
         item.notes && (
           <p className="text-xs text-stone/60 leading-relaxed mb-2">{item.notes}</p>
         )
+      )}
+
+      {/* Progress history */}
+      {!editing && item.progressHistory && item.progressHistory.length > 0 && (
+        <ProgressTimeline history={item.progressHistory} />
       )}
 
       {/* Actions */}
@@ -421,7 +459,9 @@ const PROGRESS_TRUNCATE = 120
 function GoalCard({ goal }: { goal: Goal }) {
   const style = STATUS_STYLES[goal.status] || STATUS_STYLES.active
   const [progressExpanded, setProgressExpanded] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const progressLong = (goal.progress?.length ?? 0) > PROGRESS_TRUNCATE
+  const hasHistory = goal.progressHistory && goal.progressHistory.length > 0
 
   return (
     <div className={`rounded-lg border border-border-custom p-3 ${style.bg}`}>
@@ -438,6 +478,15 @@ function GoalCard({ goal }: { goal: Goal }) {
                 <Calendar className="h-3 w-3" />
                 No deadline
               </span>
+            )}
+            {hasHistory && (
+              <button
+                onClick={() => setHistoryExpanded(!historyExpanded)}
+                className="inline-flex items-center gap-1 text-[10px] text-sky-400/60 hover:text-sky-400 transition-colors"
+              >
+                <TrendingUp className="h-3 w-3" />
+                {goal.progressHistory!.length} update{goal.progressHistory!.length !== 1 ? 's' : ''}
+              </button>
             )}
           </div>
           {goal.progress && (
@@ -456,6 +505,9 @@ function GoalCard({ goal }: { goal: Goal }) {
                 </button>
               )}
             </div>
+          )}
+          {historyExpanded && hasHistory && (
+            <ProgressTimeline history={goal.progressHistory!} />
           )}
         </div>
       </div>

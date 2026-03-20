@@ -311,6 +311,12 @@ export interface KnowledgeGroup {
 
 // --- Goals ---
 
+export interface GoalProgressEntry {
+  progress: string
+  timestamp: string
+  notes?: string
+}
+
 export interface Goal {
   id: string
   title: string
@@ -320,6 +326,7 @@ export interface Goal {
   notes?: string
   space?: string
   createdAt?: string
+  progressHistory?: GoalProgressEntry[]
 }
 
 // --- Dashboard cards ---
@@ -436,6 +443,7 @@ export interface CardItem {
   progress?: string
   dueDate?: string
   notes?: string
+  progressHistory?: GoalProgressEntry[]
   [key: string]: unknown
 }
 

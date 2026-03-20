@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Trash2, Clock, Plus, ChevronDown } from 'lucide-react'
+import { X, Trash2, Clock, Plus, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSchedule, useSkillSchedules, useToggleSkillSchedule, useSpaceSchedule } from '@/hooks/useSpaces'
 import { addScheduleJob, deleteScheduleJob, updateScheduleJob, addSpaceScheduleJob, deleteSpaceScheduleJob, updateSpaceScheduleJob } from '@/lib/api'
@@ -44,6 +44,7 @@ interface TimelineItem {
   minutes: number
   isPast: boolean
   isNext: boolean
+  didRun: boolean
 }
 
 const DAY_MAP = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
@@ -53,7 +54,14 @@ function dedupTimes(times: string[]): string[] {
   return [...new Set(times)].sort()
 }
 
-function buildTimeline(schedule: ScheduledJob[]): TimelineItem[] {
+/** Check if a job ran today at the given time based on lastRun data */
+function didJobRun(jobName: string, time: string, lastRun: Record<string, string>): boolean {
+  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const key = `${jobName}:${today}T${time}`
+  return key in lastRun
+}
+
+function buildTimeline(schedule: ScheduledJob[], lastRun: Record<string, string> = {}): TimelineItem[] {
   const now = new Date()
   const nowDay = DAY_MAP[now.getDay()]
   const nowMinutes = now.getHours() * 60 + now.getMinutes()
@@ -77,6 +85,7 @@ function buildTimeline(schedule: ScheduledJob[]): TimelineItem[] {
         minutes,
         isPast: minutes < nowMinutes,
         isNext: false,
+        didRun: didJobRun(job.name, time, lastRun),
       })
     }
   }
@@ -123,6 +132,7 @@ function buildNextDayTimeline(schedule: ScheduledJob[]): NextDayTimeline | null 
           minutes: timeToMinutes(time),
           isPast: false,
           isNext: false,
+          didRun: false,
         })
       }
     }
@@ -623,7 +633,8 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
   // Force timeline mode for space view
   const effectiveViewMode = space ? 'timeline' : viewMode
 
-  const timeline = buildTimeline(mergedSchedule)
+  const lastRun = space ? {} : (globalQuery.data?.lastRun || {})
+  const timeline = buildTimeline(mergedSchedule, lastRun)
   const hasUpcoming = timeline.some(i => !i.isPast)
   const nextDay = !hasUpcoming ? buildNextDayTimeline(mergedSchedule) : null
 
@@ -652,6 +663,20 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
             </div>
           )}
 
+          {/* Today's execution summary */}
+          {timeline.length > 0 && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-[10px] text-stone/40">
+                {pastItems.filter(i => i.didRun).length}/{timeline.length} ran today
+              </span>
+              {pastItems.some(i => !i.didRun) && (
+                <span className="text-[10px] text-amber-400/50">
+                  {pastItems.filter(i => !i.didRun).length} missed
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Past items — last 3 by default */}
           {pastItems.length > 0 && (
             <div className="space-y-1.5">
@@ -661,7 +686,7 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   className="w-full text-center py-1 text-xs text-stone/40 hover:text-stone transition-colors flex items-center justify-center gap-1"
                 >
                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${pastExpanded ? 'rotate-180' : ''}`} />
-                  {pastExpanded ? 'Show less' : `Show all ${pastItems.length} completed today`}
+                  {pastExpanded ? 'Show less' : `Show all ${pastItems.length} past`}
                 </button>
               )}
               {visiblePastItems.map((item, idx) => (
@@ -671,12 +696,16 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                   className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${canEdit(item.job.name) ? 'hover:bg-surface/30' : 'cursor-default'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
-                    <span className="text-stone/40 text-[10px] shrink-0 leading-none">&#10003;</span>
+                    {item.didRun ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-moss/60 shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-400/60 shrink-0" />
+                    )}
                     <span className="text-xs font-mono tabular-nums text-stone/40">
                       {to12Hour(item.time)}
                     </span>
                   </div>
-                  <span className="text-sm truncate text-stone/40">
+                  <span className={`text-sm truncate ${item.didRun ? 'text-stone/40' : 'text-amber-400/50'}`}>
                     {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
                   {!space && <SpaceBadge source={item.job.source} />}
@@ -697,17 +726,29 @@ export function ScheduleSection({ adding, setAdding, viewMode = 'timeline', spac
                 <button
                   key={`upcoming-${item.job.name}-${item.time}-${idx}`}
                   onClick={() => canEdit(item.job.name) && setEditingJob(item.job)}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors bg-surface/30 border border-transparent ${canEdit(item.job.name) ? 'hover:bg-surface/50' : 'cursor-default'}`}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors border border-transparent ${item.isNext ? 'bg-sky-500/[0.06] border-sky-500/20' : 'bg-surface/30'} ${canEdit(item.job.name) ? 'hover:bg-surface/50' : 'cursor-default'}`}
                 >
                   <div className="flex items-center gap-2 shrink-0 w-[80px]">
-                    <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
-                    <span className="text-xs font-mono tabular-nums text-stone/60">
+                    {item.isNext ? (
+                      <span className="relative h-2.5 w-2.5 shrink-0">
+                        <span className="absolute inset-0 rounded-full bg-sky-400 animate-ping opacity-40" />
+                        <span className="relative block h-2.5 w-2.5 rounded-full bg-sky-400" />
+                      </span>
+                    ) : (
+                      <span className="h-2 w-2 rounded-full shrink-0 bg-stone/30" />
+                    )}
+                    <span className={`text-xs font-mono tabular-nums ${item.isNext ? 'text-sky-400' : 'text-stone/60'}`}>
                       {to12Hour(item.time)}
                     </span>
                   </div>
-                  <span className="text-sm truncate text-stone/70">
+                  <span className={`text-sm truncate ${item.isNext ? 'text-parchment' : 'text-stone/70'}`}>
                     {toTitleCase(item.job.name.replace(/^skill:/, '').replace(/^plugin__/, ''))}
                   </span>
+                  {item.isNext && (
+                    <span className="text-[9px] font-medium uppercase tracking-wider text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded-full shrink-0">
+                      Next
+                    </span>
+                  )}
                   {!space && <SpaceBadge source={item.job.source} />}
                 </button>
               ))}

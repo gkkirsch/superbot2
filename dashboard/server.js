@@ -4566,6 +4566,19 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       if (idx === -1) { release(); return res.status(404).json({ error: 'Item not found' }) }
 
       oldStatus = items[idx].status
+
+      // Track progress history for goals
+      if (skillId === 'goals' && updates.progress !== undefined && updates.progress !== items[idx].progress && updates.progress !== '') {
+        if (!Array.isArray(items[idx].progressHistory)) {
+          items[idx].progressHistory = []
+        }
+        items[idx].progressHistory.push({
+          progress: updates.progress,
+          timestamp: new Date().toISOString(),
+          ...(updates.notes && updates.notes !== items[idx].notes ? { notes: updates.notes } : {}),
+        })
+      }
+
       for (const [key, value] of Object.entries(updates)) {
         if (!IMMUTABLE_CARD_FIELDS.has(key)) {
           items[idx][key] = value
