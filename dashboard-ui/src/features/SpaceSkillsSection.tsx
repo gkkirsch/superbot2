@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Blocks, Loader2, ChevronDown } from 'lucide-react'
-import { useSpaceSkills, useCards, useCardItems } from '@/hooks/useSpaces'
+import { useSpaceSkills, useCards, useSpaceCardItems } from '@/hooks/useSpaces'
 import { getSkillIcon } from '@/lib/skillIcons'
 import { getRendererOrDefault } from '@/features/cardRenderers'
 import { CardSkillSection } from '@/features/CardSection'
@@ -63,7 +63,7 @@ function SpaceSkillCard({ card, space }: SpaceSkillCardProps) {
 function SpaceLevelExtension({ ext, card, slug }: { ext: SpaceSkillInfo; card?: CardDefinition; slug: string }) {
   const [collapsed, toggle] = useCollapsedState(`${slug}:${ext.skillId}`)
   const Icon = getSkillIcon(ext.icon)
-  const { data } = useCardItems(card?.skillId ?? '')
+  const { data } = useSpaceCardItems(card?.skillId ?? '', slug)
   const defaultStatus = card?.defaultFilter?.status || 'pending'
   const itemCount = card ? (data?.items?.filter(i => !i.status || i.status === defaultStatus).length ?? 0) : 0
 

@@ -4212,6 +4212,29 @@ async function getCardDefinitions() {
           _manifests.set(skillId, p.manifest)
           cards.push({ ...p.card, skillId })
         }
+        // Also check skills/<skill>/ subdirectories for skill-level manifests
+        // (handles plugins where superbot.json and data live inside skills/<skill>/)
+        const pluginSkillsDir = join(p.dir, 'skills')
+        try {
+          const pluginSkills = await safeReaddir(pluginSkillsDir)
+          for (const skill of pluginSkills) {
+            if (skill.startsWith('.')) continue
+            const skillDir = join(pluginSkillsDir, skill)
+            try { if (!(await stat(skillDir)).isDirectory()) continue } catch { continue }
+            const skillResult = await readSkillManifest(skillDir)
+            if (skillResult) {
+              const skillSkillId = p.name === skill ? `plugin__${p.name}` : `plugin__${p.name}__${skill}`
+              // Update _spaceCardDirs to point to skill dir (not version dir) for data resolution
+              if (!_spaceCardDirs.has(skillSkillId)) _spaceCardDirs.set(skillSkillId, new Map())
+              _spaceCardDirs.get(skillSkillId).set(slug, skillDir)
+              if (!cards.some(c => c.skillId === skillSkillId)) {
+                _cardBaseDirs.set(skillSkillId, skillDir)
+                _manifests.set(skillSkillId, skillResult.manifest)
+                cards.push({ ...skillResult.card, skillId: skillSkillId })
+              }
+            }
+          }
+        } catch { /* no skills dir */ }
       }
       // Scan space skills
       const spaceSkills = await scanSpaceSkillsFromFS(codeDir)
@@ -4316,6 +4339,11 @@ function resolveCardDataPath(skillId, dataSource, space) {
       if (existsSync(newPath)) {
         return newPath
       }
+      // Check directly in skill directory (self-contained pattern where data.jsonl sits alongside superbot.json)
+      try {
+        const directPath = validatePath(copyDir, dataSource)
+        if (existsSync(directPath)) return directPath
+      } catch { /* invalid path, skip */ }
       // Check legacy locations (don't auto-migrate — migration happens when user re-installs with copy scripts)
       // Legacy with skillId (e.g. plugin__social-media-approvals)
       const legacyDataDir = join(SPACES_DIR, space, 'skill-data', skillId)
@@ -4382,10 +4410,19 @@ async function readCardItems(skillId, dataSource, space) {
       // Aggregate across all spaces that have this skill installed
       const spaces = getSpacesForSkill(skillId)
       const allItems = []
+      const seenIds = new Set()
       for (const slug of spaces) {
         const filePath = resolveCardDataPath(skillId, dataSource, slug)
         const items = await readCardItemsFromPath(filePath)
-        allItems.push(...items)
+        // Deduplicate by ID — symlinked copies may point to the same physical file
+        for (const item of items) {
+          if (item.id && !seenIds.has(item.id)) {
+            seenIds.add(item.id)
+            allItems.push(item)
+          } else if (!item.id) {
+            allItems.push(item)
+          }
+        }
       }
       return allItems
     }
@@ -4429,9 +4466,12 @@ app.get('/api/cards/:skillId/items', async (req, res) => {
     const cards = await getCardDefinitions()
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
-    const allItems = await readCardItems(card.skillId, card.dataSource, space || undefined)
-    // Return all items — let the client-side renderer handle filtering
-    // (each renderer knows its own defaultFilter logic)
+    let allItems = await readCardItems(card.skillId, card.dataSource, space || undefined)
+    // Filter by space field if a space was requested and items have space tags
+    // (handles plugins with shared data files containing posts for multiple spaces)
+    if (space && allItems.length > 0 && allItems.some(i => i.space !== undefined)) {
+      allItems = allItems.filter(i => i.space === space)
+    }
     res.json({ items: allItems, card })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -4508,8 +4548,10 @@ app.patch('/api/cards/:skillId/items/:itemId', async (req, res) => {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${[...validStatuses].join(', ')}` })
     }
 
-    // For space-scoped skills, find which space has this item
-    const itemSpace = isSpaceScoped(skillId) ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
+    // For space-scoped skills or plugins with per-space copies, find which space has this item
+    const hasSpaceCopies = _spaceCardDirs.has(skillId) && _spaceCardDirs.get(skillId).size > 0
+    const needsSpaceResolution = isSpaceScoped(skillId) || hasSpaceCopies
+    const itemSpace = needsSpaceResolution ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
     if (isSpaceScoped(skillId) && !itemSpace) {
       return res.status(404).json({ error: 'Item not found in any space' })
     }
@@ -4577,8 +4619,10 @@ app.delete('/api/cards/:skillId/items/:itemId', async (req, res) => {
     const card = cards.find(c => c.skillId === skillId)
     if (!card) return res.status(404).json({ error: 'Card not found' })
 
-    // For space-scoped skills, find which space has this item
-    const itemSpace = isSpaceScoped(skillId) ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
+    // For space-scoped skills or plugins with per-space copies, find which space has this item
+    const hasSpaceCopies = _spaceCardDirs.has(skillId) && _spaceCardDirs.get(skillId).size > 0
+    const needsSpaceResolution = isSpaceScoped(skillId) || hasSpaceCopies
+    const itemSpace = needsSpaceResolution ? await findItemSpace(card.skillId, card.dataSource, itemId) : undefined
     if (isSpaceScoped(skillId) && !itemSpace) {
       return res.status(404).json({ error: 'Item not found in any space' })
     }
