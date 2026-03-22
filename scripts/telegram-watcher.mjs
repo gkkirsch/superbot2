@@ -147,6 +147,21 @@ async function filterExistingImages(paths) {
 
 // --- Telegram API ---
 
+const MAX_RETRIES = 3
+const RETRY_BACKOFF = [1000, 2000, 4000] // exponential backoff
+
+function isRetryableError(err) {
+  const msg = (err.message || '').toLowerCase()
+  return msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('fetch failed') ||
+    msg.includes('network') ||
+    msg.includes('socket hang up') ||
+    msg.includes('aborted')
+}
+
 async function tg(method, body) {
   const url = `${TELEGRAM_API}${botToken}/${method}`
   const opts = {
@@ -154,56 +169,80 @@ async function tg(method, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }
-  const res = await fetch(url, opts)
-  const json = await res.json()
-  if (!json.ok) {
-    throw new Error(`Telegram API ${method} failed: ${json.description || 'unknown error'}`)
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, opts)
+      const json = await res.json()
+      if (!json.ok) {
+        throw new Error(`Telegram API ${method} failed: ${json.description || 'unknown error'}`)
+      }
+      return json.result
+    } catch (err) {
+      if (attempt < MAX_RETRIES && isRetryableError(err)) {
+        const delay = RETRY_BACKOFF[attempt - 1] || 4000
+        log(`tg(${method}) attempt ${attempt}/${MAX_RETRIES} failed: ${err.message} — retrying in ${delay}ms`)
+        await sleep(delay)
+        continue
+      }
+      throw err
+    }
   }
-  return json.result
 }
 
 async function tgMultipart(method, fields, files) {
-  const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`
-  const CRLF = Buffer.from('\r\n')
-  const buffers = []
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`
+      const CRLF = Buffer.from('\r\n')
+      const buffers = []
 
-  // Add text fields
-  for (const [key, value] of Object.entries(fields)) {
-    if (value === undefined || value === null) continue
-    buffers.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
-    ))
+      // Add text fields
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined || value === null) continue
+        buffers.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+        ))
+      }
+
+      // Add file fields
+      for (const { field, filePath, filename } of files) {
+        const fileData = await readFile(filePath)
+        const name = filename || basename(filePath)
+        buffers.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+        ))
+        buffers.push(fileData)
+        buffers.push(CRLF)
+      }
+
+      // Closing boundary
+      buffers.push(Buffer.from(`--${boundary}--\r\n`))
+      const body = Buffer.concat(buffers)
+
+      const url = `${TELEGRAM_API}${botToken}/${method}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(body.length),
+        },
+        body,
+      })
+      const json = await res.json()
+      if (!json.ok) {
+        throw new Error(`Telegram API ${method} (multipart) failed: ${json.description || 'unknown error'}`)
+      }
+      return json.result
+    } catch (err) {
+      if (attempt < MAX_RETRIES && isRetryableError(err)) {
+        const delay = RETRY_BACKOFF[attempt - 1] || 4000
+        log(`tgMultipart(${method}) attempt ${attempt}/${MAX_RETRIES} failed: ${err.message} — retrying in ${delay}ms`)
+        await sleep(delay)
+        continue
+      }
+      throw err
+    }
   }
-
-  // Add file fields
-  for (const { field, filePath, filename } of files) {
-    const fileData = await readFile(filePath)
-    const name = filename || basename(filePath)
-    buffers.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
-    ))
-    buffers.push(fileData)
-    buffers.push(CRLF)
-  }
-
-  // Closing boundary
-  buffers.push(Buffer.from(`--${boundary}--\r\n`))
-  const body = Buffer.concat(buffers)
-
-  const url = `${TELEGRAM_API}${botToken}/${method}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      'Content-Length': String(body.length),
-    },
-    body,
-  })
-  const json = await res.json()
-  if (!json.ok) {
-    throw new Error(`Telegram API ${method} (multipart) failed: ${json.description || 'unknown error'}`)
-  }
-  return json.result
 }
 
 async function sendPhoto(filePath, caption, replyToMessageId) {
