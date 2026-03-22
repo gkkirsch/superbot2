@@ -49,7 +49,7 @@ let shuttingDown = false
 // is actively chatting via Telegram, not when messages originate from dashboard
 let lastTelegramMessageTime = 0
 let replyBaseline = 0
-const TELEGRAM_CONVERSATION_TIMEOUT = 5 * 60 * 1000 // 5 minutes
+const TELEGRAM_CONVERSATION_TIMEOUT = 2 * 60 * 60 * 1000 // 2 hours
 
 // In-memory map: short callback key -> full escalation ID
 // Populated when escalation cards are sent, used when callback buttons are clicked
@@ -1010,10 +1010,10 @@ async function checkForReplies() {
       (Date.now() - lastTelegramMessageTime) < TELEGRAM_CONVERSATION_TIMEOUT
 
     if (!conversationActive) {
-      if (orchestratorReplies.length > lastSentReplyCount) {
-        lastSentReplyCount = orchestratorReplies.length
-        await saveLastSentCount(lastSentReplyCount)
-      }
+      // Don't advance the counter — just skip sending. The replyBaseline
+      // mechanism handles skipping old messages when the next Telegram
+      // message arrives, so we don't need to silently discard replies here.
+      stopTyping()
       return
     }
 
@@ -1342,12 +1342,23 @@ async function main() {
   await writePidFile()
   log(`PID file written: ${PID_FILE} (pid=${process.pid})`)
 
-  // Verify bot token
-  try {
-    const me = await tg('getMe', {})
-    log(`Bot connected: @${me.username} (${me.first_name})`)
-  } catch (err) {
-    logError(`Failed to connect to Telegram: ${err.message}`)
+  // Verify bot token (retry up to 5 times for transient network issues)
+  let connected = false
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      const me = await tg('getMe', {})
+      log(`Bot connected: @${me.username} (${me.first_name})`)
+      connected = true
+      break
+    } catch (err) {
+      logError(`Connection attempt ${attempt}/5 failed: ${err.message}`)
+      if (attempt < 5) {
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+  }
+  if (!connected) {
+    logError('Failed to connect to Telegram after 5 attempts')
     await removePidFile()
     process.exit(1)
   }
