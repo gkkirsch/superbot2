@@ -24,6 +24,7 @@ const LAST_SENT_FILE = join(SUPERBOT_DIR, 'telegram-last-sent-idx.txt')
 const LAST_UPDATE_ID_FILE = join(SUPERBOT_DIR, 'telegram-last-update-id.txt')
 const SENT_ESCALATIONS_FILE = join(SUPERBOT_DIR, 'telegram-sent-escalations.json')
 const MESSAGE_MAP_FILE = join(SUPERBOT_DIR, 'telegram-message-map.json')
+const HEARTBEAT_FILE = join(SUPERBOT_DIR, 'telegram-heartbeat.txt')
 const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations', 'needs_human')
 const SUPERBOT2_NAME = process.env.SUPERBOT2_NAME || 'superbot2'
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
@@ -1318,6 +1319,9 @@ async function pollUpdates() {
       if (json.result.length > 0) {
         await saveLastUpdateId(lastUpdateId)
       }
+
+      // Write heartbeat so watchdog knows we're alive
+      await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8')
     } catch (err) {
       if (shuttingDown) break
       logError(`Polling error: ${err.message}`)
