@@ -43,8 +43,6 @@ let lastUpdateId = -1 // -1 means "not loaded yet, skip old updates on first run
 let lastSentReplyCount = 0
 let sentEscalationIds = new Set()
 let typingInterval = null
-let thinkingTimer = null
-let thinkingMessageId = null
 let waitingForReply = false
 let shuttingDown = false
 
@@ -354,44 +352,11 @@ async function answerCallbackQuery(callbackQueryId, text) {
 
 // --- Typing indicator ---
 
-const THINKING_DELAY = 15000 // Send "Thinking..." after 15s
-
 function startTyping() {
   if (typingInterval) return
   waitingForReply = true
   sendTypingAction()
   typingInterval = setInterval(sendTypingAction, TYPING_INTERVAL)
-
-  // Send "Thinking..." message after delay if still waiting
-  if (thinkingTimer) clearTimeout(thinkingTimer)
-  thinkingTimer = setTimeout(async () => {
-    if (!waitingForReply || !chatId) return
-    try {
-      const result = await sendMessage('Thinking...', {
-        replyToMessageId: lastUserMessageId || undefined,
-      })
-      if (result?.message_id) {
-        thinkingMessageId = result.message_id
-      }
-    } catch {
-      // non-critical — typing indicator still active
-    }
-  }, THINKING_DELAY)
-}
-
-async function clearThinkingMessage() {
-  if (thinkingTimer) {
-    clearTimeout(thinkingTimer)
-    thinkingTimer = null
-  }
-  if (thinkingMessageId && chatId) {
-    try {
-      await tg('deleteMessage', { chat_id: chatId, message_id: thinkingMessageId })
-    } catch {
-      // message may already be deleted or too old — ignore
-    }
-    thinkingMessageId = null
-  }
 }
 
 function stopTyping() {
@@ -400,7 +365,6 @@ function stopTyping() {
     clearInterval(typingInterval)
     typingInterval = null
   }
-  clearThinkingMessage()
 }
 
 // --- PID file ---
@@ -1157,9 +1121,6 @@ async function checkForReplies() {
     }
 
     const newReplies = orchestratorReplies.slice(startIdx)
-
-    // Clear "Thinking..." message before sending actual replies
-    await clearThinkingMessage()
 
     for (const reply of newReplies) {
       const text = reply.text || reply.content || ''
