@@ -1289,6 +1289,8 @@ async function pollUpdates() {
 
   log(`Polling for updates with offset=${lastUpdateId + 1}`)
 
+  let consecutiveErrors = 0
+
   while (!shuttingDown) {
     try {
       const body = {
@@ -1306,51 +1308,71 @@ async function pollUpdates() {
       })
 
       if (!res.ok) {
-        const errText = await res.text()
+        let errText = ''
+        try { errText = await res.text() } catch { errText = '(could not read response body)' }
         logError(`getUpdates failed: HTTP ${res.status} - ${errText}`)
-        await sleep(5000)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
         continue
       }
 
-      const json = await res.json()
+      let json
+      try {
+        json = await res.json()
+      } catch (parseErr) {
+        logError(`getUpdates response not valid JSON: ${parseErr.message}`)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
+        continue
+      }
+
       if (!json.ok || !json.result) {
         logError(`getUpdates response not ok: ${JSON.stringify(json)}`)
-        await sleep(5000)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
         continue
       }
 
+      // Successful poll — reset error counter
+      consecutiveErrors = 0
+
       for (const update of json.result) {
-        lastUpdateId = Math.max(lastUpdateId, update.update_id)
+        try {
+          lastUpdateId = Math.max(lastUpdateId, update.update_id)
 
-        if (update.callback_query) {
-          log(`Inbound callback_query [update_id=${update.update_id}]: data=${update.callback_query.data}`)
-          await handleCallbackQuery(update.callback_query)
-          continue
-        }
-
-        if (update.message) {
-          const msg = update.message
-          const msgChatId = String(msg.chat.id)
-
-          // Auto-detect chatId from first message
-          if (!chatId) {
-            chatId = msgChatId
-            await saveConfigField('chatId', chatId)
-            log(`Auto-detected chatId: ${chatId}`)
-            await sendMessage('Chat ID registered! You\'re connected to superbot2.')
-          }
-
-          // Security: only process messages from authorized chat
-          if (msgChatId !== chatId) {
-            log(`Ignoring message from unauthorized chat: ${msgChatId}`)
+          if (update.callback_query) {
+            log(`Inbound callback_query [update_id=${update.update_id}]: data=${update.callback_query.data}`)
+            await handleCallbackQuery(update.callback_query)
             continue
           }
 
-          if (msg.text) {
-            const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
-            log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
-            await handleTextMessage(msg.text, msg)
+          if (update.message) {
+            const msg = update.message
+            const msgChatId = String(msg.chat.id)
+
+            // Auto-detect chatId from first message
+            if (!chatId) {
+              chatId = msgChatId
+              await saveConfigField('chatId', chatId)
+              log(`Auto-detected chatId: ${chatId}`)
+              await sendMessage('Chat ID registered! You\'re connected to superbot2.')
+            }
+
+            // Security: only process messages from authorized chat
+            if (msgChatId !== chatId) {
+              log(`Ignoring message from unauthorized chat: ${msgChatId}`)
+              continue
+            }
+
+            if (msg.text) {
+              const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
+              log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
+              await handleTextMessage(msg.text, msg)
+            }
           }
+        } catch (updateErr) {
+          logError(`Error processing update ${update.update_id}: ${updateErr.message}`)
+          // Continue processing remaining updates — don't let one bad update crash the loop
         }
       }
 
@@ -1363,8 +1385,10 @@ async function pollUpdates() {
       await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8')
     } catch (err) {
       if (shuttingDown) break
-      logError(`Polling error: ${err.message}`)
-      await sleep(5000)
+      consecutiveErrors++
+      const backoff = Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000)
+      logError(`Polling error (consecutive=${consecutiveErrors}, backoff=${backoff}ms): ${err.message}`)
+      await sleep(backoff)
     }
   }
 }
