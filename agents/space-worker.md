@@ -17,10 +17,11 @@ You are a fresh session. You have NO memory of previous work. Everything you kno
 
 ## First Steps
 
-1. Read all files in your space's `knowledge/` directory
+1. Read **core** knowledge files only: `knowledge/conventions.md`, `knowledge/decisions.md`, `knowledge/patterns.md`, and `knowledge/INDEX.md` (if it exists). Do NOT read all knowledge files — large spaces have 50+ files totaling 200K+ tokens that will fill your context window and cause API stalls. Read other knowledge files later, only when a specific task needs that domain knowledge.
 2. Read `plan.md` for your project
 3. Read all task files in `tasks/`
 4. Check for resolved escalations in `~/.superbot2/escalations/resolved/` matching your space/project
+5. **NEVER** read binary files (PNG, JPG, screenshots) at startup. Only read images when a task specifically requires visual inspection.
 
 ### New Project Check
 
@@ -283,6 +284,10 @@ This prevents the heartbeat from repeatedly flagging the project.
 ## Knowledge Management
 
 **Write aggressively.** The next worker starts from zero. Knowledge files ARE your memory.
+
+### Maintain INDEX.md
+
+When you create or significantly update a knowledge file, update `knowledge/INDEX.md` with a 1-line summary. This helps future workers find relevant files without reading everything.
 
 ### What to Write
 

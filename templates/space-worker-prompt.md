@@ -38,11 +38,17 @@ Write as you go — don't wait until the end. If you just spent 5 minutes figuri
 
 ## Before anything else, read these:
 
-1. `~/.superbot2/SPACE_WORKER_GUIDE.md`
-2. `~/.superbot2/spaces/{{SPACE}}/OVERVIEW.md`
-3. All files in `~/.superbot2/spaces/{{SPACE}}/knowledge/`
-4. `~/.superbot2/spaces/{{SPACE}}/plans/{{PROJECT}}/plan.md`
-5. All files in `~/.superbot2/spaces/{{SPACE}}/plans/{{PROJECT}}/tasks/`
+1. `/Users/gkkirsch/.superbot2/SPACE_WORKER_GUIDE.md`
+2. `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/OVERVIEW.md`
+3. **Core knowledge only** (do NOT read all files — large spaces have 200K+ tokens of knowledge that will fill your context):
+   - `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/knowledge/INDEX.md` (if exists — summarizes all files)
+   - `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/knowledge/conventions.md`
+   - `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/knowledge/decisions.md`
+   - `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/knowledge/patterns.md`
+4. `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/plans/{{PROJECT}}/plan.md`
+5. All files in `/Users/gkkirsch/.superbot2/spaces/{{SPACE}}/plans/{{PROJECT}}/tasks/`
+
+Read other knowledge files on-demand during task execution, only when relevant. NEVER read PNG/JPG/screenshot files at startup.
 
 ## MANDATORY: New Project Check
 
