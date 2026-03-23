@@ -1079,9 +1079,17 @@ async function checkForReplies() {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
 
+    // Safety: if the inbox was truncated/recreated, our counter may be too high.
+    // Reset to current length to prevent permanently stuck forwarding.
+    if (lastSentReplyCount > orchestratorReplies.length) {
+      log(`Counter sync: lastSentReplyCount (${lastSentReplyCount}) > inbox length (${orchestratorReplies.length}) — resetting`)
+      lastSentReplyCount = orchestratorReplies.length
+      await saveLastSentCount(lastSentReplyCount)
+    }
+
     // Only forward replies when the user is actively chatting via Telegram.
-    // When inactive, silently advance the counter so dashboard-originated
-    // messages don't accumulate and get dumped later.
+    // When inactive, skip sending — the replyBaseline mechanism handles
+    // skipping old messages when the next Telegram message arrives.
     const conversationActive = lastTelegramMessageTime > 0 &&
       (Date.now() - lastTelegramMessageTime) < TELEGRAM_CONVERSATION_TIMEOUT
 
@@ -1442,6 +1450,19 @@ async function main() {
   lastSentReplyCount = await loadLastSentCount()
   sentEscalationIds = await loadSentEscalations()
   messageMap = await loadMessageMap()
+
+  // Startup counter sync check — detect if inbox was truncated since last run
+  try {
+    const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
+    const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
+    if (lastSentReplyCount > orchestratorReplies.length) {
+      log(`Startup counter sync: lastSentReplyCount (${lastSentReplyCount}) > inbox length (${orchestratorReplies.length}) — resetting`)
+      lastSentReplyCount = orchestratorReplies.length
+      await saveLastSentCount(lastSentReplyCount)
+    }
+  } catch {
+    // non-critical — will be caught in checkForReplies too
+  }
 
   // Check for already-running instance, then write PID file
   await checkPidFile()
