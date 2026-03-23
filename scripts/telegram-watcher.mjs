@@ -10,9 +10,9 @@
 // Handles /status, /escalations, /recent, /schedule, /todo, /help commands
 // Typing indicator while waiting for orchestrator reply
 
-import { readFile, writeFile, readdir, unlink, stat } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { readFile, writeFile, readdir, unlink, stat, mkdir } from 'node:fs/promises'
+import { existsSync, createWriteStream } from 'node:fs'
+import { join, basename, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 
@@ -146,6 +146,36 @@ async function filterExistingImages(paths) {
     }
   }
   return existing
+}
+
+const UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads')
+
+// --- Download inbound Telegram photos ---
+
+async function downloadTelegramFile(fileId) {
+  // Step 1: Get file path from Telegram
+  const fileInfo = await tg('getFile', { file_id: fileId })
+  if (!fileInfo?.file_path) {
+    throw new Error('getFile returned no file_path')
+  }
+
+  // Step 2: Download the file
+  const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`
+  const ext = extname(fileInfo.file_path) || '.jpg'
+  const filename = `telegram-${Date.now()}${ext}`
+  const destPath = join(UPLOADS_DIR, filename)
+
+  await mkdir(UPLOADS_DIR, { recursive: true })
+
+  const res = await fetch(downloadUrl)
+  if (!res.ok) {
+    throw new Error(`Download failed: HTTP ${res.status}`)
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer())
+  await writeFile(destPath, buffer)
+  log(`Downloaded photo: ${destPath} (${buffer.length} bytes)`)
+  return destPath
 }
 
 // --- Telegram API ---
@@ -324,7 +354,7 @@ async function answerCallbackQuery(callbackQueryId, text) {
 
 // --- Typing indicator ---
 
-const THINKING_DELAY = 10000 // Send "Thinking..." after 10s
+const THINKING_DELAY = 15000 // Send "Thinking..." after 15s
 
 function startTyping() {
   if (typingInterval) return
@@ -1070,6 +1100,23 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
+// --- Smart typing detection ---
+// If an orchestrator reply mentions spawning a worker or background task,
+// stop the typing indicator — the user shouldn't see typing during a long background wait.
+const BACKGROUND_TASK_PATTERNS = [
+  /\bspawn(ing|ed)?\b.*\bworker\b/i,
+  /\bdispatch(ing|ed)?\b.*\bworker\b/i,
+  /\bbackground\s+task\b/i,
+  /\bworker\s+(started|launched|dispatched|spawned)\b/i,
+  /\bkicking off\b.*\bworker\b/i,
+  /\bstarting\b.*\bworker\b/i,
+  /\bqueued\b.*\b(task|work)\b/i,
+]
+
+function mentionsBackgroundWork(text) {
+  return BACKGROUND_TASK_PATTERNS.some(p => p.test(text))
+}
+
 // --- Reply mirroring ---
 
 async function checkForReplies() {
@@ -1227,7 +1274,15 @@ async function checkForReplies() {
       }
     }
 
+    // Smart typing: if any reply mentions spawning a worker/background task,
+    // stop typing and don't resume — the user shouldn't see typing during a long wait.
+    const anyBackgroundWork = newReplies.some(r => mentionsBackgroundWork(r.text || r.content || ''))
     stopTyping()
+    if (anyBackgroundWork) {
+      // Prevent typing from being restarted for this conversation turn
+      waitingForReply = false
+      log('Reply mentions background work — typing indicator suppressed')
+    }
     lastSentReplyCount = orchestratorReplies.length
     await saveLastSentCount(lastSentReplyCount)
     await saveMessageMap()
@@ -1376,6 +1431,36 @@ async function pollUpdates() {
               const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
               log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
               await handleTextMessage(msg.text, msg)
+            } else if (msg.photo && msg.photo.length > 0) {
+              // Telegram sends photos as array of sizes — pick the largest
+              const photo = msg.photo[msg.photo.length - 1]
+              log(`Inbound photo [update_id=${update.update_id}, msg_id=${msg.message_id}]: file_id=${photo.file_id}`)
+              try {
+                const localPath = await downloadTelegramFile(photo.file_id)
+                // Relay as text message with the local path (and caption if any)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n${localPath}`
+                  : localPath
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download photo: ${dlErr.message}`)
+                await sendMessage('Failed to download your photo.')
+              }
+            } else if (msg.document && msg.document.mime_type?.startsWith('image/')) {
+              // Photos sent as files (uncompressed) also come as documents
+              log(`Inbound image document [update_id=${update.update_id}, msg_id=${msg.message_id}]: file_id=${msg.document.file_id}`)
+              try {
+                const localPath = await downloadTelegramFile(msg.document.file_id)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n${localPath}`
+                  : localPath
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download image document: ${dlErr.message}`)
+                await sendMessage('Failed to download your image.')
+              }
             }
           }
         } catch (updateErr) {
