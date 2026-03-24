@@ -332,10 +332,21 @@ async function editMessageText(messageId, text, opts = {}) {
 
 async function sendTypingAction() {
   if (!chatId) return
+  // Fire-and-forget with short timeout — don't use tg() retry wrapper
+  // because retry delays make the typing indicator appear slow
   try {
-    await tg('sendChatAction', { chat_id: chatId, action: 'typing' })
-  } catch {
-    // typing action failures are non-critical
+    fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+      signal: AbortSignal.timeout(5000),
+    }).then(r => r.json()).then(j => {
+      if (!j.ok) log(`typing action failed: ${JSON.stringify(j)}`)
+    }).catch(e => {
+      log(`typing action error: ${e.message}`)
+    })
+  } catch (err) {
+    log(`typing action sync error: ${err.message}`)
   }
 }
 
@@ -561,14 +572,13 @@ async function handleTextMessage(text, msg) {
     lastUserMessageId = msg.message_id
   }
 
-  // Activate Telegram conversation — set baseline to current inbox count so we
-  // only forward orchestrator replies that arrive AFTER this message.
-  // Also record an anchor linking the current inbox count to this user message
-  // so replies can be threaded back to the correct message.
+  // Activate Telegram conversation — set baseline to lastSentReplyCount so we
+  // forward any replies that haven't been sent yet, including ones that arrived
+  // between the user's message and now (race condition fix).
+  replyBaseline = lastSentReplyCount
   try {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
-    replyBaseline = orchestratorReplies.length
     if (msg && msg.message_id) {
       userMessageAnchors.push({
         inboxCountAtSend: orchestratorReplies.length,
@@ -1098,22 +1108,9 @@ async function checkForReplies() {
       await saveLastSentCount(lastSentReplyCount)
     }
 
-    // Only forward replies when the user is actively chatting via Telegram.
-    // When inactive, skip sending — the replyBaseline mechanism handles
-    // skipping old messages when the next Telegram message arrives.
-    const conversationActive = lastTelegramMessageTime > 0 &&
-      (Date.now() - lastTelegramMessageTime) < TELEGRAM_CONVERSATION_TIMEOUT
-
-    if (!conversationActive) {
-      // Don't advance the counter — just skip sending. The replyBaseline
-      // mechanism handles skipping old messages when the next Telegram
-      // message arrives, so we don't need to silently discard replies here.
-      stopTyping()
-      return
-    }
-
-    // Use the baseline to skip messages that were already in the inbox before
-    // the user's Telegram message — these are dashboard-originated, not replies
+    // Always forward unsent replies — no conversation gating.
+    // The counter ensures we never send duplicates, and the replyBaseline
+    // prevents dumping old messages after a restart.
     const startIdx = Math.max(lastSentReplyCount, replyBaseline)
 
     if (orchestratorReplies.length <= startIdx) {
@@ -1388,6 +1385,9 @@ async function pollUpdates() {
               continue
             }
 
+            // Start typing immediately on any inbound message
+            startTyping()
+
             if (msg.text) {
               const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
               log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
@@ -1439,6 +1439,8 @@ async function pollUpdates() {
       await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8')
     } catch (err) {
       if (shuttingDown) break
+      // Write heartbeat even on errors — poll timeouts are normal and don't mean we're stuck
+      await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8').catch(() => {})
       consecutiveErrors++
       const backoff = Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000)
       logError(`Polling error (consecutive=${consecutiveErrors}, backoff=${backoff}ms): ${err.message}`)
