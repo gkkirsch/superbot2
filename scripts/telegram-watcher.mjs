@@ -57,6 +57,10 @@ const TELEGRAM_CONVERSATION_TIMEOUT = 2 * 60 * 60 * 1000 // 2 hours
 let callbackMap = new Map() // e.g. "e1" -> "esc-personal-assistant-email-triage-..."
 let callbackCounter = 0
 
+// Map: Telegram message_id of sent escalation card -> escalation ID
+// Used to detect freeform replies to escalation cards
+let escalationMessageMap = new Map() // e.g. 12345 -> "esc-personal-assistant-email-triage-..."
+
 // Message ID tracking for reply threading
 // lastUserMessageId: the Telegram message_id of the user's most recent non-command message
 // messageMap: maps inbox index -> Telegram message_id of the bot's sent reply
@@ -501,6 +505,45 @@ function buildReplyContext(replyToMessage) {
 }
 
 async function handleTextMessage(text, msg) {
+  // Check if this is a freeform reply to an escalation card
+  if (msg?.reply_to_message?.message_id && escalationMessageMap.has(msg.reply_to_message.message_id)) {
+    const escId = escalationMessageMap.get(msg.reply_to_message.message_id)
+    const escFile = join(ESCALATIONS_DIR, `${escId}.json`)
+    if (existsSync(escFile)) {
+      log(`Freeform escalation reply for ${escId}: ${text.slice(0, 100)}`)
+      try {
+        await new Promise((resolve, reject) => {
+          execFile('bash', [
+            join(SUPERBOT_DIR, 'scripts', 'resolve-escalation.sh'),
+            escFile,
+            '--resolution', text.trim(),
+            '--resolved-by', 'user',
+          ], { timeout: 10000 }, (err, stdout, stderr) => {
+            if (err) reject(new Error(stderr || err.message))
+            else resolve(stdout)
+          })
+        })
+        // Edit the escalation card to show resolved state
+        try {
+          const origMsg = msg.reply_to_message
+          await editMessageText(origMsg.message_id,
+            (origMsg.text || '') + `\n\n✅ <b>Resolved:</b> ${escapeHtml(text.trim())}`,
+            { replyMarkup: { inline_keyboard: [] } }
+          )
+        } catch { /* ignore edit failures */ }
+        await sendMessage('Escalation resolved.', { replyToMessageId: msg.message_id })
+        escalationMessageMap.delete(msg.reply_to_message.message_id)
+      } catch (err) {
+        logError(`Failed to resolve escalation ${escId} via freeform reply: ${err.message}`)
+        await sendMessage('Failed to resolve escalation.')
+      }
+      return
+    } else {
+      log(`Escalation file not found for freeform reply: ${escFile} (may already be resolved)`)
+      escalationMessageMap.delete(msg.reply_to_message.message_id)
+    }
+  }
+
   // Check for bot commands
   const cmd = text.trim().toLowerCase()
 
@@ -973,8 +1016,11 @@ async function sendEscalationCard(esc) {
   const replyMarkup = { inline_keyboard: buttons }
 
   try {
-    await sendMessage(text, { replyMarkup })
-    log(`Sent escalation card for ${esc.id} (callback keys: e${escCounter}:*)`)
+    const sentMsg = await sendMessage(text, { replyMarkup })
+    if (sentMsg?.message_id) {
+      escalationMessageMap.set(sentMsg.message_id, esc.id)
+    }
+    log(`Sent escalation card for ${esc.id} (callback keys: e${escCounter}:*, msg_id=${sentMsg?.message_id || '?'})`)
   } catch (err) {
     logError(`Failed to send escalation card for ${esc.id}: ${err.message}`)
   }
