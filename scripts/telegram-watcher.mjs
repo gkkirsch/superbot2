@@ -543,6 +543,7 @@ async function handleTextMessage(text, msg) {
         logError(`Failed to resolve escalation ${escId} via freeform reply: ${err.message}`)
         await sendMessage('Failed to resolve escalation.')
       }
+      stopTyping()
       return
     } else {
       log(`Escalation file not found for freeform reply: ${escFile} (may already be resolved)`)
@@ -553,6 +554,7 @@ async function handleTextMessage(text, msg) {
   // Check for bot commands
   const cmd = text.trim().toLowerCase()
 
+  // Bot commands — these don't relay to the orchestrator, so stop typing after handling
   if (cmd === '/start') {
     await sendMessage(
       '<b>superbot2 Telegram Bot</b>\n\n' +
@@ -568,6 +570,7 @@ async function handleTextMessage(text, msg) {
       '/todo - Your todos\n' +
       '/help - List commands'
     )
+    stopTyping()
     return
   }
 
@@ -584,41 +587,49 @@ async function handleTextMessage(text, msg) {
       '/help - Show this message\n\n' +
       'Any other message is sent to the superbot2 orchestrator.'
     )
+    stopTyping()
     return
   }
 
   if (cmd === '/status') {
     await handleStatusCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/escalations') {
     await handleEscalationsCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/workers') {
     await handleWorkersCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/recent') {
     await handleRecentActivityCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/schedule') {
     await handleScheduleCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/todo') {
     await handleTodosCommand()
+    stopTyping()
     return
   }
 
   if (cmd === '/spaces') {
     await handleSpacesCommand()
+    stopTyping()
     return
   }
 
