@@ -1422,6 +1422,22 @@ async function pollUpdates() {
                 logError(`Failed to download image document: ${dlErr.message}`)
                 await sendMessage('Failed to download your image.')
               }
+            } else if (msg.document) {
+              // Non-image documents (PDF, files, etc.)
+              const doc = msg.document
+              const docName = doc.file_name || 'unknown'
+              log(`Inbound document [update_id=${update.update_id}, msg_id=${msg.message_id}]: ${docName} (${doc.mime_type || 'unknown type'}, file_id=${doc.file_id})`)
+              try {
+                const localPath = await downloadTelegramFile(doc.file_id)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n[File: ${docName}]\n${localPath}`
+                  : `[File: ${docName}]\n${localPath}`
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download document: ${dlErr.message}`)
+                await sendMessage(`Failed to download your file (${docName}).`)
+              }
             }
           }
         } catch (updateErr) {
