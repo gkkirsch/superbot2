@@ -562,6 +562,7 @@ async function handleTextMessage(text, msg) {
       '/status - Portfolio overview\n' +
       '/spaces - Spaces and project details\n' +
       '/escalations - Open escalations needing your input\n' +
+      '/workers - Active team members\n' +
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
@@ -576,6 +577,7 @@ async function handleTextMessage(text, msg) {
       '/status - Portfolio overview (spaces, projects, tasks)\n' +
       '/spaces - Spaces and project details\n' +
       '/escalations - List open escalations with action buttons\n' +
+      '/workers - Active team members\n' +
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
@@ -592,6 +594,11 @@ async function handleTextMessage(text, msg) {
 
   if (cmd === '/escalations') {
     await handleEscalationsCommand()
+    return
+  }
+
+  if (cmd === '/workers') {
+    await handleWorkersCommand()
     return
   }
 
@@ -942,6 +949,47 @@ async function handleSpacesCommand() {
   } catch (err) {
     logError(`Spaces command failed: ${err.message}`)
     await sendMessage('Failed to list spaces.')
+  }
+}
+
+async function handleWorkersCommand() {
+  await sendTypingAction()
+
+  try {
+    const teamConfigPath = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'config.json')
+    const teamConfig = await readJsonFile(teamConfigPath)
+
+    if (!teamConfig?.members || teamConfig.members.length === 0) {
+      await sendMessage('No team members found.')
+      return
+    }
+
+    let text = '<b>Team Members</b>\n'
+
+    for (const member of teamConfig.members) {
+      const name = member.name || '?'
+      const type = member.agentType || '?'
+      const model = member.model || '?'
+      const cwd = member.cwd || ''
+
+      // Derive a short workspace name from cwd
+      const workspace = cwd ? basename(cwd) : ''
+
+      text += `\n<b>${escapeHtml(name)}</b>`
+      text += ` <i>(${escapeHtml(type)})</i>\n`
+      text += `Model: <code>${escapeHtml(model)}</code>`
+      if (workspace) text += ` | Dir: <code>${escapeHtml(workspace)}</code>`
+      text += '\n'
+    }
+
+    if (text.length > 4000) {
+      text = text.slice(0, 3997) + '...'
+    }
+
+    await sendMessage(text)
+  } catch (err) {
+    logError(`Workers command failed: ${err.message}`)
+    await sendMessage('Failed to list workers.')
   }
 }
 
@@ -1656,6 +1704,26 @@ async function main() {
     log(`Authorized chatId: ${chatId}`)
   } else {
     log('No chatId configured — will auto-detect from first message')
+  }
+
+  // Register bot commands menu for autocomplete
+  try {
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'status', description: 'Portfolio overview' },
+        { command: 'escalations', description: 'Open escalations needing input' },
+        { command: 'workers', description: 'Active workers' },
+        { command: 'recent', description: 'Recent session summaries' },
+        { command: 'schedule', description: 'Scheduled jobs' },
+        { command: 'todo', description: 'Your todos' },
+        { command: 'spaces', description: 'Spaces and project details' },
+        { command: 'help', description: 'List available commands' },
+      ],
+    })
+    log('Bot commands menu registered')
+  } catch (err) {
+    logError(`Failed to register bot commands: ${err.message}`)
+    // Non-critical — commands still work, just no autocomplete
   }
 
   // Start background loops
