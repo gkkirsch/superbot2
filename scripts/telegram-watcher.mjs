@@ -11,7 +11,7 @@
 // Typing indicator while waiting for orchestrator reply
 
 import { readFile, writeFile, readdir, unlink, stat, mkdir } from 'node:fs/promises'
-import { existsSync, createWriteStream } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join, basename, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
@@ -46,11 +46,9 @@ let typingInterval = null
 let waitingForReply = false
 let shuttingDown = false
 
-// Telegram conversation gating — only forward orchestrator replies when user
-// is actively chatting via Telegram, not when messages originate from dashboard
-let lastTelegramMessageTime = 0
+// Baseline index: when user sends a message via Telegram, we record the current
+// inbox length so we only forward replies that arrived after that point.
 let replyBaseline = 0
-const TELEGRAM_CONVERSATION_TIMEOUT = 2 * 60 * 60 * 1000 // 2 hours
 
 // In-memory map: short callback key -> full escalation ID
 // Populated when escalation cards are sent, used when callback buttons are clicked
@@ -353,16 +351,12 @@ async function sendTypingAction() {
   })
   try {
     doSend().then(r => r.json()).then(j => {
-      if (!j.ok) {
-        log(`typing action failed, retrying: ${JSON.stringify(j)}`)
-        doSend().catch(e => log(`typing retry error: ${e.message}`))
-      }
-    }).catch(e => {
-      log(`typing action error, retrying: ${e.message}`)
-      doSend().catch(e2 => log(`typing retry error: ${e2.message}`))
+      if (!j.ok) doSend().catch(() => {})
+    }).catch(() => {
+      doSend().catch(() => {})
     })
-  } catch (err) {
-    log(`typing action sync error: ${err.message}`)
+  } catch {
+    // non-critical
   }
 }
 
@@ -658,7 +652,6 @@ async function handleTextMessage(text, msg) {
       })
     }
   }
-  lastTelegramMessageTime = Date.now()
   await saveMessageMap()
 
   // Build the relayed text, prepending reply context if the user replied to a specific message
@@ -1080,7 +1073,7 @@ async function sendEscalationCard(esc) {
     if (sentMsg?.message_id) {
       escalationMessageMap.set(sentMsg.message_id, esc.id)
     }
-    log(`Sent escalation card for ${esc.id} (callback keys: e${escCounter}:*, msg_id=${sentMsg?.message_id || '?'})`)
+    log(`Sent escalation card for ${esc.id}`)
   } catch (err) {
     logError(`Failed to send escalation card for ${esc.id}: ${err.message}`)
   }
@@ -1250,7 +1243,6 @@ async function checkForReplies() {
     // Safety: if the inbox was truncated/recreated, our counter may be too high.
     // Reset to current length to prevent permanently stuck forwarding.
     if (lastSentReplyCount > orchestratorReplies.length) {
-      log(`Counter sync: lastSentReplyCount (${lastSentReplyCount}) > inbox length (${orchestratorReplies.length}) — resetting`)
       lastSentReplyCount = orchestratorReplies.length
       await saveLastSentCount(lastSentReplyCount)
     }
@@ -1367,7 +1359,7 @@ async function checkForReplies() {
             lastSentBotMessageText = combinedTruncated
             lastSentBotMessageTime = now
             // sentResult stays null — we reuse the existing message_id
-            log(`Edited previous message (msg_id=${lastSentBotMessageId}): ${truncated.slice(0, 60)}...`)
+            log(`Edited previous message to append reply`)
           } catch (editErr) {
             logError(`Failed to edit message, sending new: ${editErr.message}`)
             // Fall through to send as new message
@@ -1389,9 +1381,7 @@ async function checkForReplies() {
     const anyBackgroundWork = newReplies.some(r => mentionsBackgroundWork(r.text || r.content || ''))
     stopTyping()
     if (anyBackgroundWork) {
-      // Prevent typing from being restarted for this conversation turn
       waitingForReply = false
-      log('Reply mentions background work — typing indicator suppressed')
     }
     lastSentReplyCount = orchestratorReplies.length
     await saveLastSentCount(lastSentReplyCount)
@@ -1672,7 +1662,6 @@ async function main() {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
     if (lastSentReplyCount > orchestratorReplies.length) {
-      log(`Startup counter sync: lastSentReplyCount (${lastSentReplyCount}) > inbox length (${orchestratorReplies.length}) — resetting`)
       lastSentReplyCount = orchestratorReplies.length
       await saveLastSentCount(lastSentReplyCount)
     }
