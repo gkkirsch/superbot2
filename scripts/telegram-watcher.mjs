@@ -31,7 +31,7 @@ const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 
 const DASHBOARD_API = `http://localhost:${process.env.SUPERBOT2_API_PORT || '3274'}/api`
 const TELEGRAM_API = 'https://api.telegram.org/bot'
 const POLL_TIMEOUT = 30
-const TYPING_INTERVAL = 4000
+const TYPING_INTERVAL = 3000
 const REPLY_POLL_INTERVAL = 3000
 const ESCALATION_POLL_INTERVAL = 10000
 
@@ -343,17 +343,23 @@ async function editMessageText(messageId, text, opts = {}) {
 async function sendTypingAction() {
   if (!chatId) return
   // Fire-and-forget with short timeout — don't use tg() retry wrapper
-  // because retry delays make the typing indicator appear slow
+  // because retry delays make the typing indicator appear slow.
+  // On failure, retry once immediately to maximize indicator visibility.
+  const doSend = () => fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+    signal: AbortSignal.timeout(5000),
+  })
   try {
-    fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
-      signal: AbortSignal.timeout(5000),
-    }).then(r => r.json()).then(j => {
-      if (!j.ok) log(`typing action failed: ${JSON.stringify(j)}`)
+    doSend().then(r => r.json()).then(j => {
+      if (!j.ok) {
+        log(`typing action failed, retrying: ${JSON.stringify(j)}`)
+        doSend().catch(e => log(`typing retry error: ${e.message}`))
+      }
     }).catch(e => {
-      log(`typing action error: ${e.message}`)
+      log(`typing action error, retrying: ${e.message}`)
+      doSend().catch(e2 => log(`typing retry error: ${e2.message}`))
     })
   } catch (err) {
     log(`typing action sync error: ${err.message}`)
@@ -543,7 +549,6 @@ async function handleTextMessage(text, msg) {
         logError(`Failed to resolve escalation ${escId} via freeform reply: ${err.message}`)
         await sendMessage('Failed to resolve escalation.')
       }
-      stopTyping()
       return
     } else {
       log(`Escalation file not found for freeform reply: ${escFile} (may already be resolved)`)
@@ -554,7 +559,8 @@ async function handleTextMessage(text, msg) {
   // Check for bot commands
   const cmd = text.trim().toLowerCase()
 
-  // Bot commands — these don't relay to the orchestrator, so stop typing after handling
+  // Bot commands — typing indicator will naturally expire (Telegram 5s window)
+  // and stopTyping() is only called when an orchestrator reply is delivered
   if (cmd === '/start') {
     await sendMessage(
       '<b>superbot2 Telegram Bot</b>\n\n' +
@@ -570,7 +576,6 @@ async function handleTextMessage(text, msg) {
       '/todo - Your todos\n' +
       '/help - List commands'
     )
-    stopTyping()
     return
   }
 
@@ -587,49 +592,41 @@ async function handleTextMessage(text, msg) {
       '/help - Show this message\n\n' +
       'Any other message is sent to the superbot2 orchestrator.'
     )
-    stopTyping()
     return
   }
 
   if (cmd === '/status') {
     await handleStatusCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/escalations') {
     await handleEscalationsCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/workers') {
     await handleWorkersCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/recent') {
     await handleRecentActivityCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/schedule') {
     await handleScheduleCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/todo') {
     await handleTodosCommand()
-    stopTyping()
     return
   }
 
   if (cmd === '/spaces') {
     await handleSpacesCommand()
-    stopTyping()
     return
   }
 
@@ -677,14 +674,12 @@ async function handleTextMessage(text, msg) {
     })
     if (!res.ok) {
       logError(`Failed to relay message to dashboard: HTTP ${res.status}`)
-      stopTyping()
       await sendMessage('Failed to relay message to orchestrator.')
     } else {
       log(`Relayed message to orchestrator: ${relayText.slice(0, 80)}...`)
     }
   } catch (err) {
     logError(`Error relaying message: ${err.message}`)
-    stopTyping()
     await sendMessage('Failed to relay message — is the dashboard running?')
   }
 }
