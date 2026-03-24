@@ -73,6 +73,12 @@ let userMessageAnchors = [] // [{inboxCountAtSend, telegramMessageId}, ...]
 const MAX_MESSAGE_MAP_SIZE = 200 // Keep map bounded
 const MAX_ANCHORS = 200 // Keep anchors bounded
 
+// Message editing: track last sent text message for rapid-fire reply coalescing
+let lastSentBotMessageId = null // Telegram message_id of the last text reply sent
+let lastSentBotMessageTime = 0  // timestamp when it was sent
+let lastSentBotMessageText = '' // text content of the last sent message
+const EDIT_WINDOW_MS = 5000     // edit instead of new message if within 5 seconds
+
 // --- Helpers ---
 
 function log(msg) {
@@ -1139,6 +1145,47 @@ function mentionsBackgroundWork(text) {
 
 // --- Reply mirroring ---
 
+// Helper: send a new text reply with HTML -> plain text -> no-threading fallback chain
+async function sendNewTextReply(html, plainText, replyToId) {
+  try {
+    const result = await tg('sendMessage', {
+      chat_id: chatId,
+      text: html,
+      parse_mode: 'HTML',
+      ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+    })
+    log(`Sent reply to Telegram (reply_to=${replyToId || 'none'}): ${plainText.slice(0, 60)}...`)
+    if (result?.message_id) {
+      lastSentBotMessageId = result.message_id
+      lastSentBotMessageTime = Date.now()
+      lastSentBotMessageText = plainText
+    }
+    return result
+  } catch (err) {
+    logError(`Failed to send reply to Telegram: ${err.message}`)
+    try {
+      const result = await tg('sendMessage', {
+        chat_id: chatId,
+        text: plainText,
+        ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+      })
+      log(`Sent reply as plain text fallback`)
+      if (result?.message_id) {
+        lastSentBotMessageId = result.message_id
+        lastSentBotMessageTime = Date.now()
+        lastSentBotMessageText = plainText
+      }
+      return result
+    } catch (fallbackErr) {
+      logError(`Fallback send also failed: ${fallbackErr.message}`)
+      try {
+        await tg('sendMessage', { chat_id: chatId, text: plainText })
+      } catch { /* give up */ }
+      return null
+    }
+  }
+}
+
 async function checkForReplies() {
   if (!chatId) return
 
@@ -1239,36 +1286,41 @@ async function checkForReplies() {
             await tg('sendMessage', { chat_id: chatId, text: truncated }).catch(() => {})
           }
         }
+        // Reset edit tracking — can't edit a photo message into text
+        lastSentBotMessageId = null
+        lastSentBotMessageText = ''
       } else {
         // No images — send as text with reply threading
         const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
         const html = markdownToTelegramHtml(truncated)
 
-        try {
-          sentResult = await tg('sendMessage', {
-            chat_id: chatId,
-            text: html,
-            parse_mode: 'HTML',
-            ...(replyToId ? { reply_to_message_id: replyToId } : {}),
-          })
-          log(`Sent reply to Telegram (reply_to=${replyToId || 'none'}): ${truncated.slice(0, 60)}...`)
-        } catch (err) {
-          logError(`Failed to send reply to Telegram: ${err.message}`)
-          // Fallback: send as plain text if HTML parsing fails
+        // Try to edit the previous message if it was sent recently (within 5s)
+        const now = Date.now()
+        const canEdit = lastSentBotMessageId &&
+          (now - lastSentBotMessageTime) < EDIT_WINDOW_MS &&
+          lastSentBotMessageText // don't edit if previous was empty
+
+        if (canEdit) {
+          // Append new text to previous message with a separator
+          const combinedText = lastSentBotMessageText + '\n\n' + truncated
+          const combinedTruncated = combinedText.length > 4000
+            ? combinedText.slice(0, 3997) + '...'
+            : combinedText
+          const combinedHtml = markdownToTelegramHtml(combinedTruncated)
+
           try {
-            sentResult = await tg('sendMessage', {
-              chat_id: chatId,
-              text: truncated,
-              ...(replyToId ? { reply_to_message_id: replyToId } : {}),
-            })
-            log(`Sent reply as plain text fallback`)
-          } catch (fallbackErr) {
-            logError(`Fallback send also failed: ${fallbackErr.message}`)
-            // Last resort: send without reply threading
-            try {
-              await tg('sendMessage', { chat_id: chatId, text: truncated })
-            } catch { /* give up */ }
+            await editMessageText(lastSentBotMessageId, combinedHtml)
+            lastSentBotMessageText = combinedTruncated
+            lastSentBotMessageTime = now
+            // sentResult stays null — we reuse the existing message_id
+            log(`Edited previous message (msg_id=${lastSentBotMessageId}): ${truncated.slice(0, 60)}...`)
+          } catch (editErr) {
+            logError(`Failed to edit message, sending new: ${editErr.message}`)
+            // Fall through to send as new message
+            sentResult = await sendNewTextReply(html, truncated, replyToId)
           }
+        } else {
+          sentResult = await sendNewTextReply(html, truncated, replyToId)
         }
       }
 
