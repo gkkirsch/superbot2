@@ -8428,4 +8428,35 @@ app.get('/{*path}', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`Dashboard server running on http://localhost:${PORT}`)
   console.log(`Reading from ${SUPERBOT_DIR}`)
+  autoStartTelegram()
 })
+
+async function autoStartTelegram() {
+  try {
+    const config = await readJsonFile(join(SUPERBOT_DIR, 'config.json'))
+    if (!config?.telegram?.botToken) return // not configured, skip silently
+    if (!config.telegram.enabled) {
+      console.log('[telegram] Configured but not enabled — skipping auto-start')
+      return
+    }
+
+    // Check if already running
+    let watcherRunning = false
+    try { execFileSync('pgrep', ['-f', 'telegram-watcher'], { stdio: 'pipe' }); watcherRunning = true } catch {}
+
+    if (watcherRunning) {
+      console.log('[telegram] Watcher already running — skipping auto-start')
+      return
+    }
+
+    console.log('[telegram] Auto-starting telegram watcher...')
+    const watchdogScript = join(import.meta.dirname, '..', 'scripts', 'telegram-watchdog.sh')
+    const child = spawn('bash', [watchdogScript], {
+      detached: true,
+      stdio: 'ignore',
+    })
+    child.unref()
+  } catch (err) {
+    console.error('[telegram] Auto-start failed:', err.message)
+  }
+}
