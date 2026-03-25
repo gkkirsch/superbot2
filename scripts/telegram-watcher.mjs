@@ -1268,14 +1268,22 @@ async function checkForReplies() {
       const replyIdx = startIdx + newReplies.indexOf(reply)
 
       // Find the correct user message to thread this reply to.
-      // Walk the anchors to find the most recent user message sent
-      // BEFORE this inbox index — that's the message that triggered this reply.
+      // Walk anchors to find the one with the highest inboxCountAtSend that
+      // is still <= replyIdx. When multiple anchors share the same
+      // inboxCountAtSend (user sent rapid-fire messages before any reply),
+      // pick the FIRST in that group — the earliest message that could have
+      // triggered this reply. This prevents all replies from threading under
+      // the user's most recent message when they sent several in a row.
       let replyToId = lastUserMessageId || null
       if (userMessageAnchors.length > 0) {
         let bestAnchor = null
         for (const anchor of userMessageAnchors) {
           if (anchor.inboxCountAtSend <= replyIdx) {
-            bestAnchor = anchor
+            if (!bestAnchor || anchor.inboxCountAtSend > bestAnchor.inboxCountAtSend) {
+              // Higher inboxCountAtSend — strictly better match
+              bestAnchor = anchor
+            }
+            // Same inboxCountAtSend — keep the first one (don't overwrite)
           }
         }
         if (bestAnchor) {
