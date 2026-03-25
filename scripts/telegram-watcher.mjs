@@ -1240,10 +1240,12 @@ async function checkForReplies() {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
 
-    // Safety: if the inbox was truncated/recreated, our counter may be too high.
-    // Reset to current length to prevent permanently stuck forwarding.
+    // Safety: if the inbox was truncated/recreated (e.g. orchestrator restart),
+    // our counter may be too high. Reset to 0 so all messages in the new inbox
+    // get forwarded — the old messages are gone, these are all new.
     if (lastSentReplyCount > orchestratorReplies.length) {
-      lastSentReplyCount = orchestratorReplies.length
+      log(`Inbox truncated: counter was ${lastSentReplyCount}, inbox now has ${orchestratorReplies.length} replies — resetting to 0`)
+      lastSentReplyCount = 0
       await saveLastSentCount(lastSentReplyCount)
     }
 
@@ -1530,6 +1532,18 @@ async function pollUpdates() {
             // Start typing immediately on any inbound message
             startTyping()
 
+            // React with 👀 to acknowledge receipt instantly — raw fetch, no retry wrapper
+            fetch(`${TELEGRAM_API}${botToken}/setMessageReaction`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                message_id: msg.message_id,
+                reaction: [{ type: 'emoji', emoji: '👀' }],
+              }),
+              signal: AbortSignal.timeout(5000),
+            }).catch(() => {}) // fire-and-forget
+
             if (msg.text) {
               const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
               log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
@@ -1599,6 +1613,14 @@ async function pollUpdates() {
       if (shuttingDown) break
       // Write heartbeat even on errors — poll timeouts are normal and don't mean we're stuck
       await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8').catch(() => {})
+
+      // Poll timeouts are normal (no messages arrived) — immediately re-poll, no backoff
+      const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted')
+      if (isTimeout) {
+        continue
+      }
+
+      // Real errors get backoff
       consecutiveErrors++
       const backoff = Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000)
       logError(`Polling error (consecutive=${consecutiveErrors}, backoff=${backoff}ms): ${err.message}`)
@@ -1657,12 +1679,15 @@ async function main() {
   sentEscalationIds = await loadSentEscalations()
   messageMap = await loadMessageMap()
 
-  // Startup counter sync check — detect if inbox was truncated since last run
+  // Startup counter sync check — detect if inbox was truncated since last run.
+  // Reset to 0 (not current length) because a truncated inbox means a new
+  // orchestrator session — all messages in it are new and need forwarding.
   try {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
     if (lastSentReplyCount > orchestratorReplies.length) {
-      lastSentReplyCount = orchestratorReplies.length
+      log(`Inbox truncated since last run: counter was ${lastSentReplyCount}, inbox now has ${orchestratorReplies.length} replies — resetting to 0`)
+      lastSentReplyCount = 0
       await saveLastSentCount(lastSentReplyCount)
     }
   } catch {
