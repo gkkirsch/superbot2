@@ -1532,18 +1532,6 @@ async function pollUpdates() {
             // Start typing immediately on any inbound message
             startTyping()
 
-            // React with 👀 to acknowledge receipt instantly — raw fetch, no retry wrapper
-            fetch(`${TELEGRAM_API}${botToken}/setMessageReaction`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                chat_id: chatId,
-                message_id: msg.message_id,
-                reaction: [{ type: 'emoji', emoji: '👀' }],
-              }),
-              signal: AbortSignal.timeout(5000),
-            }).catch(() => {}) // fire-and-forget
-
             if (msg.text) {
               const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
               log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
