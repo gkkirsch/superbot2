@@ -363,21 +363,53 @@ echo "Generated session ID: $SESSION_ID"
 mkdir -p "$TEAM_DIR/inboxes"
 rm -f "$TEAM_DIR/config.json"
 
+# ─── Detect OS ───
+detect_os() {
+  case "$(uname -s)" in
+    Darwin)  echo "macos" ;;
+    Linux)   echo "linux" ;;
+    *)       echo "unknown" ;;
+  esac
+}
+
+OS_TYPE=$(detect_os)
+
 # ─── Main loop with restart support ───
 
 rm -f "$RESTART_FLAG"
 IS_RESTART=false
 
 # Ensure heartbeat is running
-if ! launchctl list com.superbot2.heartbeat &>/dev/null; then
+install_heartbeat() {
   echo "Installing heartbeat..."
   bash "$REPO_DIR/scripts/install-heartbeat.sh"
+}
+
+if [[ "$OS_TYPE" == "macos" ]]; then
+  if ! launchctl list com.superbot2.heartbeat &>/dev/null; then
+    install_heartbeat
+  fi
+elif [[ "$OS_TYPE" == "linux" ]]; then
+  if ! crontab -l 2>/dev/null | grep -q "superbot2-heartbeat"; then
+    install_heartbeat
+  fi
 fi
 
 # Ensure scheduler is running
-if ! launchctl list com.superbot2.scheduler &>/dev/null; then
+install_scheduler() {
   echo "Installing scheduler..."
   bash "$REPO_DIR/scripts/install-scheduler.sh"
+}
+
+if [[ "$OS_TYPE" == "macos" ]]; then
+  if ! launchctl list com.superbot2.scheduler &>/dev/null; then
+    install_scheduler
+  fi
+elif [[ "$OS_TYPE" == "linux" ]]; then
+  SCHED_PID_FILE="$DIR/.scheduler.pid"
+  if [[ ! -f "$SCHED_PID_FILE" ]] || ! kill -0 "$(cat "$SCHED_PID_FILE" 2>/dev/null)" 2>/dev/null; then
+    install_scheduler
+  fi
 fi
 
 start_dashboard_ui
