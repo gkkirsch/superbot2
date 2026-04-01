@@ -10,9 +10,9 @@
 // Handles /status, /escalations, /recent, /schedule, /todo, /help commands
 // Typing indicator while waiting for orchestrator reply
 
-import { readFile, writeFile, readdir, unlink, stat } from 'node:fs/promises'
+import { readFile, writeFile, readdir, unlink, stat, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join, basename, extname } from 'node:path'
 import { homedir } from 'node:os'
 import { execFile } from 'node:child_process'
 
@@ -24,13 +24,14 @@ const LAST_SENT_FILE = join(SUPERBOT_DIR, 'telegram-last-sent-idx.txt')
 const LAST_UPDATE_ID_FILE = join(SUPERBOT_DIR, 'telegram-last-update-id.txt')
 const SENT_ESCALATIONS_FILE = join(SUPERBOT_DIR, 'telegram-sent-escalations.json')
 const MESSAGE_MAP_FILE = join(SUPERBOT_DIR, 'telegram-message-map.json')
+const HEARTBEAT_FILE = join(SUPERBOT_DIR, 'telegram-heartbeat.txt')
 const ESCALATIONS_DIR = join(SUPERBOT_DIR, 'escalations', 'needs_human')
 const SUPERBOT2_NAME = process.env.SUPERBOT2_NAME || 'superbot2'
 const TEAM_INBOXES_DIR = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'inboxes')
 const DASHBOARD_API = `http://localhost:${process.env.SUPERBOT2_API_PORT || '3274'}/api`
 const TELEGRAM_API = 'https://api.telegram.org/bot'
 const POLL_TIMEOUT = 30
-const TYPING_INTERVAL = 4000
+const TYPING_INTERVAL = 3000
 const REPLY_POLL_INTERVAL = 3000
 const ESCALATION_POLL_INTERVAL = 10000
 
@@ -45,25 +46,36 @@ let typingInterval = null
 let waitingForReply = false
 let shuttingDown = false
 
-// Telegram conversation gating — only forward orchestrator replies when user
-// is actively chatting via Telegram, not when messages originate from dashboard
-let lastTelegramMessageTime = 0
+// Baseline index: when user sends a message via Telegram, we record the current
+// inbox length so we only forward replies that arrived after that point.
 let replyBaseline = 0
-const TELEGRAM_CONVERSATION_TIMEOUT = 5 * 60 * 1000 // 5 minutes
 
 // In-memory map: short callback key -> full escalation ID
 // Populated when escalation cards are sent, used when callback buttons are clicked
 let callbackMap = new Map() // e.g. "e1" -> "esc-personal-assistant-email-triage-..."
 let callbackCounter = 0
 
+// Map: Telegram message_id of sent escalation card -> escalation ID
+// Used to detect freeform replies to escalation cards
+let escalationMessageMap = new Map() // e.g. 12345 -> "esc-personal-assistant-email-triage-..."
+
 // Message ID tracking for reply threading
 // lastUserMessageId: the Telegram message_id of the user's most recent non-command message
 // messageMap: maps inbox index -> Telegram message_id of the bot's sent reply
-// This lets us thread orchestrator replies back to the user's message,
-// and preserve reply context when the user replies to a specific bot message.
+// userMessageAnchors: array of {inboxCountAtSend, telegramMessageId} recording which
+//   user message was active when each inbox reply arrived. Used to thread each
+//   orchestrator reply back to the correct user message instead of always the latest.
 let lastUserMessageId = null
 let messageMap = {} // { inboxIdx: telegramMessageId, ... } + { lastUserMessageId }
+let userMessageAnchors = [] // [{inboxCountAtSend, telegramMessageId}, ...]
 const MAX_MESSAGE_MAP_SIZE = 200 // Keep map bounded
+const MAX_ANCHORS = 200 // Keep anchors bounded
+
+// Message editing: track last sent text message for rapid-fire reply coalescing
+let lastSentBotMessageId = null // Telegram message_id of the last text reply sent
+let lastSentBotMessageTime = 0  // timestamp when it was sent
+let lastSentBotMessageText = '' // text content of the last sent message
+const EDIT_WINDOW_MS = 5000     // edit instead of new message if within 5 seconds
 
 // --- Helpers ---
 
@@ -142,7 +154,52 @@ async function filterExistingImages(paths) {
   return existing
 }
 
+const UPLOADS_DIR = join(SUPERBOT_DIR, 'uploads')
+
+// --- Download inbound Telegram photos ---
+
+async function downloadTelegramFile(fileId) {
+  // Step 1: Get file path from Telegram
+  const fileInfo = await tg('getFile', { file_id: fileId })
+  if (!fileInfo?.file_path) {
+    throw new Error('getFile returned no file_path')
+  }
+
+  // Step 2: Download the file
+  const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`
+  const ext = extname(fileInfo.file_path) || '.jpg'
+  const filename = `telegram-${Date.now()}${ext}`
+  const destPath = join(UPLOADS_DIR, filename)
+
+  await mkdir(UPLOADS_DIR, { recursive: true })
+
+  const res = await fetch(downloadUrl)
+  if (!res.ok) {
+    throw new Error(`Download failed: HTTP ${res.status}`)
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer())
+  await writeFile(destPath, buffer)
+  log(`Downloaded photo: ${destPath} (${buffer.length} bytes)`)
+  return destPath
+}
+
 // --- Telegram API ---
+
+const MAX_RETRIES = 3
+const RETRY_BACKOFF = [1000, 2000, 4000] // exponential backoff
+
+function isRetryableError(err) {
+  const msg = (err.message || '').toLowerCase()
+  return msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('fetch failed') ||
+    msg.includes('network') ||
+    msg.includes('socket hang up') ||
+    msg.includes('aborted')
+}
 
 async function tg(method, body) {
   const url = `${TELEGRAM_API}${botToken}/${method}`
@@ -151,56 +208,80 @@ async function tg(method, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }
-  const res = await fetch(url, opts)
-  const json = await res.json()
-  if (!json.ok) {
-    throw new Error(`Telegram API ${method} failed: ${json.description || 'unknown error'}`)
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, opts)
+      const json = await res.json()
+      if (!json.ok) {
+        throw new Error(`Telegram API ${method} failed: ${json.description || 'unknown error'}`)
+      }
+      return json.result
+    } catch (err) {
+      if (attempt < MAX_RETRIES && isRetryableError(err)) {
+        const delay = RETRY_BACKOFF[attempt - 1] || 4000
+        log(`tg(${method}) attempt ${attempt}/${MAX_RETRIES} failed: ${err.message} — retrying in ${delay}ms`)
+        await sleep(delay)
+        continue
+      }
+      throw err
+    }
   }
-  return json.result
 }
 
 async function tgMultipart(method, fields, files) {
-  const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`
-  const CRLF = Buffer.from('\r\n')
-  const buffers = []
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const boundary = `----FormBoundary${Date.now()}${Math.random().toString(36).slice(2)}`
+      const CRLF = Buffer.from('\r\n')
+      const buffers = []
 
-  // Add text fields
-  for (const [key, value] of Object.entries(fields)) {
-    if (value === undefined || value === null) continue
-    buffers.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
-    ))
+      // Add text fields
+      for (const [key, value] of Object.entries(fields)) {
+        if (value === undefined || value === null) continue
+        buffers.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`
+        ))
+      }
+
+      // Add file fields
+      for (const { field, filePath, filename } of files) {
+        const fileData = await readFile(filePath)
+        const name = filename || basename(filePath)
+        buffers.push(Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+        ))
+        buffers.push(fileData)
+        buffers.push(CRLF)
+      }
+
+      // Closing boundary
+      buffers.push(Buffer.from(`--${boundary}--\r\n`))
+      const body = Buffer.concat(buffers)
+
+      const url = `${TELEGRAM_API}${botToken}/${method}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': String(body.length),
+        },
+        body,
+      })
+      const json = await res.json()
+      if (!json.ok) {
+        throw new Error(`Telegram API ${method} (multipart) failed: ${json.description || 'unknown error'}`)
+      }
+      return json.result
+    } catch (err) {
+      if (attempt < MAX_RETRIES && isRetryableError(err)) {
+        const delay = RETRY_BACKOFF[attempt - 1] || 4000
+        log(`tgMultipart(${method}) attempt ${attempt}/${MAX_RETRIES} failed: ${err.message} — retrying in ${delay}ms`)
+        await sleep(delay)
+        continue
+      }
+      throw err
+    }
   }
-
-  // Add file fields
-  for (const { field, filePath, filename } of files) {
-    const fileData = await readFile(filePath)
-    const name = filename || basename(filePath)
-    buffers.push(Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`
-    ))
-    buffers.push(fileData)
-    buffers.push(CRLF)
-  }
-
-  // Closing boundary
-  buffers.push(Buffer.from(`--${boundary}--\r\n`))
-  const body = Buffer.concat(buffers)
-
-  const url = `${TELEGRAM_API}${botToken}/${method}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      'Content-Length': String(body.length),
-    },
-    body,
-  })
-  const json = await res.json()
-  if (!json.ok) {
-    throw new Error(`Telegram API ${method} (multipart) failed: ${json.description || 'unknown error'}`)
-  }
-  return json.result
 }
 
 async function sendPhoto(filePath, caption, replyToMessageId) {
@@ -259,10 +340,23 @@ async function editMessageText(messageId, text, opts = {}) {
 
 async function sendTypingAction() {
   if (!chatId) return
+  // Fire-and-forget with short timeout — don't use tg() retry wrapper
+  // because retry delays make the typing indicator appear slow.
+  // On failure, retry once immediately to maximize indicator visibility.
+  const doSend = () => fetch(`${TELEGRAM_API}${botToken}/sendChatAction`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, action: 'typing' }),
+    signal: AbortSignal.timeout(5000),
+  })
   try {
-    await tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+    doSend().then(r => r.json()).then(j => {
+      if (!j.ok) doSend().catch(() => {})
+    }).catch(() => {
+      doSend().catch(() => {})
+    })
   } catch {
-    // typing action failures are non-critical
+    // non-critical
   }
 }
 
@@ -375,6 +469,7 @@ async function loadMessageMap() {
   const data = await readJsonFile(MESSAGE_MAP_FILE)
   if (data && typeof data === 'object') {
     if (data.lastUserMessageId) lastUserMessageId = data.lastUserMessageId
+    if (Array.isArray(data._userMessageAnchors)) userMessageAnchors = data._userMessageAnchors
     return data
   }
   return {}
@@ -382,7 +477,7 @@ async function loadMessageMap() {
 
 async function saveMessageMap() {
   // Prune old entries to keep the map bounded
-  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId')
+  const keys = Object.keys(messageMap).filter(k => k !== 'lastUserMessageId' && k !== '_userMessageAnchors')
   if (keys.length > MAX_MESSAGE_MAP_SIZE) {
     // Keep only the most recent entries (highest numeric keys)
     const numericKeys = keys.filter(k => !isNaN(parseInt(k, 10))).map(Number).sort((a, b) => a - b)
@@ -391,7 +486,12 @@ async function saveMessageMap() {
       delete messageMap[String(k)]
     }
   }
+  // Prune old anchors
+  if (userMessageAnchors.length > MAX_ANCHORS) {
+    userMessageAnchors = userMessageAnchors.slice(-MAX_ANCHORS)
+  }
   messageMap.lastUserMessageId = lastUserMessageId
+  messageMap._userMessageAnchors = userMessageAnchors
   await writeJsonFile(MESSAGE_MAP_FILE, messageMap)
 }
 
@@ -411,9 +511,50 @@ function buildReplyContext(replyToMessage) {
 }
 
 async function handleTextMessage(text, msg) {
+  // Check if this is a freeform reply to an escalation card
+  if (msg?.reply_to_message?.message_id && escalationMessageMap.has(msg.reply_to_message.message_id)) {
+    const escId = escalationMessageMap.get(msg.reply_to_message.message_id)
+    const escFile = join(ESCALATIONS_DIR, `${escId}.json`)
+    if (existsSync(escFile)) {
+      log(`Freeform escalation reply for ${escId}: ${text.slice(0, 100)}`)
+      try {
+        await new Promise((resolve, reject) => {
+          execFile('bash', [
+            join(SUPERBOT_DIR, 'scripts', 'resolve-escalation.sh'),
+            escFile,
+            '--resolution', text.trim(),
+            '--resolved-by', 'user',
+          ], { timeout: 10000 }, (err, stdout, stderr) => {
+            if (err) reject(new Error(stderr || err.message))
+            else resolve(stdout)
+          })
+        })
+        // Edit the escalation card to show resolved state
+        try {
+          const origMsg = msg.reply_to_message
+          await editMessageText(origMsg.message_id,
+            (origMsg.text || '') + `\n\n✅ <b>Resolved:</b> ${escapeHtml(text.trim())}`,
+            { replyMarkup: { inline_keyboard: [] } }
+          )
+        } catch { /* ignore edit failures */ }
+        await sendMessage('Escalation resolved.', { replyToMessageId: msg.message_id })
+        escalationMessageMap.delete(msg.reply_to_message.message_id)
+      } catch (err) {
+        logError(`Failed to resolve escalation ${escId} via freeform reply: ${err.message}`)
+        await sendMessage('Failed to resolve escalation.')
+      }
+      return
+    } else {
+      log(`Escalation file not found for freeform reply: ${escFile} (may already be resolved)`)
+      escalationMessageMap.delete(msg.reply_to_message.message_id)
+    }
+  }
+
   // Check for bot commands
   const cmd = text.trim().toLowerCase()
 
+  // Bot commands — typing indicator will naturally expire (Telegram 5s window)
+  // and stopTyping() is only called when an orchestrator reply is delivered
   if (cmd === '/start') {
     await sendMessage(
       '<b>superbot2 Telegram Bot</b>\n\n' +
@@ -423,6 +564,7 @@ async function handleTextMessage(text, msg) {
       '/status - Portfolio overview\n' +
       '/spaces - Spaces and project details\n' +
       '/escalations - Open escalations needing your input\n' +
+      '/workers - Active team members\n' +
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
@@ -437,6 +579,7 @@ async function handleTextMessage(text, msg) {
       '/status - Portfolio overview (spaces, projects, tasks)\n' +
       '/spaces - Spaces and project details\n' +
       '/escalations - List open escalations with action buttons\n' +
+      '/workers - Active team members\n' +
       '/recent - Recent session summaries\n' +
       '/schedule - Scheduled jobs\n' +
       '/todo - Your todos\n' +
@@ -453,6 +596,11 @@ async function handleTextMessage(text, msg) {
 
   if (cmd === '/escalations') {
     await handleEscalationsCommand()
+    return
+  }
+
+  if (cmd === '/workers') {
+    await handleWorkersCommand()
     return
   }
 
@@ -480,19 +628,31 @@ async function handleTextMessage(text, msg) {
   // Track the user's message ID for reply threading
   if (msg && msg.message_id) {
     lastUserMessageId = msg.message_id
-    await saveMessageMap()
   }
 
-  // Activate Telegram conversation — set baseline to current inbox count so we
-  // only forward orchestrator replies that arrive AFTER this message
+  // Activate Telegram conversation — set baseline to lastSentReplyCount so we
+  // forward any replies that haven't been sent yet, including ones that arrived
+  // between the user's message and now (race condition fix).
+  replyBaseline = lastSentReplyCount
   try {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
-    replyBaseline = orchestratorReplies.length
+    if (msg && msg.message_id) {
+      userMessageAnchors.push({
+        inboxCountAtSend: orchestratorReplies.length,
+        telegramMessageId: msg.message_id,
+      })
+    }
   } catch {
     replyBaseline = lastSentReplyCount
+    if (msg && msg.message_id) {
+      userMessageAnchors.push({
+        inboxCountAtSend: lastSentReplyCount,
+        telegramMessageId: msg.message_id,
+      })
+    }
   }
-  lastTelegramMessageTime = Date.now()
+  await saveMessageMap()
 
   // Build the relayed text, prepending reply context if the user replied to a specific message
   const replyContext = msg?.reply_to_message ? buildReplyContext(msg.reply_to_message) : ''
@@ -507,14 +667,12 @@ async function handleTextMessage(text, msg) {
     })
     if (!res.ok) {
       logError(`Failed to relay message to dashboard: HTTP ${res.status}`)
-      stopTyping()
       await sendMessage('Failed to relay message to orchestrator.')
     } else {
       log(`Relayed message to orchestrator: ${relayText.slice(0, 80)}...`)
     }
   } catch (err) {
     logError(`Error relaying message: ${err.message}`)
-    stopTyping()
     await sendMessage('Failed to relay message — is the dashboard running?')
   }
 }
@@ -793,6 +951,47 @@ async function handleSpacesCommand() {
   }
 }
 
+async function handleWorkersCommand() {
+  await sendTypingAction()
+
+  try {
+    const teamConfigPath = join(SUPERBOT_DIR, '.claude', 'teams', SUPERBOT2_NAME, 'config.json')
+    const teamConfig = await readJsonFile(teamConfigPath)
+
+    if (!teamConfig?.members || teamConfig.members.length === 0) {
+      await sendMessage('No team members found.')
+      return
+    }
+
+    let text = '<b>Team Members</b>\n'
+
+    for (const member of teamConfig.members) {
+      const name = member.name || '?'
+      const type = member.agentType || '?'
+      const model = member.model || '?'
+      const cwd = member.cwd || ''
+
+      // Derive a short workspace name from cwd
+      const workspace = cwd ? basename(cwd) : ''
+
+      text += `\n<b>${escapeHtml(name)}</b>`
+      text += ` <i>(${escapeHtml(type)})</i>\n`
+      text += `Model: <code>${escapeHtml(model)}</code>`
+      if (workspace) text += ` | Dir: <code>${escapeHtml(workspace)}</code>`
+      text += '\n'
+    }
+
+    if (text.length > 4000) {
+      text = text.slice(0, 3997) + '...'
+    }
+
+    await sendMessage(text)
+  } catch (err) {
+    logError(`Workers command failed: ${err.message}`)
+    await sendMessage('Failed to list workers.')
+  }
+}
+
 // --- Escalation cards ---
 
 function escapeHtml(text) {
@@ -870,8 +1069,11 @@ async function sendEscalationCard(esc) {
   const replyMarkup = { inline_keyboard: buttons }
 
   try {
-    await sendMessage(text, { replyMarkup })
-    log(`Sent escalation card for ${esc.id} (callback keys: e${escCounter}:*)`)
+    const sentMsg = await sendMessage(text, { replyMarkup })
+    if (sentMsg?.message_id) {
+      escalationMessageMap.set(sentMsg.message_id, esc.id)
+    }
+    log(`Sent escalation card for ${esc.id}`)
   } catch (err) {
     logError(`Failed to send escalation card for ${esc.id}: ${err.message}`)
   }
@@ -971,7 +1173,65 @@ async function handleCallbackQuery(callbackQuery) {
   }
 }
 
+// --- Smart typing detection ---
+// If an orchestrator reply mentions spawning a worker or background task,
+// stop the typing indicator — the user shouldn't see typing during a long background wait.
+const BACKGROUND_TASK_PATTERNS = [
+  /\bspawn(ing|ed)?\b.*\bworker\b/i,
+  /\bdispatch(ing|ed)?\b.*\bworker\b/i,
+  /\bbackground\s+task\b/i,
+  /\bworker\s+(started|launched|dispatched|spawned)\b/i,
+  /\bkicking off\b.*\bworker\b/i,
+  /\bstarting\b.*\bworker\b/i,
+  /\bqueued\b.*\b(task|work)\b/i,
+]
+
+function mentionsBackgroundWork(text) {
+  return BACKGROUND_TASK_PATTERNS.some(p => p.test(text))
+}
+
 // --- Reply mirroring ---
+
+// Helper: send a new text reply with HTML -> plain text -> no-threading fallback chain
+async function sendNewTextReply(html, plainText, replyToId) {
+  try {
+    const result = await tg('sendMessage', {
+      chat_id: chatId,
+      text: html,
+      parse_mode: 'HTML',
+      ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+    })
+    log(`Sent reply to Telegram (reply_to=${replyToId || 'none'}): ${plainText.slice(0, 60)}...`)
+    if (result?.message_id) {
+      lastSentBotMessageId = result.message_id
+      lastSentBotMessageTime = Date.now()
+      lastSentBotMessageText = plainText
+    }
+    return result
+  } catch (err) {
+    logError(`Failed to send reply to Telegram: ${err.message}`)
+    try {
+      const result = await tg('sendMessage', {
+        chat_id: chatId,
+        text: plainText,
+        ...(replyToId ? { reply_to_message_id: replyToId } : {}),
+      })
+      log(`Sent reply as plain text fallback`)
+      if (result?.message_id) {
+        lastSentBotMessageId = result.message_id
+        lastSentBotMessageTime = Date.now()
+        lastSentBotMessageText = plainText
+      }
+      return result
+    } catch (fallbackErr) {
+      logError(`Fallback send also failed: ${fallbackErr.message}`)
+      try {
+        await tg('sendMessage', { chat_id: chatId, text: plainText })
+      } catch { /* give up */ }
+      return null
+    }
+  }
+}
 
 async function checkForReplies() {
   if (!chatId) return
@@ -980,22 +1240,18 @@ async function checkForReplies() {
     const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
     const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
 
-    // Only forward replies when the user is actively chatting via Telegram.
-    // When inactive, silently advance the counter so dashboard-originated
-    // messages don't accumulate and get dumped later.
-    const conversationActive = lastTelegramMessageTime > 0 &&
-      (Date.now() - lastTelegramMessageTime) < TELEGRAM_CONVERSATION_TIMEOUT
-
-    if (!conversationActive) {
-      if (orchestratorReplies.length > lastSentReplyCount) {
-        lastSentReplyCount = orchestratorReplies.length
-        await saveLastSentCount(lastSentReplyCount)
-      }
-      return
+    // Safety: if the inbox was truncated/recreated (e.g. orchestrator restart),
+    // our counter may be too high. Reset to 0 so all messages in the new inbox
+    // get forwarded — the old messages are gone, these are all new.
+    if (lastSentReplyCount > orchestratorReplies.length) {
+      log(`Inbox truncated: counter was ${lastSentReplyCount}, inbox now has ${orchestratorReplies.length} replies — resetting to 0`)
+      lastSentReplyCount = 0
+      await saveLastSentCount(lastSentReplyCount)
     }
 
-    // Use the baseline to skip messages that were already in the inbox before
-    // the user's Telegram message — these are dashboard-originated, not replies
+    // Always forward unsent replies — no conversation gating.
+    // The counter ensures we never send duplicates, and the replyBaseline
+    // prevents dumping old messages after a restart.
     const startIdx = Math.max(lastSentReplyCount, replyBaseline)
 
     if (orchestratorReplies.length <= startIdx) {
@@ -1004,16 +1260,36 @@ async function checkForReplies() {
 
     const newReplies = orchestratorReplies.slice(startIdx)
 
-    // Use lastUserMessageId for reply threading — the orchestrator reply
-    // should thread back to the user's most recent message
-    const replyToId = lastUserMessageId || null
-
     for (const reply of newReplies) {
       const text = reply.text || reply.content || ''
       if (!text.trim()) continue
 
       // Track the inbox index for this reply (for future reverse-mapping)
       const replyIdx = startIdx + newReplies.indexOf(reply)
+
+      // Find the correct user message to thread this reply to.
+      // Walk anchors to find the one with the highest inboxCountAtSend that
+      // is still <= replyIdx. When multiple anchors share the same
+      // inboxCountAtSend (user sent rapid-fire messages before any reply),
+      // pick the FIRST in that group — the earliest message that could have
+      // triggered this reply. This prevents all replies from threading under
+      // the user's most recent message when they sent several in a row.
+      let replyToId = lastUserMessageId || null
+      if (userMessageAnchors.length > 0) {
+        let bestAnchor = null
+        for (const anchor of userMessageAnchors) {
+          if (anchor.inboxCountAtSend <= replyIdx) {
+            if (!bestAnchor || anchor.inboxCountAtSend > bestAnchor.inboxCountAtSend) {
+              // Higher inboxCountAtSend — strictly better match
+              bestAnchor = anchor
+            }
+            // Same inboxCountAtSend — keep the first one (don't overwrite)
+          }
+        }
+        if (bestAnchor) {
+          replyToId = bestAnchor.telegramMessageId
+        }
+      }
 
       // Check for image paths in the message
       const imagePaths = extractImagePaths(text)
@@ -1066,36 +1342,41 @@ async function checkForReplies() {
             await tg('sendMessage', { chat_id: chatId, text: truncated }).catch(() => {})
           }
         }
+        // Reset edit tracking — can't edit a photo message into text
+        lastSentBotMessageId = null
+        lastSentBotMessageText = ''
       } else {
         // No images — send as text with reply threading
         const truncated = text.length > 4000 ? text.slice(0, 3997) + '...' : text
         const html = markdownToTelegramHtml(truncated)
 
-        try {
-          sentResult = await tg('sendMessage', {
-            chat_id: chatId,
-            text: html,
-            parse_mode: 'HTML',
-            ...(replyToId ? { reply_to_message_id: replyToId } : {}),
-          })
-          log(`Sent reply to Telegram (reply_to=${replyToId || 'none'}): ${truncated.slice(0, 60)}...`)
-        } catch (err) {
-          logError(`Failed to send reply to Telegram: ${err.message}`)
-          // Fallback: send as plain text if HTML parsing fails
+        // Try to edit the previous message if it was sent recently (within 5s)
+        const now = Date.now()
+        const canEdit = lastSentBotMessageId &&
+          (now - lastSentBotMessageTime) < EDIT_WINDOW_MS &&
+          lastSentBotMessageText // don't edit if previous was empty
+
+        if (canEdit) {
+          // Append new text to previous message with a separator
+          const combinedText = lastSentBotMessageText + '\n\n' + truncated
+          const combinedTruncated = combinedText.length > 4000
+            ? combinedText.slice(0, 3997) + '...'
+            : combinedText
+          const combinedHtml = markdownToTelegramHtml(combinedTruncated)
+
           try {
-            sentResult = await tg('sendMessage', {
-              chat_id: chatId,
-              text: truncated,
-              ...(replyToId ? { reply_to_message_id: replyToId } : {}),
-            })
-            log(`Sent reply as plain text fallback`)
-          } catch (fallbackErr) {
-            logError(`Fallback send also failed: ${fallbackErr.message}`)
-            // Last resort: send without reply threading
-            try {
-              await tg('sendMessage', { chat_id: chatId, text: truncated })
-            } catch { /* give up */ }
+            await editMessageText(lastSentBotMessageId, combinedHtml)
+            lastSentBotMessageText = combinedTruncated
+            lastSentBotMessageTime = now
+            // sentResult stays null — we reuse the existing message_id
+            log(`Edited previous message to append reply`)
+          } catch (editErr) {
+            logError(`Failed to edit message, sending new: ${editErr.message}`)
+            // Fall through to send as new message
+            sentResult = await sendNewTextReply(html, truncated, replyToId)
           }
+        } else {
+          sentResult = await sendNewTextReply(html, truncated, replyToId)
         }
       }
 
@@ -1105,7 +1386,13 @@ async function checkForReplies() {
       }
     }
 
+    // Smart typing: if any reply mentions spawning a worker/background task,
+    // stop typing and don't resume — the user shouldn't see typing during a long wait.
+    const anyBackgroundWork = newReplies.some(r => mentionsBackgroundWork(r.text || r.content || ''))
     stopTyping()
+    if (anyBackgroundWork) {
+      waitingForReply = false
+    }
     lastSentReplyCount = orchestratorReplies.length
     await saveLastSentCount(lastSentReplyCount)
     await saveMessageMap()
@@ -1175,6 +1462,8 @@ async function pollUpdates() {
 
   log(`Polling for updates with offset=${lastUpdateId + 1}`)
 
+  let consecutiveErrors = 0
+
   while (!shuttingDown) {
     try {
       const body = {
@@ -1192,51 +1481,120 @@ async function pollUpdates() {
       })
 
       if (!res.ok) {
-        const errText = await res.text()
+        let errText = ''
+        try { errText = await res.text() } catch { errText = '(could not read response body)' }
         logError(`getUpdates failed: HTTP ${res.status} - ${errText}`)
-        await sleep(5000)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
         continue
       }
 
-      const json = await res.json()
+      let json
+      try {
+        json = await res.json()
+      } catch (parseErr) {
+        logError(`getUpdates response not valid JSON: ${parseErr.message}`)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
+        continue
+      }
+
       if (!json.ok || !json.result) {
         logError(`getUpdates response not ok: ${JSON.stringify(json)}`)
-        await sleep(5000)
+        consecutiveErrors++
+        await sleep(Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000))
         continue
       }
 
+      // Successful poll — reset error counter
+      consecutiveErrors = 0
+
       for (const update of json.result) {
-        lastUpdateId = Math.max(lastUpdateId, update.update_id)
+        try {
+          lastUpdateId = Math.max(lastUpdateId, update.update_id)
 
-        if (update.callback_query) {
-          log(`Inbound callback_query [update_id=${update.update_id}]: data=${update.callback_query.data}`)
-          await handleCallbackQuery(update.callback_query)
-          continue
-        }
-
-        if (update.message) {
-          const msg = update.message
-          const msgChatId = String(msg.chat.id)
-
-          // Auto-detect chatId from first message
-          if (!chatId) {
-            chatId = msgChatId
-            await saveConfigField('chatId', chatId)
-            log(`Auto-detected chatId: ${chatId}`)
-            await sendMessage('Chat ID registered! You\'re connected to superbot2.')
-          }
-
-          // Security: only process messages from authorized chat
-          if (msgChatId !== chatId) {
-            log(`Ignoring message from unauthorized chat: ${msgChatId}`)
+          if (update.callback_query) {
+            log(`Inbound callback_query [update_id=${update.update_id}]: data=${update.callback_query.data}`)
+            await handleCallbackQuery(update.callback_query)
             continue
           }
 
-          if (msg.text) {
-            const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
-            log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
-            await handleTextMessage(msg.text, msg)
+          if (update.message) {
+            const msg = update.message
+            const msgChatId = String(msg.chat.id)
+
+            // Auto-detect chatId from first message
+            if (!chatId) {
+              chatId = msgChatId
+              await saveConfigField('chatId', chatId)
+              log(`Auto-detected chatId: ${chatId}`)
+              await sendMessage('Chat ID registered! You\'re connected to superbot2.')
+            }
+
+            // Security: only process messages from authorized chat
+            if (msgChatId !== chatId) {
+              log(`Ignoring message from unauthorized chat: ${msgChatId}`)
+              continue
+            }
+
+            // Start typing immediately on any inbound message
+            startTyping()
+
+            if (msg.text) {
+              const replyInfo = msg.reply_to_message ? ` (reply to msg ${msg.reply_to_message.message_id})` : ''
+              log(`Inbound message [update_id=${update.update_id}, msg_id=${msg.message_id}]${replyInfo}: ${msg.text.slice(0, 100)}`)
+              await handleTextMessage(msg.text, msg)
+            } else if (msg.photo && msg.photo.length > 0) {
+              // Telegram sends photos as array of sizes — pick the largest
+              const photo = msg.photo[msg.photo.length - 1]
+              log(`Inbound photo [update_id=${update.update_id}, msg_id=${msg.message_id}]: file_id=${photo.file_id}`)
+              try {
+                const localPath = await downloadTelegramFile(photo.file_id)
+                // Relay as text message with the local path (and caption if any)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n${localPath}`
+                  : localPath
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download photo: ${dlErr.message}`)
+                await sendMessage('Failed to download your photo.')
+              }
+            } else if (msg.document && msg.document.mime_type?.startsWith('image/')) {
+              // Photos sent as files (uncompressed) also come as documents
+              log(`Inbound image document [update_id=${update.update_id}, msg_id=${msg.message_id}]: file_id=${msg.document.file_id}`)
+              try {
+                const localPath = await downloadTelegramFile(msg.document.file_id)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n${localPath}`
+                  : localPath
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download image document: ${dlErr.message}`)
+                await sendMessage('Failed to download your image.')
+              }
+            } else if (msg.document) {
+              // Non-image documents (PDF, files, etc.)
+              const doc = msg.document
+              const docName = doc.file_name || 'unknown'
+              log(`Inbound document [update_id=${update.update_id}, msg_id=${msg.message_id}]: ${docName} (${doc.mime_type || 'unknown type'}, file_id=${doc.file_id})`)
+              try {
+                const localPath = await downloadTelegramFile(doc.file_id)
+                const caption = msg.caption || ''
+                const relayText = caption
+                  ? `${caption}\n\n[File: ${docName}]\n${localPath}`
+                  : `[File: ${docName}]\n${localPath}`
+                await handleTextMessage(relayText, msg)
+              } catch (dlErr) {
+                logError(`Failed to download document: ${dlErr.message}`)
+                await sendMessage(`Failed to download your file (${docName}).`)
+              }
+            }
           }
+        } catch (updateErr) {
+          logError(`Error processing update ${update.update_id}: ${updateErr.message}`)
+          // Continue processing remaining updates — don't let one bad update crash the loop
         }
       }
 
@@ -1244,10 +1602,25 @@ async function pollUpdates() {
       if (json.result.length > 0) {
         await saveLastUpdateId(lastUpdateId)
       }
+
+      // Write heartbeat so watchdog knows we're alive
+      await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8')
     } catch (err) {
       if (shuttingDown) break
-      logError(`Polling error: ${err.message}`)
-      await sleep(5000)
+      // Write heartbeat even on errors — poll timeouts are normal and don't mean we're stuck
+      await writeFile(HEARTBEAT_FILE, String(Date.now()), 'utf-8').catch(() => {})
+
+      // Poll timeouts are normal (no messages arrived) — immediately re-poll, no backoff
+      const isTimeout = err.name === 'TimeoutError' || err.message?.includes('timeout') || err.message?.includes('aborted')
+      if (isTimeout) {
+        continue
+      }
+
+      // Real errors get backoff
+      consecutiveErrors++
+      const backoff = Math.min(5000 * Math.pow(2, consecutiveErrors - 1), 60000)
+      logError(`Polling error (consecutive=${consecutiveErrors}, backoff=${backoff}ms): ${err.message}`)
+      await sleep(backoff)
     }
   }
 }
@@ -1302,17 +1675,43 @@ async function main() {
   sentEscalationIds = await loadSentEscalations()
   messageMap = await loadMessageMap()
 
+  // Startup counter sync check — detect if inbox was truncated since last run.
+  // Reset to 0 (not current length) because a truncated inbox means a new
+  // orchestrator session — all messages in it are new and need forwarding.
+  try {
+    const dashUserInbox = await readJsonFile(join(TEAM_INBOXES_DIR, 'dashboard-user.json')) || []
+    const orchestratorReplies = dashUserInbox.filter(m => m.from === 'team-lead')
+    if (lastSentReplyCount > orchestratorReplies.length) {
+      log(`Inbox truncated since last run: counter was ${lastSentReplyCount}, inbox now has ${orchestratorReplies.length} replies — resetting to 0`)
+      lastSentReplyCount = 0
+      await saveLastSentCount(lastSentReplyCount)
+    }
+  } catch {
+    // non-critical — will be caught in checkForReplies too
+  }
+
   // Check for already-running instance, then write PID file
   await checkPidFile()
   await writePidFile()
   log(`PID file written: ${PID_FILE} (pid=${process.pid})`)
 
-  // Verify bot token
-  try {
-    const me = await tg('getMe', {})
-    log(`Bot connected: @${me.username} (${me.first_name})`)
-  } catch (err) {
-    logError(`Failed to connect to Telegram: ${err.message}`)
+  // Verify bot token (retry up to 5 times for transient network issues)
+  let connected = false
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      const me = await tg('getMe', {})
+      log(`Bot connected: @${me.username} (${me.first_name})`)
+      connected = true
+      break
+    } catch (err) {
+      logError(`Connection attempt ${attempt}/5 failed: ${err.message}`)
+      if (attempt < 5) {
+        await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+  }
+  if (!connected) {
+    logError('Failed to connect to Telegram after 5 attempts')
     await removePidFile()
     process.exit(1)
   }
@@ -1321,6 +1720,26 @@ async function main() {
     log(`Authorized chatId: ${chatId}`)
   } else {
     log('No chatId configured — will auto-detect from first message')
+  }
+
+  // Register bot commands menu for autocomplete
+  try {
+    await tg('setMyCommands', {
+      commands: [
+        { command: 'status', description: 'Portfolio overview' },
+        { command: 'escalations', description: 'Open escalations needing input' },
+        { command: 'workers', description: 'Active workers' },
+        { command: 'recent', description: 'Recent session summaries' },
+        { command: 'schedule', description: 'Scheduled jobs' },
+        { command: 'todo', description: 'Your todos' },
+        { command: 'spaces', description: 'Spaces and project details' },
+        { command: 'help', description: 'List available commands' },
+      ],
+    })
+    log('Bot commands menu registered')
+  } catch (err) {
+    logError(`Failed to register bot commands: ${err.message}`)
+    // Non-critical — commands still work, just no autocomplete
   }
 
   // Start background loops
